@@ -97,9 +97,11 @@
     const expect = (v) => { const t = next(); if (!t || t.v !== v) throw new Error('expected "' + v + '"'); };
     function pExpr() { return pAdd(); }
     function pAdd() { let l = pMul(); while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) { const op = next().v; l = { type: 'bin', op, l, r: pMul() }; } return l; }
-    function pMul() { let l = pPow(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = next().v; l = { type: 'bin', op, l, r: pPow() }; } return l; }
-    function pPow() { const l = pUnary(); if (peek() && peek().t === 'op' && peek().v === '^') { next(); return { type: 'bin', op: '^', l, r: pPow() }; } return l; }
-    function pUnary() { const t = peek(); if (t && t.t === 'op' && (t.v === '+' || t.v === '-')) { next(); return { type: 'unary', op: t.v, arg: pUnary() }; } return pPrimary(); }
+    function pMul() { let l = pUnary(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = next().v; l = { type: 'bin', op, l, r: pUnary() }; } return l; }
+    // Standard math precedence: '^' binds tighter than unary minus, so -x^2 = -(x^2), and
+    // '^' is right-associative with a unary right operand so 2^-3 and 2^3^2 parse correctly.
+    function pUnary() { const t = peek(); if (t && t.t === 'op' && (t.v === '+' || t.v === '-')) { next(); return { type: 'unary', op: t.v, arg: pUnary() }; } return pPow(); }
+    function pPow() { const l = pPrimary(); if (peek() && peek().t === 'op' && peek().v === '^') { next(); return { type: 'bin', op: '^', l, r: pUnary() }; } return l; }
     function pPrimary() {
       const t = next();
       if (!t) throw new Error('unexpected end');
