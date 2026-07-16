@@ -4315,7 +4315,18 @@
 
   function fmtNum(v, dec) {
     dec = (dec == null ? 2 : dec);
-    const fixed = Number(v).toFixed(dec);
+    v = Number(v);
+    if (!isFinite(v)) return String(v);
+    const fixed = v.toFixed(dec);
+    // If a non-zero value collapses to 0 at the chosen precision, show significant
+    // figures instead of a misleading "0.00" (keeps normal-range display untouched).
+    if (v !== 0 && parseFloat(fixed) === 0) {
+      const a = Math.abs(v);
+      if (a < 1e-4) return v.toExponential(3);            // e.g. 6.213e-21
+      let d = 3 - Math.floor(Math.log10(a));              // ~4 significant figures
+      d = Math.max(dec, Math.min(12, d));
+      return v.toFixed(d).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    }
     const parts = fixed.split('.');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return parts.join('.');
