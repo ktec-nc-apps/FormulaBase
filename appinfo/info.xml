@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>formulabase</id>
+	<name>FormulaBase</name>
+	<summary>Save your own formulas and calculate instantly by typing in numbers</summary>
+	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
+
+Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
+
+Features:
+- Collections of reusable formulas
+- Named variables with labels, units and default values
+- Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
+- Live result as you type, with unit and decimal-place control
+- Same clean, themable design as RegiBase (light / dark)
+
+Made in Japan.]]></description>
+	<version>0.1.0</version>
+	<licence>agpl</licence>
+	<author>KTEC</author>
+	<namespace>FormulaBase</namespace>
+	<category>tools</category>
+	<category>office</category>
+	<website>https://github.com/ktec-nc-apps/FormulaBase</website>
+	<bugs>https://github.com/ktec-nc-apps/FormulaBase/issues</bugs>
+	<repository>https://github.com/ktec-nc-apps/FormulaBase</repository>
+	<dependencies>
+		<nextcloud min-version="30" max-version="32"/>
+	</dependencies>
+	<navigations>
+		<navigation>
+			<name>FormulaBase</name>
+			<route>formulabase.page.index</route>
+			<icon>app.svg</icon>
+			<order>81</order>
+		</navigation>
+	</navigations>
+</info>

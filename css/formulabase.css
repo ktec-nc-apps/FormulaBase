@@ -1,0 +1,760 @@
+/* RegiBase (Nextcloud native) — ported from the standalone app, scoped to #formulabase-root. */
+#formulabase-root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f0f3f9;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --primary-ink: #ffffff;
+  --accent: #059669;
+  --danger: #dc2626;
+  --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 8px 24px rgba(15, 23, 42, .06);
+  --radius: 14px;
+  --sidebar-w: 288px;
+}
+/* Pre-JS fallback: follow the OS until JS applies the chosen theme. */
+@media (prefers-color-scheme: dark) {
+  #formulabase-root:not([data-fbtheme]) {
+    --bg: #0b1220;
+    --surface: #131c2e;
+    --surface-2: #1b2740;
+    --border: #263450;
+    --text: #e6edf7;
+    --muted: #93a3bd;
+    --primary: #4f8cff;
+    --accent: #10b981;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+/* Authoritative: set by JS from the user's setting (規定=Nextcloudに合わせる / ダーク / ライト). */
+#formulabase-root[data-fbtheme="light"] {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #f0f3f9;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --accent: #059669;
+  --shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 8px 24px rgba(15, 23, 42, .06);
+}
+#formulabase-root[data-fbtheme="dark"] {
+  --bg: #0b1220;
+  --surface: #131c2e;
+  --surface-2: #1b2740;
+  --border: #263450;
+  --text: #e6edf7;
+  --muted: #93a3bd;
+  --primary: #4f8cff;
+  --accent: #10b981;
+  --shadow: 0 1px 3px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+}
+
+/* NC 32's #content is a flex row that expects an #app-content child to grow.
+   We render #formulabase directly, so make it fill the full width/height itself. */
+#content.app-formulabase { display: flex; }
+#formulabase, #formulabase.app-formulabase { flex: 1 1 auto; min-width: 0; width: 100%; height: calc(100dvh - var(--header-height, 50px)); }
+#formulabase-root { width: 100%; height: 100%; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", Roboto, sans-serif; }
+#formulabase-root, #formulabase-root * { box-sizing: border-box; }
+#formulabase-root button { font-family: inherit; cursor: pointer; }
+/* NC core sets `h2,h3,... { color: var(--color-main-text) }` on the bare element,
+   which overrides inheritance and leaks NC's text colour into our themed modals
+   (dark-on-dark when RegiBase is dark but Nextcloud is light). Force our colour. */
+#formulabase-root h1, #formulabase-root h2, #formulabase-root h3, #formulabase-root h4, #formulabase-root h5, #formulabase-root h6 { color: var(--text); }
+#formulabase-root input, #formulabase-root select, #formulabase-root textarea { font-family: inherit; font-size: 16px; }
+/* Neutralise Nextcloud's global form theming:
+   - core forces select{height:36px} which, with our padding, clips the text; let it grow.
+   - core's input:not(...) rule does NOT exclude checkboxes, so raw checkboxes get a 2px
+     border/box; strip that so our checkmarks render plainly. */
+#formulabase-root select { height: auto; min-height: 44px; line-height: normal; }
+/* Tell the browser which scheme native controls should paint in — otherwise a
+   dark OS/Nextcloud color-scheme paints checkboxes black even in our light theme. */
+#formulabase-root[data-fbtheme="light"] { color-scheme: light; }
+#formulabase-root[data-fbtheme="dark"] { color-scheme: dark; }
+/* radios: keep native, just strip NC's added frame */
+#formulabase-root input[type='radio'] { -webkit-appearance: auto; appearance: auto; margin: 0; border: none; background: none; box-shadow: none; min-height: 0; cursor: pointer; }
+/* checkboxes: draw our own so the box is a soft grey (not the black native fill) */
+#formulabase-root input[type='checkbox'] {
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+  width: 18px; height: 18px; min-width: 18px; min-height: 18px; max-width: 18px; max-height: 18px;
+  padding: 0; margin: 0; flex: 0 0 auto; position: relative; vertical-align: middle;
+  border: 2px solid var(--muted); border-radius: 4px; background: var(--surface-2);
+  box-shadow: none; cursor: pointer;
+}
+#formulabase-root input[type='checkbox']:hover { border-color: var(--primary); }
+#formulabase-root input[type='checkbox']:checked { background: var(--primary); border-color: var(--primary); }
+#formulabase-root input[type='checkbox']:checked::after {
+  content: ''; position: absolute; left: 4px; top: 0; width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+#formulabase-root.formulabase-loading { color: var(--muted); padding: 40px; }
+
+/* Prevent accidental text selection on UI chrome; keep it on inputs and shown values. */
+#formulabase-root { -webkit-user-select: none; user-select: none; }
+#formulabase-root input, #formulabase-root textarea, #formulabase-root [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+#formulabase-root .detail-row .val, #formulabase-root .selectable { -webkit-user-select: text; user-select: text; }
+
+/* ---------- Layout ---------- */
+#formulabase-root .layout { display: flex; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+#formulabase-root .sidebar {
+  width: var(--sidebar-w); flex: 0 0 var(--sidebar-w);
+  background: var(--surface); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+}
+#formulabase-root .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 12px; font-weight: 800; font-size: 20px; letter-spacing: .3px; cursor: default; -webkit-user-select: none; user-select: none; }
+#formulabase-root .brand .logo { font-size: 24px; }
+#formulabase-root .logo svg { width: 1em; height: 1em; display: inline-block; vertical-align: middle; }
+#formulabase-root .coll-home { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); margin: 2px 10px 4px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; font-size: 14px; font-weight: 600; }
+#formulabase-root .coll-home:hover { background: var(--surface-2); border-color: var(--primary); }
+#formulabase-root .coll-home.active { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+#formulabase-root .brand .tag { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-2); padding: 2px 8px; border-radius: 999px; }
+#formulabase-root .coll-list { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 10px; }
+#formulabase-root .coll-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 10px 12px; border: none; background: transparent; color: var(--text);
+  border-radius: 10px; font-size: 14.5px; margin-bottom: 2px;
+}
+#formulabase-root .coll-item:hover { background: var(--surface-2); }
+#formulabase-root .coll-item.active { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); font-weight: 700; }
+#formulabase-root .coll-item .ci-bar { flex: 0 0 auto; width: 4px; align-self: stretch; min-height: 20px; border-radius: 3px; }
+#formulabase-root .coll-item .ic { font-size: 20px; width: 26px; text-align: center; }
+#formulabase-root .coll-item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .coll-item .ct { font-size: 12px; color: var(--muted); background: var(--surface-2); padding: 1px 8px; border-radius: 999px; }
+#formulabase-root .coll-item.active .ct { color: var(--primary); }
+#formulabase-root .sidebar-foot { padding: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+
+#formulabase-root .main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+#formulabase-root .scrollnav { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 8; }
+#formulabase-root .scrollnav-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--primary); color: var(--primary-ink); box-shadow: 0 3px 12px rgba(0,0,0,.4); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; opacity: .5; transition: opacity .2s, filter .2s; }
+#formulabase-root .scrollnav:hover .scrollnav-btn, #formulabase-root .scrollnav-btn:focus { opacity: 1; }
+#formulabase-root .scrollnav-btn:hover { filter: brightness(1.1); }
+#formulabase-root .topbar {
+  display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+  border-bottom: 1px solid var(--border); background: var(--surface); min-height: 62px;
+}
+#formulabase-root .topbar .title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; min-width: 0; }
+#formulabase-root .topbar .title .ic { font-size: 22px; }
+#formulabase-root .topbar .title .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .topbar .spacer { flex: 1; }
+#formulabase-root .topbar-actions { display: flex; align-items: center; gap: 8px; }
+#formulabase-root .ta-break { display: none; }
+#formulabase-root .hamburger { display: none; }
+
+#formulabase-root .content { flex: 1; overflow-y: auto; padding: 18px 20px 40px; }
+/* unified sticky toolbar: search / sort + bulk actions in one frame */
+#formulabase-root .listtoolbar { position: sticky; top: 0; z-index: 6; margin-bottom: 14px; padding: 10px 12px; background: color-mix(in srgb, var(--primary) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border)); border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.07); display: flex; flex-direction: column; gap: 10px; opacity: .8; transition: opacity .2s; }
+#formulabase-root[data-fbtheme="dark"] .listtoolbar { background: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
+#formulabase-root .listtoolbar:hover, #formulabase-root .listtoolbar:focus-within { opacity: 1; }
+#formulabase-root .lt-top { display: flex; align-items: center; gap: 10px; }
+#formulabase-root .lt-collname { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .lt-collname .ic { flex: 0 0 auto; }
+#formulabase-root .lt-count { flex: 0 0 auto; font-size: 12px; color: var(--muted); font-weight: 600; }
+#formulabase-root .lt-tools { display: flex; flex-direction: column; gap: 10px; }
+#formulabase-root .lt-search { display: flex; gap: 10px; }
+/* Search box and sort select share the exact same box (height/border/font) so
+   they line up; the search box is roomier than before. */
+#formulabase-root .lt-search .searchinput, #formulabase-root .lt-search .sortselect {
+  height: 46px; box-sizing: border-box; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); outline: none; font-size: 15px;
+}
+#formulabase-root .lt-search .searchinput { flex: 1; min-width: 0; padding: 0 16px; }
+#formulabase-root .lt-search .sortselect { flex: 0 0 auto; padding: 0 12px; cursor: pointer; }
+#formulabase-root .lt-search .searchinput:focus, #formulabase-root .lt-search .sortselect:focus { border-color: var(--primary); }
+/* Selection-mode toggle: shows/hides the checkboxes + bulk action bar. */
+#formulabase-root .lt-toggle { height: 40px; box-sizing: border-box; flex: 0 0 auto; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 18px; cursor: pointer; }
+#formulabase-root .lt-toggle.on { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+#formulabase-root .lt-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); }
+#formulabase-root .selcount { font-weight: 700; font-size: 13px; color: var(--muted); }
+#formulabase-root .selspacer { flex: 1; }
+#formulabase-root .btn:disabled, #formulabase-root .btn[disabled] { opacity: .4; cursor: default; pointer-events: none; box-shadow: none; }
+@media (max-width: 780px) {
+  /* Stack search over sort so neither gets squished into a tiny square. */
+  #formulabase-root .lt-search { flex-direction: column; }
+  #formulabase-root .lt-search .searchinput, #formulabase-root .lt-search .sortselect { flex: 0 0 auto; width: 100%; }
+  #formulabase-root .lt-actions { gap: 6px; }
+  #formulabase-root .lt-actions .btn.sm { padding: 6px 8px; font-size: 12px; }
+}
+
+/* selection bar */
+
+/* record item wrappers + checkboxes */
+#formulabase-root .rec-wrap { position: relative; }
+#formulabase-root .rec-wrap.row { display: flex; align-items: center; gap: 10px; }
+#formulabase-root .rec-wrap.row .rec-row, #formulabase-root .rec-wrap.row .rec-drow { flex: 1; min-width: 0; }
+#formulabase-root .rec-check { width: 20px; height: 20px; cursor: pointer; accent-color: var(--primary); flex: 0 0 auto; }
+#formulabase-root .rec-wrap.card .rec-check, #formulabase-root .rec-wrap.img .rec-check { position: absolute; top: 10px; left: 10px; z-index: 2; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+#formulabase-root .rec-wrap.img .rec-check { top: 8px; left: 8px; }
+#formulabase-root .rec-wrap.sel .rec-card, #formulabase-root .rec-wrap.sel .rec-row, #formulabase-root .rec-wrap.sel .rec-drow, #formulabase-root .rec-wrap.sel .rec-imgcard { outline: 2px solid var(--primary); outline-offset: -1px; border-color: var(--primary); }
+
+/* per-record copy button */
+#formulabase-root .rec-copy { border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 8px; font-size: 14px; line-height: 1; padding: 6px 9px; cursor: pointer; }
+#formulabase-root .rec-copy:hover { color: var(--primary); border-color: var(--primary); }
+#formulabase-root .rec-wrap.card .rec-copy, #formulabase-root .rec-wrap.img .rec-copy { position: absolute; top: 8px; right: 8px; z-index: 2; }
+#formulabase-root .rec-wrap.row .rec-copy.inline { flex: 0 0 auto; }
+#formulabase-root .loadmore { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 18px 0 6px; }
+#formulabase-root .loadmore-info { font-size: 12px; color: var(--muted); }
+
+/* strict delete confirm */
+#formulabase-root .confirm-check { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 14px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+#formulabase-root .confirm-check input { width: 18px; height: 18px; accent-color: var(--danger); }
+
+/* record cards */
+#formulabase-root .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+#formulabase-root .rec-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 15px; box-shadow: var(--shadow); text-align: left; color: var(--text); display: block; width: 100%;
+}
+#formulabase-root .rec-card:hover { border-color: var(--primary); }
+/* reserve a top strip for the overlaid checkbox (left) and copy button (right) */
+#formulabase-root .rec-wrap.card .rec-card { padding-top: 36px; }
+#formulabase-root .rec-card .rt { font-weight: 700; font-size: 15px; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .rec-card .rl { font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+#formulabase-root .rec-card .rl span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* buttons */
+#formulabase-root .btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 9px 14px; border-radius: 10px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+#formulabase-root .btn:hover { background: var(--surface-2); }
+#formulabase-root .btn.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+#formulabase-root .btn.primary:hover { filter: brightness(1.06); }
+#formulabase-root .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+#formulabase-root .btn.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+#formulabase-root .btn.accent:hover { filter: brightness(1.06); }
+#formulabase-root .btn.ghost { border-color: transparent; background: transparent; }
+#formulabase-root .btn.block { width: 100%; justify-content: center; }
+#formulabase-root .btn.sm { padding: 6px 10px; font-size: 13px; }
+
+/* view switcher */
+#formulabase-root .viewswitch { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 2px; margin-right: 4px; }
+#formulabase-root .vbtn { border: none; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; padding: 6px 8px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; }
+#formulabase-root .vbtn svg { width: 19px; height: 19px; display: block; }
+#formulabase-root .vbtn:hover { color: var(--text); }
+#formulabase-root .vbtn.on { background: var(--surface); color: var(--primary); box-shadow: var(--shadow); }
+
+/* リスト型 */
+#formulabase-root .rec-list { display: flex; flex-direction: column; gap: 6px; }
+#formulabase-root .rec-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
+#formulabase-root .rec-row:hover { border-color: var(--primary); }
+#formulabase-root .rec-row .rr-title { font-weight: 600; font-size: 14.5px; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+#formulabase-root .rec-row .rr-sub { color: var(--muted); font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .rec-row .rr-chev { color: var(--muted); font-size: 20px; }
+
+/* リスト詳細型 */
+#formulabase-root .rec-dlist { display: flex; flex-direction: column; gap: 8px; }
+#formulabase-root .rec-drow { display: block; width: 100%; text-align: left; padding: 12px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; color: var(--text); }
+#formulabase-root .rec-drow:hover { border-color: var(--primary); }
+#formulabase-root .rec-drow .rr-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+#formulabase-root .rec-drow .rr-fields { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+#formulabase-root .rec-drow .rr-field { font-size: 12.5px; color: var(--muted); }
+#formulabase-root .rec-drow .rr-field b { color: var(--text); font-weight: 600; }
+
+/* 画像リスト型 */
+#formulabase-root .rec-imggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+#formulabase-root .rec-imgcard { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; color: var(--text); padding-bottom: 10px; }
+#formulabase-root .rec-imgcard:hover { border-color: var(--primary); }
+#formulabase-root .rec-imgcard .thumb { aspect-ratio: 4 / 3; background: var(--surface-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#formulabase-root .rec-imgcard .thumb img { width: 100%; height: 100%; object-fit: cover; }
+#formulabase-root .rec-imgcard .thumb .noimg { font-size: 40px; opacity: .5; }
+#formulabase-root .rec-imgcard .rr-title { font-weight: 700; font-size: 14px; margin: 8px 12px 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .rec-imgcard .rr-sub { font-size: 12px; color: var(--muted); margin: 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* image field */
+#formulabase-root .imgfield { display: flex; flex-direction: column; gap: 8px; }
+#formulabase-root .dropzone { border: 2px dashed var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; background: var(--surface-2); transition: border-color .12s, background .12s; }
+#formulabase-root .dropzone.over { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, var(--surface-2)); }
+#formulabase-root .dropzone-hint { color: var(--muted); font-size: 13px; text-align: center; line-height: 1.6; pointer-events: none; }
+#formulabase-root .dropzone-hint .dz-ic { display: block; font-size: 30px; opacity: .6; margin-bottom: 2px; }
+#formulabase-root .dropzone .imgpreview { margin: 0; }
+
+/* image field config in schema editor */
+#formulabase-root .imgcfg { grid-column: 1 / -1; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+#formulabase-root .imgcfg .cfg { display: inline-flex; align-items: center; gap: 6px; }
+#formulabase-root .imgcfg input[type='number'] { width: 84px; }
+#formulabase-root .imgcfg select { min-width: 150px; }
+
+/* cropper */
+#formulabase-root .cropper-mask { z-index: 10002; }
+#formulabase-root .crop-stage { position: relative; user-select: none; touch-action: none; background: var(--surface-2); border-radius: 8px; overflow: hidden; max-width: 100%; }
+#formulabase-root .crop-img { display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+#formulabase-root .crop-box { position: absolute; border: 2px solid var(--primary); box-shadow: 0 0 0 100vmax rgba(0,0,0,.45); cursor: move; box-sizing: border-box; }
+#formulabase-root .crop-h { position: absolute; width: 14px; height: 14px; background: var(--primary); border: 2px solid #fff; border-radius: 50%; box-sizing: border-box; touch-action: none; }
+#formulabase-root .crop-h.tl { left: -8px; top: -8px; cursor: nwse-resize; }
+#formulabase-root .crop-h.tr { right: -8px; top: -8px; cursor: nesw-resize; }
+#formulabase-root .crop-h.bl { left: -8px; bottom: -8px; cursor: nesw-resize; }
+#formulabase-root .crop-h.br { right: -8px; bottom: -8px; cursor: nwse-resize; }
+
+/* file / notes attachment field */
+#formulabase-root .filefield { display: flex; flex-direction: column; gap: 8px; }
+#formulabase-root .fileattach { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+#formulabase-root .fileattach .fa-ic { font-size: 22px; }
+#formulabase-root .fileattach .fa-name { flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+#formulabase-root .detail-row .dv .fa-ic { font-size: 20px; }
+#formulabase-root .note-list { display: flex; flex-direction: column; gap: 6px; }
+#formulabase-root .note-item { display: flex; align-items: center; gap: 10px; text-align: left; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+#formulabase-root .note-item:hover { border-color: var(--primary); }
+#formulabase-root .note-item .ni-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#formulabase-root .note-item .ni-cat { font-size: 11px; color: var(--muted); background: var(--surface-2); padding: 1px 8px; border-radius: 999px; }
+#formulabase-root .fp-path { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#formulabase-root .fp-cur { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); direction: rtl; text-align: left; }
+#formulabase-root .fp-list { max-height: 46vh; overflow-y: auto; }
+#formulabase-root .fp-item { cursor: pointer; }
+#formulabase-root .fp-item.sel { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--surface)); box-shadow: inset 0 0 0 1px var(--primary); }
+#formulabase-root .imgpreview { max-width: 100%; max-height: 180px; border-radius: 10px; border: 1px solid var(--border); object-fit: contain; background: var(--surface-2); align-self: flex-start; }
+#formulabase-root .imgpreview.lg { max-height: 320px; }
+#formulabase-root .imgactions { display: flex; gap: 8px; }
+#formulabase-root .imgactions label { cursor: pointer; }
+
+/* home (collection chooser) */
+#formulabase-root .home-title { font-size: 20px; font-weight: 800; margin: 4px 4px 16px; }
+#formulabase-root .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+#formulabase-root .home-card { display: flex; align-items: center; gap: 14px; text-align: left; padding: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); color: var(--text); width: 100%; }
+#formulabase-root .home-card:hover { border-color: var(--primary); transform: translateY(-1px); transition: transform .12s; }
+#formulabase-root .home-card .hc-icon { flex: 0 0 auto; width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+#formulabase-root .home-card .hc-body { min-width: 0; flex: 1; }
+#formulabase-root .home-card .hc-name { font-weight: 800; font-size: 16px; margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .home-card .hc-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#formulabase-root .home-card .hc-count { font-size: 12px; color: var(--muted); background: var(--surface-2); display: inline-block; padding: 1px 9px; border-radius: 999px; }
+
+/* empty state */
+#formulabase-root .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
+#formulabase-root .empty .big { font-size: 52px; margin-bottom: 10px; }
+
+/* ---------- Modal ---------- */
+#formulabase-root .modal-mask { position: fixed; inset: 0; background: rgba(8,12,22,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10000; }
+#formulabase-root .modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  width: 560px; max-width: 100%; max-height: 92dvh; display: flex; flex-direction: column; box-shadow: var(--shadow); color: var(--text);
+}
+#formulabase-root .modal.wide { width: 720px; }
+#formulabase-root .modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+#formulabase-root .modal-head h3 { margin: 0; font-size: 17px; flex: 1; }
+#formulabase-root .modal-body { padding: 16px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+#formulabase-root .modal-foot { padding: 14px 18px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+#formulabase-root .icon-btn { border: none; background: transparent; color: var(--muted); font-size: 20px; padding: 4px 8px; border-radius: 8px; }
+#formulabase-root .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+
+/* form */
+#formulabase-root .field { margin-bottom: 14px; }
+#formulabase-root .field > label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--muted); }
+#formulabase-root .field .req { color: var(--danger); }
+#formulabase-root .rule-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+#formulabase-root .control { display: flex; gap: 6px; align-items: stretch; }
+#formulabase-root .control input, #formulabase-root .control select, #formulabase-root .control textarea, #formulabase-root .field > input, #formulabase-root .field > select, #formulabase-root .field > textarea {
+  width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); outline: none;
+}
+#formulabase-root .control input:focus, #formulabase-root .field input:focus, #formulabase-root .field select:focus, #formulabase-root .field textarea:focus { border-color: var(--primary); }
+#formulabase-root .field textarea { min-height: 76px; resize: vertical; }
+#formulabase-root .control .icon-btn { border: 1px solid var(--border); background: var(--surface-2); }
+/* Mask secret fields without using type="password" (keeps the browser from
+   offering to save/autofill credentials). Reveal removes .secret-mask. */
+#formulabase-root .control input.secret-mask { -webkit-text-security: disc; text-security: disc; }
+
+/* emoji icon picker */
+#formulabase-root .iconpick { display: grid; grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); gap: 4px; max-height: 190px; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+#formulabase-root .iconpick-btn { font-size: 21px; line-height: 1; padding: 5px 0; border: 1px solid transparent; border-radius: 8px; background: transparent; }
+#formulabase-root .iconpick-btn:hover { background: var(--surface); }
+#formulabase-root .iconpick-btn.sel { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
+#formulabase-root .iconpick-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+#formulabase-root .iconpick-foot input { width: 84px; text-align: center; }
+#formulabase-root .iconpick-cur { font-size: 22px; }
+
+/* styled file picker (import) */
+#formulabase-root .filepick { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; max-width: 100%; }
+#formulabase-root .filepick input[type='file'] { display: none; }
+#formulabase-root .filepick .btn { pointer-events: none; }
+#formulabase-root .filepick-name { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* detail view */
+#formulabase-root .detail-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+#formulabase-root .detail-row:last-child { border-bottom: none; }
+#formulabase-root .detail-row .dk { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+#formulabase-root .detail-row .dv { font-size: 15px; word-break: break-word; display: flex; align-items: center; gap: 8px; }
+#formulabase-root .detail-row .dv .val { flex: 1; white-space: pre-wrap; }
+#formulabase-root .detail-row .dv a.val.link { color: var(--primary); text-decoration: none; word-break: break-all; }
+#formulabase-root .detail-row .dv a.val.link:hover { text-decoration: underline; }
+#formulabase-root .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* template picker */
+#formulabase-root .tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#formulabase-root .tpl-card { text-align: left; border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px; padding: 12px; color: var(--text); }
+#formulabase-root .tpl-card:hover { border-color: var(--primary); }
+#formulabase-root .tpl-card .th { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+#formulabase-root .tpl-card .th .ic { font-size: 20px; }
+#formulabase-root .tpl-card .td { font-size: 12px; color: var(--muted); }
+
+/* schema editor rows */
+#formulabase-root .schema-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: var(--surface-2); }
+#formulabase-root .schema-row.sortable { grid-template-columns: auto 1fr 1fr auto; }
+#formulabase-root .schema-row .drag-handle { cursor: grab; color: var(--muted); font-size: 18px; line-height: 1; padding: 4px 2px; user-select: none; text-align: center; }
+#formulabase-root .schema-row .drag-handle:active { cursor: grabbing; }
+#formulabase-root .schema-row.dragging { opacity: .45; }
+#formulabase-root .schema-row.dragover { outline: 2px dashed var(--primary); outline-offset: 1px; }
+#formulabase-root .schema-row .flags { display: flex; gap: 10px; grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); align-items: center; flex-wrap: wrap; }
+#formulabase-root .schema-row .flags label { display: inline-flex; align-items: center; gap: 4px; }
+#formulabase-root .schema-row input:not([type=checkbox]):not([type=radio]),
+#formulabase-root .schema-row select,
+#formulabase-root .schema-row textarea {
+  width: 100%; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); outline: none; font-size: 14px;
+}
+#formulabase-root .schema-row input:focus, #formulabase-root .schema-row select:focus, #formulabase-root .schema-row textarea:focus { border-color: var(--primary); }
+#formulabase-root .schema-row textarea { min-height: 52px; resize: vertical; }
+#formulabase-root .chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+/* transfer mapping */
+#formulabase-root .radios { display: flex; gap: 16px; flex-wrap: wrap; }
+#formulabase-root .radios label { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; }
+#formulabase-root .map-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin-bottom: 8px; }
+#formulabase-root .map-row .map-src { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 7px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+#formulabase-root .map-row .map-src .ms-label { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .map-row .map-src .ms-sample { font-size: 11.5px; color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#formulabase-root .map-row .map-src .ms-empty { font-size: 11.5px; color: var(--muted); }
+#formulabase-root .map-row .map-arrow { color: var(--muted); }
+#formulabase-root .map-row select { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+#formulabase-root .map-row select.isnew { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+/* toast */
+#formulabase-root .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; z-index: 10001; box-shadow: var(--shadow); }
+
+/* loading */
+#formulabase-root .login-wrap { display: flex; align-items: center; justify-content: center; height: calc(100dvh - var(--header-height, 50px)); padding: 20px; }
+#formulabase-root .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 30px; width: 380px; max-width: 100%; box-shadow: var(--shadow); text-align: center; }
+#formulabase-root .login-card .logo { font-size: 46px; }
+#formulabase-root .login-card p { color: var(--muted); margin: 8px 0 0; font-size: 13px; }
+
+#formulabase-root .backdrop { display: none; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 780px) {
+  #formulabase-root .sidebar {
+    position: fixed; z-index: 40; top: var(--header-height, 50px); left: 0; height: calc(100dvh - var(--header-height, 50px));
+    transform: translateX(-100%); transition: transform .22s ease; box-shadow: var(--shadow);
+  }
+  #formulabase-root .sidebar.open { transform: translateX(0); }
+  #formulabase-root .backdrop.show { display: block; position: fixed; top: var(--header-height, 50px); left: 0; right: 0; bottom: 0; background: rgba(8,12,22,.45); z-index: 35; }
+  #formulabase-root .hamburger { display: inline-flex; }
+  #formulabase-root .rec-grid { grid-template-columns: 1fr; }
+  #formulabase-root .tpl-grid { grid-template-columns: 1fr; }
+  /* Full-screen modals: no mask padding + stretch so the header ✕ and footer
+     buttons stay on-screen (otherwise a 100dvh modal in a padded mask overflows
+     and its close/cancel controls get pushed out of view). */
+  #formulabase-root .modal-mask { padding: 0; align-items: stretch; }
+  #formulabase-root .modal { width: 100%; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+  #formulabase-root .modal.wide { width: 100%; }
+  #formulabase-root .content { padding: 14px 14px 40px; }
+  /* Header wraps to its own full row. Row 1: view switcher (left) + New record
+     (right); row 2: Edit collection + Collection settings. */
+  #formulabase-root .topbar { padding: 12px 14px; flex-wrap: wrap; row-gap: 8px; }
+  #formulabase-root .topbar-actions { flex: 1 0 100%; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #formulabase-root .topbar-actions .btn.sm { padding: 6px 9px; font-size: 12px; }
+  #formulabase-root .topbar-actions .viewswitch { order: 1; margin-right: 0; }
+  #formulabase-root .topbar-actions .btn.accent { order: 2; margin-left: auto; }
+  #formulabase-root .topbar-actions .ta-break { display: block; order: 3; flex-basis: 100%; height: 0; }
+  #formulabase-root .topbar-actions .btn.sm:not(.accent) { order: 4; }
+  #formulabase-root .schema-row { grid-template-columns: 1fr; }
+  #formulabase-root .schema-row.sortable { grid-template-columns: auto 1fr; }
+  /* Table view: cap the frozen first column at half the screen width. */
+  #formulabase-root .rec-table .rt-frozen { max-width: 50vw; }
+  #formulabase-root .rec-table .rt-fval { max-width: 42vw; }
+}
+
+/* 表計算型 (spreadsheet-style table; leftmost column frozen, rest scroll) */
+/* Single scroll region: for the table view, .content becomes a flex column that
+   does NOT scroll; only the table wrap scrolls (both axes), so the topbar/toolbar
+   stay fixed and scrolling the table never moves the header. */
+#formulabase-root .content-table { display: flex; flex-direction: column; overflow: hidden; }
+#formulabase-root .content-table .listtoolbar { flex: 0 0 auto; }
+#formulabase-root .content-table .rec-table-wrap { flex: 1 1 auto; min-height: 0; }
+#formulabase-root .rec-table-wrap { overflow: auto; overscroll-behavior: contain; max-width: 100%; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+#formulabase-root .rec-table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 13px; white-space: nowrap; }
+#formulabase-root .rec-table th, #formulabase-root .rec-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: left; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+#formulabase-root .rec-table thead th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-weight: 600; z-index: 1; }
+/* 2nd+ columns: grab-to-scroll cursor (on the cells directly, so hover shows it);
+   frozen 1st column + actions stay clickable. */
+#formulabase-root .rec-table td, #formulabase-root .rec-table th { cursor: -webkit-grab; cursor: grab; }
+#formulabase-root .rec-table .rt-frozen, #formulabase-root .rec-table .rt-frozen *, #formulabase-root .rec-table .rt-actions, #formulabase-root .rec-table .rt-actions * { cursor: pointer; }
+#formulabase-root .rec-table-wrap.dragging, #formulabase-root .rec-table-wrap.dragging * { cursor: -webkit-grabbing !important; cursor: grabbing !important; }
+#formulabase-root .rec-table .rt-thumb { pointer-events: none; -webkit-user-drag: none; }
+#formulabase-root .rec-table tbody tr:hover td { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+#formulabase-root .rec-table tbody tr.sel td { background: color-mix(in srgb, var(--primary) 15%, var(--surface)); }
+#formulabase-root .rec-table td.mono { font-family: ui-monospace, monospace; letter-spacing: 1px; }
+#formulabase-root .rec-table .rt-actions { width: 1px; text-align: center; }
+#formulabase-root .rec-table .rt-thumb { width: 30px; height: 30px; object-fit: cover; border-radius: 4px; vertical-align: middle; }
+/* frozen first column (checkbox + title), stays put while columns 2+ scroll */
+#formulabase-root .rec-table .rt-frozen { position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--border); font-weight: 600; }
+#formulabase-root .rec-table thead th.rt-frozen { z-index: 3; }
+#formulabase-root .rec-table tbody td.rt-frozen { background: var(--surface); }
+#formulabase-root .rec-table thead th.rt-frozen { background: var(--surface-2); }
+#formulabase-root .rec-table tbody tr:hover td.rt-frozen { background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+#formulabase-root .rec-table tbody tr.sel td.rt-frozen { background: color-mix(in srgb, var(--primary) 15%, var(--surface)); }
+#formulabase-root .rec-table .rt-fhead { display: inline-flex; align-items: center; gap: 8px; }
+#formulabase-root .rec-table .rt-fcell { display: inline-flex; vertical-align: middle; margin-right: 8px; }
+#formulabase-root .rec-table .rt-fval { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ================= FormulaBase-specific ================= */
+#formulabase-root .empty-hint { color: var(--muted); padding: 24px 8px; text-align: center; }
+#formulabase-root .empty-hint.sm { padding: 10px 4px; font-size: 13px; }
+#formulabase-root .spacer { flex: 1; }
+#formulabase-root .brand .tag { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--surface-2); padding: 2px 8px; border-radius: 999px; }
+
+/* buttons */
+#formulabase-root .btn { display: inline-flex; align-items: center; gap: 6px; justify-content: center; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; }
+#formulabase-root .btn:hover { background: var(--surface-2); border-color: var(--primary); }
+#formulabase-root .btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+#formulabase-root .btn.accent:hover { filter: brightness(1.07); }
+#formulabase-root .btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: transparent; }
+#formulabase-root .btn.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+#formulabase-root .btn.sm { padding: 6px 10px; font-size: 13px; }
+#formulabase-root .btn.xs { padding: 4px 8px; font-size: 12px; border-radius: 8px; }
+
+/* forms */
+#formulabase-root .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+#formulabase-root .field > label { font-size: 13px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+#formulabase-root .field.frow { flex-direction: row; gap: 18px; }
+#formulabase-root .field.frow > span { display: flex; flex-direction: column; gap: 6px; }
+#formulabase-root .control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-size: 15px; }
+#formulabase-root .control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+#formulabase-root .control.mono, #formulabase-root code { font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Noto Sans Mono", monospace; }
+#formulabase-root .schema-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+#formulabase-root .err-msg { color: var(--danger); font-size: 13px; }
+
+/* content two-column: formulas + step/history side panel */
+#formulabase-root .fb-content { display: flex; gap: 18px; align-items: flex-start; }
+#formulabase-root .fb-listcol { flex: 1; min-width: 0; }
+#formulabase-root .fb-side { width: 340px; flex: 0 0 340px; position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; }
+
+/* formula card */
+#formulabase-root .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+#formulabase-root .fb-card { margin-bottom: 14px; transition: border-color .15s; }
+#formulabase-root .fb-card.active { border-color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent), var(--shadow); }
+#formulabase-root .fb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+#formulabase-root .fb-name { font-weight: 800; font-size: 16px; flex: 1; min-width: 0; }
+#formulabase-root .fb-actions { display: flex; gap: 6px; }
+#formulabase-root .fb-expr { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); font-size: 13px; background: var(--surface-2); padding: 7px 10px; border-radius: 8px; margin-bottom: 12px; overflow-x: auto; }
+#formulabase-root .fb-vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+#formulabase-root .fb-var { display: flex; flex-direction: column; gap: 4px; }
+#formulabase-root .fb-vlabel { font-size: 12px; font-weight: 600; color: var(--muted); }
+#formulabase-root .fb-vinput { display: flex; align-items: center; gap: 6px; }
+#formulabase-root .fb-vinput input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 15px; }
+#formulabase-root .fb-vinput input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent); }
+#formulabase-root .fb-vunit { font-size: 13px; color: var(--muted); flex: 0 0 auto; }
+#formulabase-root .fb-result { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); font-size: 20px; font-weight: 800; }
+#formulabase-root .fb-result.err { background: color-mix(in srgb, var(--danger) 12%, var(--surface-2)); color: var(--danger); font-size: 14px; font-weight: 600; }
+#formulabase-root .fb-result .fb-req { color: var(--muted); }
+#formulabase-root .fb-result .fb-rvalue { color: var(--accent); }
+#formulabase-root .fb-result.err .fb-rvalue { color: var(--danger); }
+#formulabase-root .fb-result .fb-runit { font-size: 14px; color: var(--muted); font-weight: 600; }
+#formulabase-root .fb-notes { margin-top: 10px; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+
+/* welcome */
+#formulabase-root .fb-welcome { display: flex; justify-content: center; padding-top: 40px; }
+#formulabase-root .fb-welcome-card { text-align: center; max-width: 440px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 32px; }
+#formulabase-root .fb-welcome-card .logo.big { font-size: 52px; }
+#formulabase-root .fb-welcome-card h2 { margin: 12px 0 6px; }
+#formulabase-root .fb-welcome-card p { color: var(--muted); margin-bottom: 18px; }
+#formulabase-root .fb-welcome-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* side panel: steps */
+#formulabase-root .fb-side-sec { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+#formulabase-root .fb-side-h { font-weight: 800; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+#formulabase-root .fb-side-h .btn { margin-left: auto; }
+#formulabase-root .fb-side-sub { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
+#formulabase-root .fb-steps { list-style: none; margin: 0; padding: 0; }
+#formulabase-root .fb-steps li { padding: 5px 0; }
+#formulabase-root .fb-steps li code { font-size: 13px; word-break: break-word; }
+#formulabase-root .fb-steps li.first code { color: var(--muted); }
+#formulabase-root .fb-step-op { color: var(--primary); font-weight: 700; margin-right: 8px; }
+#formulabase-root .fb-step-final { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 18px; font-weight: 800; color: var(--accent); }
+
+/* side panel: history */
+#formulabase-root .fb-hist { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#formulabase-root .fb-hist li { display: flex; align-items: stretch; gap: 6px; }
+#formulabase-root .fb-hist-restore { flex: 1; min-width: 0; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 7px 10px; display: flex; flex-direction: column; gap: 2px; color: var(--text); }
+#formulabase-root .fb-hist-restore:hover { border-color: var(--primary); }
+#formulabase-root .fb-hist-in { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .fb-hist-out { font-weight: 700; color: var(--accent); font-size: 14px; }
+#formulabase-root .fb-hist-time { font-size: 11px; color: var(--muted); }
+#formulabase-root .fb-hist-del { flex: 0 0 auto; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 0 10px; color: var(--muted); }
+#formulabase-root .fb-hist-del:hover { color: var(--danger); border-color: var(--danger); }
+
+/* modals — structure (.modal / .modal-head / .modal-body / .modal-foot) matches RegiBase;
+   defined once in the ported block above. Only the mask overlay is set here. */
+#formulabase-root .modal-mask { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+
+/* templates grid */
+#formulabase-root .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+#formulabase-root .tpl-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); }
+#formulabase-root .tpl-cat { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .4px; }
+#formulabase-root .tpl-name { font-weight: 700; font-size: 14px; }
+#formulabase-root .tpl-expr { font-size: 12px; color: var(--muted); background: var(--surface); padding: 5px 8px; border-radius: 7px; overflow-x: auto; }
+#formulabase-root .tpl-card .btn { align-self: flex-start; margin-top: 2px; }
+
+@media (max-width: 900px) {
+  #formulabase-root .fb-content { flex-direction: column; }
+  #formulabase-root .fb-side { width: 100%; flex: 1 1 auto; position: static; }
+}
+
+/* template search */
+#formulabase-root .tpl-search { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; background: var(--surface); padding: 4px 0 12px; margin-bottom: 4px; }
+#formulabase-root .tpl-search-ic { font-size: 15px; opacity: .7; flex: 0 0 auto; }
+#formulabase-root .tpl-search .control { flex: 1 1 auto; }
+#formulabase-root .tpl-search-clear { flex: 0 0 auto; border: 1px solid var(--border); background: var(--surface-2); border-radius: 9px; width: 30px; height: 30px; color: var(--muted); cursor: pointer; }
+#formulabase-root .tpl-search-clear:hover { border-color: var(--primary); color: var(--text); }
+#formulabase-root .tpl-search-count { flex: 0 0 auto; font-size: 11px; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+
+/* grouped templates (accordion) */
+#formulabase-root .tpl-groups { display: flex; flex-direction: column; gap: 8px; }
+#formulabase-root .tpl-group-h { width: 100%; text-align: left; cursor: pointer; font-weight: 800; font-size: 14px; color: var(--primary); letter-spacing: .3px; padding: 10px 12px; border: 1px solid var(--border); background: var(--surface-2); border-radius: 10px; display: flex; align-items: center; gap: 10px; }
+#formulabase-root .tpl-group.open .tpl-group-h { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+#formulabase-root .tpl-group-h:hover { border-color: var(--primary); }
+#formulabase-root .tpl-group-caret { font-size: 10px; color: var(--muted); transition: transform .15s ease; flex: 0 0 auto; }
+#formulabase-root .tpl-group.open .tpl-group-caret { transform: rotate(90deg); }
+#formulabase-root .tpl-group-ic { font-size: 18px; flex: 0 0 auto; }
+#formulabase-root .tpl-group-title { flex: 1 1 auto; }
+#formulabase-root .tpl-group-n { font-size: 11px; color: var(--muted); background: var(--surface); border-radius: 999px; padding: 1px 9px; letter-spacing: 0; flex: 0 0 auto; }
+#formulabase-root .tpl-group.open .tpl-grid { border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); border-top: none; border-radius: 0 0 10px 10px; padding: 12px; margin-top: 0; }
+
+/* template card: ＋ button sits before the title */
+#formulabase-root .tpl-card-h { display: flex; align-items: center; gap: 8px; }
+#formulabase-root .tpl-add { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px; border: none; background: var(--primary); color: #fff; font-size: 18px; line-height: 1; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+#formulabase-root .tpl-add:hover { filter: brightness(1.08); }
+#formulabase-root .tpl-card .tpl-name { flex: 1 1 auto; }
+
+/* toast + copy buttons */
+#formulabase-root .fb-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 90; padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 600; color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.3); max-width: 80vw; }
+#formulabase-root .fb-toast-success { background: var(--accent); }
+#formulabase-root .fb-toast-error { background: var(--danger); }
+#formulabase-root .fb-toast-info { background: var(--primary); }
+#formulabase-root .fb-hist-copy { flex: 0 0 auto; border: 1px solid var(--border); background: var(--surface); border-radius: 9px; padding: 0 9px; color: var(--muted); font-size: 13px; }
+#formulabase-root .fb-hist-copy:hover { color: var(--primary); border-color: var(--primary); }
+
+/* real-math (MathML) rendering — genuine fraction bars, exponents, radicals, × / π */
+#formulabase-root math { font-size: 15px; line-height: 1.25; }
+#formulabase-root .fb-expr { color: var(--text); font-family: inherit; font-size: 15px; padding: 12px 14px; background: var(--surface-2); border-radius: 10px; border: 1px solid var(--border); }
+#formulabase-root .fb-expr math { font-size: 1.5em; }
+#formulabase-root .tpl-expr { color: var(--text); }
+#formulabase-root .tpl-expr math { font-size: 14px; }
+#formulabase-root .fb-math { display: inline-block; vertical-align: middle; }
+#formulabase-root .fb-steps li { overflow-x: auto; }
+#formulabase-root .fb-steps li .fb-math math { font-size: 15px; }
+#formulabase-root .fb-steps li.first .fb-math { color: var(--muted); }
+#formulabase-root .fb-expr-preview { margin-top: 8px; padding: 8px 10px; background: var(--surface-2); border: 1px dashed var(--border); border-radius: 8px; overflow-x: auto; color: var(--text); }
+#formulabase-root .fb-expr-preview math { font-size: 17px; }
+
+/* Collection icon: full categorized emoji palette that opens as a popup (ported from RegiBase). */
+#formulabase-root .iconpick-head { position: relative; display: flex; align-items: center; gap: 10px; }
+#formulabase-root .iconpick-head .iconpick-cur { font-size: 26px; line-height: 1; width: 44px; height: 44px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; }
+#formulabase-root .iconpick-head .iconpick-cur:hover, #formulabase-root .iconpick-head .iconpick-cur.open { border-color: var(--primary); }
+#formulabase-root .iconpick-head input { width: 90px; text-align: center; }
+/* Emoji picker opens as a popup when the icon mark is pressed (was always-open). */
+/* Centered fixed panel so the picker is never clipped by the scrolling modal body. */
+#formulabase-root .emoji-popup { position: fixed; z-index: 40; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(360px, 92vw); max-height: 72vh; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 16px 44px rgba(0,0,0,0.3); padding: 6px; }
+#formulabase-root .emoji-popup .emoji-palette { max-height: none; flex: 1 1 auto; min-height: 0; border: 0; background: transparent; padding: 4px; overflow-y: auto; }
+#formulabase-root .emoji-palette { max-height: 260px; overflow-y: auto; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+#formulabase-root .emoji-cat { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 8px 0 4px; }
+#formulabase-root .emoji-group:first-child .emoji-cat { margin-top: 0; }
+#formulabase-root .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 2px; }
+#formulabase-root .emoji-btn { font-size: 20px; line-height: 1; padding: 5px 0; border: 1px solid transparent; border-radius: 8px; background: transparent; cursor: pointer; }
+#formulabase-root .emoji-btn:hover { background: var(--surface); }
+#formulabase-root .emoji-btn.sel { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, var(--surface)); }
+#formulabase-root .perm-backdrop { position: fixed; inset: 0; z-index: 25; background: transparent; }
+
+/* input-assist palette (formula editor) */
+#formulabase-root .fb-expr-hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; line-height: 1.5; }
+#formulabase-root .fb-pad { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+#formulabase-root .fb-pad-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#formulabase-root .fb-pad-btn { min-width: 36px; justify-content: center; font-size: 15px; font-weight: 600; }
+#formulabase-root .fb-pad-btn.var { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 500; background: color-mix(in srgb, var(--primary) 10%, var(--surface)); border-color: color-mix(in srgb, var(--primary) 30%, var(--border)); }
+#formulabase-root .fb-pad-tag { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: 2px; }
+#formulabase-root .fb-pad-vars { margin-top: 2px; }
+
+/* settings modal (theme + language) */
+#formulabase-root .settings-body .field { padding-left: 16px; }
+#formulabase-root .settings-body .field > label { margin-left: -16px; }
+#formulabase-root .fb-radios { display: flex; flex-wrap: wrap; gap: 8px; }
+#formulabase-root .fb-radio { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 14px; cursor: pointer; }
+#formulabase-root .fb-radio input { margin: 0; accent-color: var(--primary); }
+
+/* settings/collection modal — match RegiBase field layout & radios */
+#formulabase-root .radios { display: flex; gap: 16px; flex-wrap: wrap; }
+#formulabase-root .radios label { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; }
+#formulabase-root .field-row { display: flex; gap: 12px; align-items: flex-start; }
+#formulabase-root .field-row > .field { flex: 1 1 0; min-width: 0; }
+#formulabase-root .field-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+#formulabase-root .topbar .title .desc { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- internal collection sharing (ported from RegiBase, permission-only) ---- */
+#formulabase-root .muted { color: var(--muted); }
+#formulabase-root .share-badge { font-size: 12px; margin-right: 4px; line-height: 1; flex: 0 0 auto; }
+#formulabase-root .settings-body .share-section { padding-left: 0; }
+#formulabase-root .settings-body .share-section .share-body { padding-left: 16px; }
+#formulabase-root .share-section { border-top: 1px dashed var(--border); padding-top: 12px; }
+#formulabase-root .share-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; text-align: left; }
+#formulabase-root .share-toggle:hover { color: var(--text); }
+#formulabase-root .share-toggle .share-caret { font-size: 11px; flex: 0 0 auto; color: var(--muted); }
+#formulabase-root .share-toggle .share-toggle-label { flex: 0 0 auto; }
+#formulabase-root .share-toggle .share-hint { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
+#formulabase-root .share-toggle:hover .share-hint { color: var(--primary); }
+#formulabase-root .share-toggle .share-count { flex: 0 0 auto; margin-left: auto; min-width: 20px; text-align: center; padding: 1px 7px; border-radius: 10px; background: var(--primary); color: #fff; font-size: 12px; }
+#formulabase-root .share-body { padding-top: 10px; }
+#formulabase-root .share-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+#formulabase-root .share-row { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+#formulabase-root .share-row .share-user { flex: 1 1 auto; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formulabase-root .share-perm { flex: 0 0 auto; }
+#formulabase-root .share-add { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+#formulabase-root .share-search { position: relative; }
+#formulabase-root .share-results { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+#formulabase-root .share-result { text-align: left; background: transparent; border: 0; padding: 7px 10px; cursor: pointer; font-size: 13px; }
+#formulabase-root .share-result:hover { background: var(--surface-2); }
+#formulabase-root .share-picked { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+#formulabase-root .share-add input:not([type='checkbox']):not([type='radio']),
+#formulabase-root .share-add select {
+  width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); outline: none; min-height: 44px;
+}
+#formulabase-root .share-add input:focus, #formulabase-root .share-add select:focus { border-color: var(--primary); }
+#formulabase-root .share-top { display: flex; gap: 8px; align-items: flex-start; }
+#formulabase-root .share-top .share-search, #formulabase-root .share-top .share-picked { flex: 1 1 auto; min-width: 0; }
+#formulabase-root .share-top .perm-wrap {
+  position: relative; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; min-width: 84px; padding: 0 26px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text);
+}
+#formulabase-root .share-top .perm-wrap.open, #formulabase-root .share-top .perm-wrap:hover { border-color: var(--primary); }
+#formulabase-root .share-top .perm-label { font-size: 16px; line-height: 1; color: var(--text); pointer-events: none; }
+#formulabase-root .share-top .perm-arrow { position: absolute; right: 9px; top: 50%; transform: translateY(-55%); font-size: 13px; color: var(--muted); pointer-events: none; }
+#formulabase-root .share-top .perm-menu {
+  position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; min-width: 100%;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18); overflow: hidden; padding: 4px;
+}
+#formulabase-root .share-top .perm-opt {
+  display: block; width: 100%; text-align: center; padding: 9px 14px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text); font-size: 15px; white-space: nowrap; cursor: pointer;
+}
+#formulabase-root .share-top .perm-opt:hover { background: var(--surface-2); }
+#formulabase-root .share-top .perm-opt.sel { background: var(--primary); color: #fff; }
+#formulabase-root .share-err { color: var(--danger, #e11d48); font-size: 12px; margin: 4px 0; }
+
+/* ---- formula description (Markdown) ---- */
+#formulabase-root .fb-desc { margin: 2px 0 8px; }
+#formulabase-root .fb-md { font-size: 13px; color: var(--text); line-height: 1.55; word-break: break-word; }
+#formulabase-root .fb-md > :first-child { margin-top: 0; }
+#formulabase-root .fb-md > :last-child { margin-bottom: 0; }
+#formulabase-root .fb-md p { margin: 0 0 6px; }
+#formulabase-root .fb-md h1, #formulabase-root .fb-md h2, #formulabase-root .fb-md h3,
+#formulabase-root .fb-md h4, #formulabase-root .fb-md h5, #formulabase-root .fb-md h6 { margin: 8px 0 4px; font-size: 1em; font-weight: 700; }
+#formulabase-root .fb-md h1 { font-size: 1.2em; }
+#formulabase-root .fb-md h2 { font-size: 1.1em; }
+#formulabase-root .fb-md ul, #formulabase-root .fb-md ol { margin: 4px 0 6px; padding-left: 20px; }
+#formulabase-root .fb-md li { margin: 1px 0; }
+#formulabase-root .fb-md code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: .92em; }
+#formulabase-root .fb-md pre { background: var(--surface-2); padding: 8px 10px; border-radius: 8px; overflow-x: auto; margin: 6px 0; }
+#formulabase-root .fb-md pre code { background: transparent; padding: 0; }
+#formulabase-root .fb-md blockquote { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--border); color: var(--muted); }
+#formulabase-root .fb-md a { color: var(--primary); }
+#formulabase-root .fb-md hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+#formulabase-root .fb-md-tabs { float: right; display: inline-flex; gap: 4px; }
+#formulabase-root .fb-md-preview { min-height: 64px; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); }
