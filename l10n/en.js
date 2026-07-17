@@ -12433,6 +12433,8 @@ OC.L10N.register(
     "Robotics": "Robotics",
     "Renewable energy": "Renewable energy",
     "Agriculture": "Agriculture",
-    "Number theory": "Number theory"
+    "Number theory": "Number theory",
+    "Loading templates…" : "Loading templates…",
+    "Could not load templates." : "Could not load templates."
 },
 "nplurals=2; plural=(n != 1);");

@@ -124,6 +124,40 @@ class ApiController extends Controller {
 		return new JSONResponse(['translations' => $data['translations'] ?? []]);
 	}
 
+	/**
+	 * Formula templates (~3000 famous formulas) are not shipped in the JS bundle — the
+	 * picker loads a lightweight search index once, then each genre's full body (with
+	 * description/notes) only when that genre is expanded. See data/templates/.
+	 */
+	private function templatesDataDir(): string {
+		return __DIR__ . '/../../data/templates';
+	}
+
+	/** Lightweight index: {name, cat, expression, variables:[{key,label,default}]} for every template. */
+	#[NoAdminRequired]
+	public function templatesIndex(): JSONResponse {
+		$path = $this->templatesDataDir() . '/index.json';
+		$data = json_decode((string)@file_get_contents($path), true);
+		return new JSONResponse($data ?? []);
+	}
+
+	/** Full template bodies for one category, resolved via manifest.json (exact-name lookup, no path building from input). */
+	#[NoAdminRequired]
+	public function templatesCat(string $cat): JSONResponse {
+		$dir = $this->templatesDataDir();
+		$manifest = json_decode((string)@file_get_contents($dir . '/manifest.json'), true);
+		if (!is_array($manifest) || !isset($manifest[$cat])) {
+			return new JSONResponse(['error' => 'unknown category'], Http::STATUS_NOT_FOUND);
+		}
+		$base = realpath($dir);
+		$path = realpath($dir . '/' . $manifest[$cat]);
+		if ($path === false || $base === false || strpos($path, $base) !== 0) {
+			return new JSONResponse(['error' => 'not found'], Http::STATUS_NOT_FOUND);
+		}
+		$data = json_decode((string)file_get_contents($path), true);
+		return new JSONResponse($data ?? []);
+	}
+
 	private function uid(): string {
 		$u = $this->userSession->getUser();
 		return $u ? $u->getUID() : '';

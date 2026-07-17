@@ -12433,6 +12433,8 @@ OC.L10N.register(
     "Robotics": "ロボティクス",
     "Renewable energy": "再生可能エネルギー",
     "Agriculture": "農業",
-    "Number theory": "数論"
+    "Number theory": "数論",
+    "Loading templates…" : "テンプレートを読み込み中…",
+    "Could not load templates." : "テンプレートを読み込めませんでした。"
 },
 "nplurals=1; plural=0;");
