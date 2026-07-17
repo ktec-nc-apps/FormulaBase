@@ -1,6 +1,10 @@
 OC.L10N.register(
     "formulabase",
     {
+    "Solve this variable from the result": "Solve this variable from the result",
+    "Target result": "Target result",
+    "Enter the desired result": "Enter the desired result",
+    "No solution found for this value.": "No solution found for this value.",
     "Reversible": "Reversible",
     "This formula can be reverse-calculated (solve for a variable from the result).": "This formula can be reverse-calculated (solve for a variable from the result).",
     "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.": "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.",

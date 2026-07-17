@@ -150,6 +150,41 @@
   }
   function extractVars(expr) { try { return collectVars(parseAST(expr), [], {}); } catch (e) { return []; } }
 
+  // Numerically solve `expr` for `key` such that evaluating it (with the rest of
+  // `scope` held fixed) equals `target`. Uses the secant method retried from several
+  // seed points, since the expression's derivative isn't known symbolically. Returns
+  // a finite number, or null if no root is found (domain error, no convergence, etc).
+  function solveVar(expr, scope, key, target) {
+    const ast = parseAST(expr);
+    const f = (x) => {
+      let v;
+      try { v = evalAST(ast, Object.assign({}, scope, { [key]: x })); } catch (e) { return NaN; }
+      return (typeof v === 'number' && isFinite(v)) ? v - target : NaN;
+    };
+    const tol = 1e-13 * Math.max(1, Math.abs(target));
+    for (const x0 of [1, 2, 0.5, 10, 100, -1, -10, -100, 0.1, -0.5, 1000, -1000]) {
+      let x1 = x0, x2 = x0 + (Math.abs(x0) > 1e-6 ? x0 * 1e-3 : 1e-3);
+      let f1 = f(x1);
+      if (!isFinite(f1)) continue;
+      let solved = null;
+      for (let i = 0; i < 80; i++) {
+        const f2 = f(x2);
+        if (!isFinite(f2)) { x2 = (x2 + x1) / 2; continue; }
+        if (Math.abs(f2) < tol) { solved = x2; break; }
+        const denom = f2 - f1;
+        if (denom === 0) break;
+        const xNext = x2 - f2 * (x2 - x1) / denom;
+        if (!isFinite(xNext) || Math.abs(xNext) > 1e15) break;
+        x1 = x2; f1 = f2; x2 = xNext;
+      }
+      if (solved != null) {
+        const verify = f(solved);
+        if (isFinite(verify) && Math.abs(verify) < 1e-6 * Math.max(1, Math.abs(target)) + 1e-6) return solved;
+      }
+    }
+    return null;
+  }
+
   function fmtV(v) { if (!isFinite(v)) return String(v); const nn = Number(v.toPrecision(12)); return String(nn); }
 
   function nodePrec(n) { return n.type === 'bin' ? PREC[n.op] : n.type === 'unary' ? 4 : 5; }
@@ -3411,13 +3446,24 @@
               <div class="fb-desc fb-md" v-if="f.description" v-html="md(t(f.description))"></div>
               <div class="fb-expr" v-html="mathml(f.expression)"></div>
               <div class="fb-vars" v-if="f.variables.length">
-                <label class="fb-var" v-for="v in f.variables" :key="v.key">
-                  <span class="fb-vlabel">{{ v.label ? t(v.label) : v.key }}</span>
+                <label class="fb-var" v-for="v in f.variables" :key="v.key" :class="{ solving: isSolving(f, v.key) }">
+                  <span class="fb-vlabel">
+                    {{ v.label ? t(v.label) : v.key }}
+                    <button v-if="isReversible(f)" type="button" class="fb-solve-btn" :class="{ active: isSolving(f, v.key) }" @click.stop="toggleSolve(f, v.key)" :title="t('Solve this variable from the result')">🎯</button>
+                  </span>
                   <span class="fb-vinput">
-                    <input type="number" step="any" inputmode="decimal" v-model="inputs[f.id][v.key]" :placeholder="ph(v)">
+                    <input type="number" step="any" inputmode="decimal" :value="inputs[f.id][v.key]" @input="setVar(f, v.key, $event.target.value)" :disabled="isSolving(f, v.key)" :placeholder="ph(v)">
                     <span class="fb-vunit" v-if="v.unit">{{ v.unit }}</span>
                   </span>
                 </label>
+              </div>
+              <div class="fb-solve" v-if="solveFor[f.id]">
+                <span class="fb-req">{{ t('Target result') }} =</span>
+                <input type="number" step="any" inputmode="decimal" class="fb-solve-input" :value="solveTarget[f.id]" @input="setTarget(f, $event.target.value)" :placeholder="t('Enter the desired result')">
+                <span class="fb-runit" v-if="f.result_unit">{{ f.result_unit }}</span>
+                <span class="spacer"></span>
+                <span class="err-msg" v-if="solveErr[f.id]">⚠ {{ t('No solution found for this value.') }}</span>
+                <button class="btn xs" @click.stop="toggleSolve(f, solveFor[f.id])">{{ t('Cancel') }}</button>
               </div>
               <div class="fb-result" :class="{err: result(f).err, ok: result(f).ok}">
                 <span class="fb-req">=</span>
@@ -3753,6 +3799,10 @@
         inputs: {},
         activeId: null,
         history: {},
+        // reverse calculation: which variable (if any) is solved from a target result
+        solveFor: {},
+        solveTarget: {},
+        solveErr: {},
         templates: TEMPLATES,
         tplSearch: '',
         tplOpen: {},
@@ -3986,6 +4036,48 @@
           return { ok: true, err: false, text: fmtNum(val, f.decimals), value: val };
         } catch (e) { return { ok: false, err: true, text: '⚠ ' + (e.message || 'error') }; }
       },
+      /* reverse calculation: pick a variable, enter the target result, solve for it numerically */
+      isSolving(f, key) { return this.solveFor[f.id] === key; },
+      setVar(f, key, val) {
+        const inputs = this.inputs[f.id] || (this.inputs[f.id] = {});
+        inputs[key] = val;
+        if (this.solveFor[f.id] && this.solveFor[f.id] !== key) this.applySolve(f);
+      },
+      setTarget(f, val) { this.solveTarget[f.id] = val; this.applySolve(f); },
+      toggleSolve(f, key) {
+        if (this.solveFor[f.id] === key) { this.solveFor[f.id] = null; this.solveErr[f.id] = false; return; }
+        this.solveFor[f.id] = key;
+        this.solveErr[f.id] = false;
+        if (!this.solveTarget[f.id]) {
+          const r = this.result(f);
+          this.solveTarget[f.id] = r.ok ? String(r.value) : '';
+        }
+        this.applySolve(f);
+      },
+      applySolve(f) {
+        const key = this.solveFor[f.id];
+        if (!key) return;
+        const inputs = this.inputs[f.id] || (this.inputs[f.id] = {});
+        const raw = this.solveTarget[f.id];
+        const target = Number(raw);
+        this.solveErr[f.id] = false;
+        if (raw === '' || raw == null || isNaN(target)) { inputs[key] = ''; return; }
+        const scope = {};
+        for (const v of f.variables) {
+          if (v.key === key) continue;
+          const rv = inputs[v.key];
+          if (rv === '' || rv == null) {
+            if (v.default !== '' && v.default != null && !isNaN(Number(v.default))) { scope[v.key] = Number(v.default); continue; }
+            inputs[key] = ''; return;
+          }
+          const num = Number(rv); if (isNaN(num)) { inputs[key] = ''; return; }
+          scope[v.key] = num;
+        }
+        let x = null;
+        try { x = solveVar(f.expression, scope, key, target); } catch (e) { x = null; }
+        if (x == null || !isFinite(x)) { inputs[key] = ''; this.solveErr[f.id] = true; return; }
+        inputs[key] = String(x);
+      },
       async loadCollections() {
         try {
           this.collections = await api('collections');
@@ -4004,6 +4096,9 @@
         }
         this.inputs = inputs;
         this.history = {};
+        this.solveFor = {};
+        this.solveTarget = {};
+        this.solveErr = {};
         this.activeId = this.formulas.length ? this.formulas[0].id : null;
         if (this.activeId != null) this.loadHistory(this.activeId);
       },

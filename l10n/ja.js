@@ -1,6 +1,10 @@
 OC.L10N.register(
     "formulabase",
     {
+    "Solve this variable from the result": "この変数を結果から逆算する",
+    "Target result": "目標の結果",
+    "Enter the desired result": "求めたい結果を入力",
+    "No solution found for this value.": "この値に対する解が見つかりませんでした。",
     "Reversible": "逆算可",
     "This formula can be reverse-calculated (solve for a variable from the result).": "この公式は逆算できます（結果から変数の値を求められます）。",
     "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.": "半径 r から円周（円の周りの長さ）を 2×pi×r で求めます。結果は円を一周する距離で、半径と同じ長さの単位になります。",
