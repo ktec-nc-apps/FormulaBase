@@ -3625,74 +3625,75 @@ const _hoisted_176 = { class: "tpl-card-h" }
 const _hoisted_177 = ["onClick", "title", "aria-label"]
 const _hoisted_178 = { class: "tpl-name" }
 const _hoisted_179 = ["innerHTML"]
-const _hoisted_180 = { class: "modal-foot" }
-const _hoisted_181 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_182 = { class: "modal" }
-const _hoisted_183 = { class: "modal-head" }
-const _hoisted_184 = { class: "modal-body settings-body" }
-const _hoisted_185 = { class: "field" }
-const _hoisted_186 = { class: "radios" }
-const _hoisted_187 = {
+const _hoisted_180 = ["innerHTML"]
+const _hoisted_181 = { class: "modal-foot" }
+const _hoisted_182 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_183 = { class: "modal" }
+const _hoisted_184 = { class: "modal-head" }
+const _hoisted_185 = { class: "modal-body settings-body" }
+const _hoisted_186 = { class: "field" }
+const _hoisted_187 = { class: "radios" }
+const _hoisted_188 = {
   class: "field",
   style: {"margin-top":"16px"}
 }
-const _hoisted_188 = { value: "auto" }
-const _hoisted_189 = ["value"]
-const _hoisted_190 = { class: "field-hint" }
-const _hoisted_191 = {
+const _hoisted_189 = { value: "auto" }
+const _hoisted_190 = ["value"]
+const _hoisted_191 = { class: "field-hint" }
+const _hoisted_192 = {
   class: "field",
   style: {"margin-top":"16px","border-top":"1px solid var(--border)","padding-top":"14px"}
 }
-const _hoisted_192 = {
+const _hoisted_193 = {
   class: "field-hint",
   style: {"margin-bottom":"8px"}
 }
-const _hoisted_193 = { style: {"display":"flex","gap":"8px","flex-wrap":"wrap"} }
-const _hoisted_194 = { class: "modal-foot" }
-const _hoisted_195 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
-const _hoisted_196 = { class: "modal" }
-const _hoisted_197 = { class: "modal-head" }
-const _hoisted_198 = ["disabled"]
-const _hoisted_199 = { style: {"margin-top":"0","font-size":"13px","color":"var(--muted)"} }
-const _hoisted_200 = { class: "field" }
-const _hoisted_201 = ["placeholder"]
-const _hoisted_202 = {
+const _hoisted_194 = { style: {"display":"flex","gap":"8px","flex-wrap":"wrap"} }
+const _hoisted_195 = { class: "modal-foot" }
+const _hoisted_196 = /*#__PURE__*/_createElementVNode("span", { class: "spacer" }, null, -1 /* HOISTED */)
+const _hoisted_197 = { class: "modal" }
+const _hoisted_198 = { class: "modal-head" }
+const _hoisted_199 = ["disabled"]
+const _hoisted_200 = { style: {"margin-top":"0","font-size":"13px","color":"var(--muted)"} }
+const _hoisted_201 = { class: "field" }
+const _hoisted_202 = ["placeholder"]
+const _hoisted_203 = {
   key: 0,
   style: {"color":"var(--danger)","font-size":"13px"}
 }
-const _hoisted_203 = {
+const _hoisted_204 = {
   key: 1,
   style: {"font-size":"13px","color":"var(--muted)"}
 }
-const _hoisted_204 = { class: "modal-foot" }
-const _hoisted_205 = ["disabled"]
+const _hoisted_205 = { class: "modal-foot" }
 const _hoisted_206 = ["disabled"]
-const _hoisted_207 = { class: "modal" }
-const _hoisted_208 = { class: "modal-head" }
-const _hoisted_209 = ["disabled"]
-const _hoisted_210 = { class: "modal-body" }
-const _hoisted_211 = { class: "filepick" }
-const _hoisted_212 = { class: "btn sm" }
-const _hoisted_213 = { class: "filepick-name" }
-const _hoisted_214 = {
+const _hoisted_207 = ["disabled"]
+const _hoisted_208 = { class: "modal" }
+const _hoisted_209 = { class: "modal-head" }
+const _hoisted_210 = ["disabled"]
+const _hoisted_211 = { class: "modal-body" }
+const _hoisted_212 = { class: "filepick" }
+const _hoisted_213 = { class: "btn sm" }
+const _hoisted_214 = { class: "filepick-name" }
+const _hoisted_215 = {
   class: "field",
   style: {"margin-top":"12px"}
 }
-const _hoisted_215 = { class: "field" }
-const _hoisted_216 = { class: "radios" }
-const _hoisted_217 = { style: {"color":"var(--danger)","font-size":"13px","background":"color-mix(in srgb,var(--danger) 12%,transparent)","padding":"8px 10px","border-radius":"8px"} }
-const _hoisted_218 = { class: "confirm-check" }
-const _hoisted_219 = {
+const _hoisted_216 = { class: "field" }
+const _hoisted_217 = { class: "radios" }
+const _hoisted_218 = { style: {"color":"var(--danger)","font-size":"13px","background":"color-mix(in srgb,var(--danger) 12%,transparent)","padding":"8px 10px","border-radius":"8px"} }
+const _hoisted_219 = { class: "confirm-check" }
+const _hoisted_220 = {
   key: 1,
   style: {"color":"var(--danger)","font-size":"13px","margin-top":"8px"}
 }
-const _hoisted_220 = {
+const _hoisted_221 = {
   key: 2,
   style: {"font-size":"13px","color":"var(--muted)","margin-top":"8px"}
 }
-const _hoisted_221 = { class: "modal-foot" }
-const _hoisted_222 = ["disabled"]
+const _hoisted_222 = { class: "modal-foot" }
 const _hoisted_223 = ["disabled"]
+const _hoisted_224 = ["disabled"]
 
 return function render(_ctx, _cache) {
   return (_openBlock(), _createElementBlock("div", _hoisted_1, [
@@ -4583,7 +4584,14 @@ return function render(_ctx, _cache) {
                               _createElementVNode("div", {
                                 class: "tpl-expr",
                                 innerHTML: _ctx.mathml(tp.expression)
-                              }, null, 8 /* PROPS */, _hoisted_179)
+                              }, null, 8 /* PROPS */, _hoisted_179),
+                              (tp.description)
+                                ? (_openBlock(), _createElementBlock("div", {
+                                    key: 0,
+                                    class: "tpl-desc fb-md",
+                                    innerHTML: _ctx.md(_ctx.t(tp.description))
+                                  }, null, 8 /* PROPS */, _hoisted_180))
+                                : _createCommentVNode("v-if", true)
                             ]))
                           }), 128 /* KEYED_FRAGMENT */))
                         ]))
@@ -4592,8 +4600,8 @@ return function render(_ctx, _cache) {
                 }), 128 /* KEYED_FRAGMENT */))
               ])
             ]),
-            _createElementVNode("div", _hoisted_180, [
-              _hoisted_181,
+            _createElementVNode("div", _hoisted_181, [
+              _hoisted_182,
               _createElementVNode("button", {
                 class: "btn",
                 onClick: _cache[48] || (_cache[48] = $event => (_ctx.modal=null))
@@ -4608,18 +4616,18 @@ return function render(_ctx, _cache) {
           class: "modal-mask",
           onClick: _cache[62] || (_cache[62] = _withModifiers($event => (_ctx.modal=null), ["self"]))
         }, [
-          _createElementVNode("div", _hoisted_182, [
-            _createElementVNode("div", _hoisted_183, [
+          _createElementVNode("div", _hoisted_183, [
+            _createElementVNode("div", _hoisted_184, [
               _createElementVNode("h3", null, _toDisplayString(_ctx.t('⚙️ Settings')), 1 /* TEXT */),
               _createElementVNode("button", {
                 class: "icon-btn",
                 onClick: _cache[50] || (_cache[50] = (...args) => (_ctx.cancelSettings && _ctx.cancelSettings(...args)))
               }, "✕")
             ]),
-            _createElementVNode("div", _hoisted_184, [
-              _createElementVNode("div", _hoisted_185, [
+            _createElementVNode("div", _hoisted_185, [
+              _createElementVNode("div", _hoisted_186, [
                 _createElementVNode("label", null, "🌗 " + _toDisplayString(_ctx.t('Theme')), 1 /* TEXT */),
-                _createElementVNode("div", _hoisted_186, [
+                _createElementVNode("div", _hoisted_187, [
                   _createElementVNode("label", null, [
                     _withDirectives(_createElementVNode("input", {
                       type: "radio",
@@ -4655,27 +4663,27 @@ return function render(_ctx, _cache) {
                   ])
                 ])
               ]),
-              _createElementVNode("div", _hoisted_187, [
+              _createElementVNode("div", _hoisted_188, [
                 _createElementVNode("label", null, "🌐 " + _toDisplayString(_ctx.t('Language')), 1 /* TEXT */),
                 _withDirectives(_createElementVNode("select", {
                   "onUpdate:modelValue": _cache[57] || (_cache[57] = $event => ((_ctx.settingsForm.language) = $event))
                 }, [
-                  _createElementVNode("option", _hoisted_188, _toDisplayString(_ctx.t('System default (match Nextcloud)')), 1 /* TEXT */),
+                  _createElementVNode("option", _hoisted_189, _toDisplayString(_ctx.t('System default (match Nextcloud)')), 1 /* TEXT */),
                   (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.languages, (lg) => {
                     return (_openBlock(), _createElementBlock("option", {
                       key: lg.code,
                       value: lg.code
-                    }, _toDisplayString(lg.name), 9 /* TEXT, PROPS */, _hoisted_189))
+                    }, _toDisplayString(lg.name), 9 /* TEXT, PROPS */, _hoisted_190))
                   }), 128 /* KEYED_FRAGMENT */))
                 ], 512 /* NEED_PATCH */), [
                   [_vModelSelect, _ctx.settingsForm.language]
                 ]),
-                _createElementVNode("div", _hoisted_190, _toDisplayString(_ctx.t('The display language switches when you press “Save”.')), 1 /* TEXT */)
+                _createElementVNode("div", _hoisted_191, _toDisplayString(_ctx.t('The display language switches when you press “Save”.')), 1 /* TEXT */)
               ]),
-              _createElementVNode("div", _hoisted_191, [
+              _createElementVNode("div", _hoisted_192, [
                 _createElementVNode("label", null, "💾 " + _toDisplayString(_ctx.t('Backup / Restore')), 1 /* TEXT */),
-                _createElementVNode("div", _hoisted_192, _toDisplayString(_ctx.t('Save all your collections and formulas to a ZIP file, or restore them from one.')), 1 /* TEXT */),
-                _createElementVNode("div", _hoisted_193, [
+                _createElementVNode("div", _hoisted_193, _toDisplayString(_ctx.t('Save all your collections and formulas to a ZIP file, or restore them from one.')), 1 /* TEXT */),
+                _createElementVNode("div", _hoisted_194, [
                   _createElementVNode("button", {
                     type: "button",
                     class: "btn sm",
@@ -4689,8 +4697,8 @@ return function render(_ctx, _cache) {
                 ])
               ])
             ]),
-            _createElementVNode("div", _hoisted_194, [
-              _hoisted_195,
+            _createElementVNode("div", _hoisted_195, [
+              _hoisted_196,
               _createElementVNode("button", {
                 class: "btn",
                 onClick: _cache[60] || (_cache[60] = (...args) => (_ctx.cancelSettings && _ctx.cancelSettings(...args)))
@@ -4709,49 +4717,49 @@ return function render(_ctx, _cache) {
           class: "modal-mask",
           onClick: _cache[68] || (_cache[68] = _withModifiers($event => (!_ctx.backupForm.busy && (_ctx.modal=null)), ["self"]))
         }, [
-          _createElementVNode("div", _hoisted_196, [
-            _createElementVNode("div", _hoisted_197, [
+          _createElementVNode("div", _hoisted_197, [
+            _createElementVNode("div", _hoisted_198, [
               _createElementVNode("h3", null, _toDisplayString(_ctx.t('💾 Download all data')), 1 /* TEXT */),
               _createElementVNode("button", {
                 class: "icon-btn",
                 disabled: _ctx.backupForm.busy,
                 onClick: _cache[63] || (_cache[63] = $event => (_ctx.modal=null))
-              }, "✕", 8 /* PROPS */, _hoisted_198)
+              }, "✕", 8 /* PROPS */, _hoisted_199)
             ]),
             _createElementVNode("form", {
               class: "modal-body",
               onSubmit: _cache[65] || (_cache[65] = _withModifiers((...args) => (_ctx.doBackup && _ctx.doBackup(...args)), ["prevent"]))
             }, [
-              _createElementVNode("p", _hoisted_199, _toDisplayString(_ctx.t('Optionally set a password to encrypt the ZIP. Leave it blank for a plain (unencrypted) archive.')), 1 /* TEXT */),
-              _createElementVNode("div", _hoisted_200, [
+              _createElementVNode("p", _hoisted_200, _toDisplayString(_ctx.t('Optionally set a password to encrypt the ZIP. Leave it blank for a plain (unencrypted) archive.')), 1 /* TEXT */),
+              _createElementVNode("div", _hoisted_201, [
                 _createElementVNode("label", null, _toDisplayString(_ctx.t('Password (optional)')), 1 /* TEXT */),
                 _withDirectives(_createElementVNode("input", {
                   type: "password",
                   "onUpdate:modelValue": _cache[64] || (_cache[64] = $event => ((_ctx.backupForm.password) = $event)),
                   autocomplete: "new-password",
                   placeholder: _ctx.t('Blank = no encryption')
-                }, null, 8 /* PROPS */, _hoisted_201), [
+                }, null, 8 /* PROPS */, _hoisted_202), [
                   [_vModelText, _ctx.backupForm.password]
                 ])
               ]),
               (_ctx.backupForm.err)
-                ? (_openBlock(), _createElementBlock("div", _hoisted_202, _toDisplayString(_ctx.backupForm.err), 1 /* TEXT */))
+                ? (_openBlock(), _createElementBlock("div", _hoisted_203, _toDisplayString(_ctx.backupForm.err), 1 /* TEXT */))
                 : _createCommentVNode("v-if", true),
               (_ctx.backupForm.busy)
-                ? (_openBlock(), _createElementBlock("div", _hoisted_203, _toDisplayString(_ctx.t('Creating…')), 1 /* TEXT */))
+                ? (_openBlock(), _createElementBlock("div", _hoisted_204, _toDisplayString(_ctx.t('Creating…')), 1 /* TEXT */))
                 : _createCommentVNode("v-if", true)
             ], 32 /* NEED_HYDRATION */),
-            _createElementVNode("div", _hoisted_204, [
+            _createElementVNode("div", _hoisted_205, [
               _createElementVNode("button", {
                 class: "btn",
                 disabled: _ctx.backupForm.busy,
                 onClick: _cache[66] || (_cache[66] = $event => (_ctx.modal=null))
-              }, _toDisplayString(_ctx.t('Cancel')), 9 /* TEXT, PROPS */, _hoisted_205),
+              }, _toDisplayString(_ctx.t('Cancel')), 9 /* TEXT, PROPS */, _hoisted_206),
               _createElementVNode("button", {
                 class: "btn primary",
                 disabled: _ctx.backupForm.busy,
                 onClick: _cache[67] || (_cache[67] = (...args) => (_ctx.doBackup && _ctx.doBackup(...args)))
-              }, _toDisplayString(_ctx.t('Download')), 9 /* TEXT, PROPS */, _hoisted_206)
+              }, _toDisplayString(_ctx.t('Download')), 9 /* TEXT, PROPS */, _hoisted_207)
             ])
           ])
         ]))
@@ -4762,26 +4770,26 @@ return function render(_ctx, _cache) {
           class: "modal-mask",
           onClick: _cache[78] || (_cache[78] = _withModifiers($event => (!_ctx.restoreForm.busy && (_ctx.modal=null)), ["self"]))
         }, [
-          _createElementVNode("div", _hoisted_207, [
-            _createElementVNode("div", _hoisted_208, [
+          _createElementVNode("div", _hoisted_208, [
+            _createElementVNode("div", _hoisted_209, [
               _createElementVNode("h3", null, _toDisplayString(_ctx.t('♻ Restore from backup')), 1 /* TEXT */),
               _createElementVNode("button", {
                 class: "icon-btn",
                 disabled: _ctx.restoreForm.busy,
                 onClick: _cache[69] || (_cache[69] = $event => (_ctx.modal=null))
-              }, "✕", 8 /* PROPS */, _hoisted_209)
+              }, "✕", 8 /* PROPS */, _hoisted_210)
             ]),
-            _createElementVNode("div", _hoisted_210, [
-              _createElementVNode("label", _hoisted_211, [
+            _createElementVNode("div", _hoisted_211, [
+              _createElementVNode("label", _hoisted_212, [
                 _createElementVNode("input", {
                   type: "file",
                   accept: ".zip",
                   onChange: _cache[70] || (_cache[70] = (...args) => (_ctx.onRestoreFile && _ctx.onRestoreFile(...args)))
                 }, null, 32 /* NEED_HYDRATION */),
-                _createElementVNode("span", _hoisted_212, _toDisplayString(_ctx.t('📄 Choose file')), 1 /* TEXT */),
-                _createElementVNode("span", _hoisted_213, _toDisplayString(_ctx.restoreForm.fileName || _ctx.t('Backup file (.zip)')), 1 /* TEXT */)
+                _createElementVNode("span", _hoisted_213, _toDisplayString(_ctx.t('📄 Choose file')), 1 /* TEXT */),
+                _createElementVNode("span", _hoisted_214, _toDisplayString(_ctx.restoreForm.fileName || _ctx.t('Backup file (.zip)')), 1 /* TEXT */)
               ]),
-              _createElementVNode("div", _hoisted_214, [
+              _createElementVNode("div", _hoisted_215, [
                 _createElementVNode("label", null, _toDisplayString(_ctx.t('Password (only if the backup has one)')), 1 /* TEXT */),
                 _withDirectives(_createElementVNode("input", {
                   type: "password",
@@ -4791,9 +4799,9 @@ return function render(_ctx, _cache) {
                   [_vModelText, _ctx.restoreForm.password]
                 ])
               ]),
-              _createElementVNode("div", _hoisted_215, [
+              _createElementVNode("div", _hoisted_216, [
                 _createElementVNode("label", null, _toDisplayString(_ctx.t('Restore method')), 1 /* TEXT */),
-                _createElementVNode("div", _hoisted_216, [
+                _createElementVNode("div", _hoisted_217, [
                   _createElementVNode("label", null, [
                     _withDirectives(_createElementVNode("input", {
                       type: "radio",
@@ -4828,8 +4836,8 @@ return function render(_ctx, _cache) {
               ]),
               (_ctx.restoreForm.mode==='overwrite')
                 ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
-                    _createElementVNode("p", _hoisted_217, _toDisplayString(_ctx.t('⚠️ Overwriting replaces ALL existing data (collections and formulas).')), 1 /* TEXT */),
-                    _createElementVNode("label", _hoisted_218, [
+                    _createElementVNode("p", _hoisted_218, _toDisplayString(_ctx.t('⚠️ Overwriting replaces ALL existing data (collections and formulas).')), 1 /* TEXT */),
+                    _createElementVNode("label", _hoisted_219, [
                       _withDirectives(_createElementVNode("input", {
                         type: "checkbox",
                         "onUpdate:modelValue": _cache[75] || (_cache[75] = $event => ((_ctx.restoreForm.confirm) = $event))
@@ -4841,23 +4849,23 @@ return function render(_ctx, _cache) {
                   ], 64 /* STABLE_FRAGMENT */))
                 : _createCommentVNode("v-if", true),
               (_ctx.restoreForm.err)
-                ? (_openBlock(), _createElementBlock("div", _hoisted_219, _toDisplayString(_ctx.restoreForm.err), 1 /* TEXT */))
+                ? (_openBlock(), _createElementBlock("div", _hoisted_220, _toDisplayString(_ctx.restoreForm.err), 1 /* TEXT */))
                 : _createCommentVNode("v-if", true),
               (_ctx.restoreForm.busy)
-                ? (_openBlock(), _createElementBlock("div", _hoisted_220, _toDisplayString(_ctx.t('Restoring…')), 1 /* TEXT */))
+                ? (_openBlock(), _createElementBlock("div", _hoisted_221, _toDisplayString(_ctx.t('Restoring…')), 1 /* TEXT */))
                 : _createCommentVNode("v-if", true)
             ]),
-            _createElementVNode("div", _hoisted_221, [
+            _createElementVNode("div", _hoisted_222, [
               _createElementVNode("button", {
                 class: "btn",
                 disabled: _ctx.restoreForm.busy,
                 onClick: _cache[76] || (_cache[76] = $event => (_ctx.modal=null))
-              }, _toDisplayString(_ctx.t('Cancel')), 9 /* TEXT, PROPS */, _hoisted_222),
+              }, _toDisplayString(_ctx.t('Cancel')), 9 /* TEXT, PROPS */, _hoisted_223),
               _createElementVNode("button", {
                 class: _normalizeClass(["btn", _ctx.restoreForm.mode==='overwrite' ? 'danger' : 'primary']),
                 disabled: _ctx.restoreForm.busy || (_ctx.restoreForm.mode==='overwrite' && !_ctx.restoreForm.confirm),
                 onClick: _cache[77] || (_cache[77] = (...args) => (_ctx.doRestore && _ctx.doRestore(...args)))
-              }, _toDisplayString(_ctx.t('Restore')), 11 /* TEXT, CLASS, PROPS */, _hoisted_223)
+              }, _toDisplayString(_ctx.t('Restore')), 11 /* TEXT, CLASS, PROPS */, _hoisted_224)
             ])
           ])
         ]))

@@ -3626,6 +3626,7 @@
                   <div class="tpl-name">{{ t(tp.name) }}</div>
                 </div>
                 <div class="tpl-expr" v-html="mathml(tp.expression)"></div>
+                <div class="tpl-desc fb-md" v-if="tp.description" v-html="md(t(tp.description))"></div>
               </div>
             </div>
           </div>

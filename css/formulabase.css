@@ -636,6 +636,7 @@
 #formulabase-root .fb-expr math { font-size: 1.5em; }
 #formulabase-root .tpl-expr { color: var(--text); }
 #formulabase-root .tpl-expr math { font-size: 14px; }
+#formulabase-root .tpl-desc.fb-md { font-size: 12px; color: var(--muted); margin: 0; }
 #formulabase-root .fb-math { display: inline-block; vertical-align: middle; }
 #formulabase-root .fb-steps li { overflow-x: auto; }
 #formulabase-root .fb-steps li .fb-math math { font-size: 15px; }
