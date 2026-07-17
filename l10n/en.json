@@ -1,5 +1,7 @@
 {
     "translations": {
+        "Reversible": "Reversible",
+        "This formula can be reverse-calculated (solve for a variable from the result).": "This formula can be reverse-calculated (solve for a variable from the result).",
         "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.": "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.",
         "Input the radius, not the diameter; if you have the diameter, halve it first. The output length uses the same unit as r.": "Input the radius, not the diameter; if you have the diameter, halve it first. The output length uses the same unit as r.",
         "Calculates the area of a triangle as base×height÷2. Height must be the perpendicular distance from the base to the opposite vertex, not the length of a slanted side.": "Calculates the area of a triangle as base×height÷2. Height must be the perpendicular distance from the base to the opposite vertex, not the length of a slanted side.",

@@ -532,6 +532,7 @@
 #formulabase-root .fb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 #formulabase-root .fb-name { font-weight: 800; font-size: 16px; flex: 1; min-width: 0; }
 #formulabase-root .fb-actions { display: flex; gap: 6px; }
+#formulabase-root .badge-outline { flex: 0 0 auto; border: 1px solid var(--primary); color: var(--primary); background: transparent; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 #formulabase-root .fb-expr { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); font-size: 13px; background: var(--surface-2); padding: 7px 10px; border-radius: 8px; margin-bottom: 12px; overflow-x: auto; }
 #formulabase-root .fb-vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
 #formulabase-root .fb-var { display: flex; flex-direction: column; gap: 4px; }

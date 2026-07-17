@@ -1,6 +1,8 @@
 OC.L10N.register(
     "formulabase",
     {
+    "Reversible": "逆算可",
+    "This formula can be reverse-calculated (solve for a variable from the result).": "この公式は逆算できます（結果から変数の値を求められます）。",
     "Computes the circumference (perimeter) of a circle from its radius r, using 2×pi×r. The result is the distance once around the circle in the same length unit as the radius.": "半径 r から円周（円の周りの長さ）を 2×pi×r で求めます。結果は円を一周する距離で、半径と同じ長さの単位になります。",
     "Input the radius, not the diameter; if you have the diameter, halve it first. The output length uses the same unit as r.": "入力するのは直径ではなく半径です。直径しかない場合は先に半分にしてください。結果の長さは r と同じ単位になります。",
     "Calculates the area of a triangle as base×height÷2. Height must be the perpendicular distance from the base to the opposite vertex, not the length of a slanted side.": "三角形の面積を 底辺×高さ÷2 で計算します。高さは底辺から対頂点までの垂直距離であり、斜辺の長さではありません。",

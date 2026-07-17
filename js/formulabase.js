@@ -3318,6 +3318,17 @@
   }
 
   // Icon per genre for the template picker headers. Unknown genres fall back to 🧮.
+  // Functions/operators whose output is flat, periodic-step, or many-to-one — numeric
+  // root-finding on them has no reliable unique inverse, so such formulas are excluded
+  // from "reverse calculation" (solve for a variable from the result).
+  const NON_REVERSIBLE_RE = /\b(round|floor|ceil|trunc|sign|mod|min|max|abs)\b/;
+  function isReversible(tp) {
+    if (!tp || !tp.variables || !tp.variables.length) return false;
+    const e = tp.expression || '';
+    if (NON_REVERSIBLE_RE.test(e)) return false;
+    if (e.indexOf('%') >= 0) return false;
+    return true;
+  }
   const CAT_ICONS = {
     'Geometry': '📐', 'Math': '➗', 'Physics': '⚛️', 'Electricity': '⚡', 'Money': '💰',
     'Health': '🩺', 'Conversion': '🔄', 'Everyday': '🏠', 'Statistics': '📊',
@@ -3390,6 +3401,7 @@
             <div v-for="f in formulas" :key="f.id" class="card fb-card" :class="{active: f.id===activeId}" @focusin="activeId=f.id" @click="activeId=f.id">
               <div class="fb-head">
                 <div class="fb-name">{{ t(f.name) }}</div>
+                <span class="badge-outline" v-if="isReversible(f)" :title="t('This formula can be reverse-calculated (solve for a variable from the result).')">⇄ {{ t('Reversible') }}</span>
                 <div class="fb-actions">
                   <button class="btn sm" @click.stop="copyExpr(f)" :title="t('Copy expression')">{{ copiedKey==='ex'+f.id ? '✓' : '⧉' }}</button>
                   <button class="btn sm" v-if="canEdit" @click.stop="openFormulaModal(f)">{{ t('Edit') }}</button>
@@ -3624,6 +3636,7 @@
                 <div class="tpl-card-h">
                   <button class="tpl-add" @click="addTemplate(tp)" :title="t('Add')" :aria-label="t('Add')">＋</button>
                   <div class="tpl-name">{{ t(tp.name) }}</div>
+                  <span class="badge-outline" v-if="isReversible(tp)" :title="t('This formula can be reverse-calculated (solve for a variable from the result).')">⇄ {{ t('Reversible') }}</span>
                 </div>
                 <div class="tpl-expr" v-html="mathml(tp.expression)"></div>
                 <div class="tpl-desc fb-md" v-if="tp.description" v-html="md(t(tp.description))"></div>
@@ -3874,6 +3887,7 @@
       fmt(v, d) { return fmtNum(v, d); },
       // Render an expression string as real MathML; fall back to escaped plain text if it can't parse.
       mathml(expr) { try { return mathmlOf(parseAST(String(expr))); } catch (e) { return mlEscape(expr == null ? '' : String(expr)); } },
+      isReversible(tp) { return isReversible(tp); },
       // Render an already-parsed AST node (used for the substitution/reduction trace).
       mathmlNode(n) { try { return mathmlOf(n); } catch (e) { return mlEscape(pr(n)); } },
       // Insert a palette token at the caret in the expression input; place the caret inside "()".
