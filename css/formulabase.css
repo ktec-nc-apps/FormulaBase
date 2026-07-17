@@ -594,7 +594,7 @@
 #formulabase-root .modal-mask { position: fixed; inset: 0; background: rgba(15,23,42,.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
 
 /* templates grid */
-#formulabase-root .tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+#formulabase-root .tpl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 #formulabase-root .tpl-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); }
 #formulabase-root .tpl-cat { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .4px; }
 #formulabase-root .tpl-name { font-weight: 700; font-size: 14px; }
@@ -604,6 +604,10 @@
 @media (max-width: 900px) {
   #formulabase-root .fb-content { flex-direction: column; }
   #formulabase-root .fb-side { width: 100%; flex: 1 1 auto; position: static; }
+}
+
+@media (max-width: 480px) {
+  #formulabase-root .tpl-grid { grid-template-columns: 1fr; }
 }
 
 /* template search */
