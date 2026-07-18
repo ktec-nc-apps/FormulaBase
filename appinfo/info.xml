@@ -12,10 +12,11 @@ Features:
 - Named variables with labels, units and default values
 - Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
 - Live result as you type, with unit and decimal-place control
+- Share a collection with other Nextcloud users at three levels (view / edit / delete)
 - Same clean, themable design as RegiBase (light / dark)
 
 Made in Japan.]]></description>
-	<version>0.4.1</version>
+	<version>0.4.2</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
