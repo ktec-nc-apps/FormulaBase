@@ -11,7 +11,7 @@ FormulaBase is a lightweight personal calculator for the formulas you use again 
 
 Organise your formulas into **collections**, define each formula's **variables** once, then open it any time, type in numbers, and read the result **live**. A right-hand panel shows the **step-by-step calculation** (values substituted in, then reduced one operation at a time), and every calculation you press **Record** on is kept in a per-formula **history** stored on the server.
 
-### Why FormulaBase
+### Why FormulaBas
 
 - **You don't start from a blank page.** FormulaBase ships with **2,971 ready-made formula templates across 64 categories** — physics, geometry, finance, health & medicine, chemistry, electricity & electronics, astronomy, computing, statistics, materials science, and many more. Search the library, drop a template straight into your own collection, and start calculating — no need to type out the formula yourself.
 - **Nothing leaves your browser.** The expression engine is a small hand-written parser/AST evaluator — **no `eval`, no `new Function`, no `unsafe-eval`**. Every calculation runs client-side, instantly, with no round-trip to the server and no code-injection surface.
@@ -44,7 +44,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 
 計算式を**コレクション**にまとめ、各式の**変数**を一度だけ定義しておけば、あとはいつでも開いて数値を入力するだけで結果が**リアルタイム**に出ます。画面右側には**計算の経過**（数値を代入し、1 演算ずつ簡約していく様子）が表示され、「**記録**」を押した計算は式ごとの**履歴**としてサーバーに保存されます。
 
-### FormulaBaseが選ばれる理由
+### 機能
 
 - **ゼロから式を作る必要がありません。** 物理・幾何・金融・健康医療・化学・電気電子・天文・情報・統計・材料科学など、**64ジャンル・2,971件の組み込み公式テンプレート**をあらかじめ搭載。ライブラリから検索して、そのまま自分のコレクションに追加するだけで使い始められます。
 - **計算はすべてブラウザ内で完結。** 数式エンジンは自前実装の小さなパーサ／AST評価器で、**`eval`・`new Function` は一切不使用**（`unsafe-eval` なし）。サーバーへの通信も発生せず、コード実行のリスクもありません。
