@@ -32,7 +32,7 @@ Made in Japan.]]></description>
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
 
 Made in Japan.]]></description>
-	<version>0.4.5</version>
+	<version>0.4.6</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
@@ -41,6 +41,14 @@ Made in Japan.]]></description>
 	<website>https://github.com/ktec-nc-apps/FormulaBase</website>
 	<bugs>https://github.com/ktec-nc-apps/FormulaBase/issues</bugs>
 	<repository>https://github.com/ktec-nc-apps/FormulaBase</repository>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/01-formula-list.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/02-calculation.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/03-money-results.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/04-reverse-solve.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/05-templates.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/06-formula-editor.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/07-settings.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/08-collection-settings.png</screenshot>
 	<dependencies>
 		<nextcloud min-version="30" max-version="32"/>
 	</dependencies>
