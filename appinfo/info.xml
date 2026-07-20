@@ -15,9 +15,7 @@ Features:
 - Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
 - Live result as you type, with unit and decimal-place control
 - Share a collection with other Nextcloud users at three levels (view / edit / delete)
-- Same clean, themable design as RegiBase (light / dark)
-
-Made in Japan.]]></description>
+- Same clean, themable design as RegiBase (light / dark)]]></description>
 	<description lang="ja"><![CDATA[FormulaBaseは、値上げ計算・単位換算・ローン返済額・配合比率・工学定数など、よく使う計算式を何度でもすぐに使える軽量な計算アプリです。
 
 計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。

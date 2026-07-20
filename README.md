@@ -3,7 +3,14 @@
 **Save your own formulas, type in numbers, and calculate instantly — a personal calculator app for Nextcloud, with nearly 3,000 built-in formula templates to get you started.**
 **自分の計算式を登録して、数値を入れるだけで即計算できる Nextcloud 向けアプリ。約3,000件の組み込みテンプレート付き。**
 
+> Personal project · self-hosted · runs entirely inside your own Nextcloud.
+> 個人プロジェクト · セルフホスト · あなた自身の Nextcloud の中だけで動作します。
+
+[English ↓](#english) · [日本語 ↓](#japanese)
+
 ---
+
+<a id="english"></a>
 
 ## English
 
@@ -38,6 +45,8 @@ Requires Nextcloud 30–32.
 
 ---
 
+<a id="japanese"></a>
+
 ## 日本語
 
 FormulaBase は、何度も使う計算式（利益率、単位換算、ローン返済、配合比、各種定数など）を登録しておける、軽量な個人向け計算アプリです。
@@ -68,5 +77,18 @@ Nextcloud 30〜32 対応。
 
 ---
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Formula list](screenshots/01-formula-list.png) | ![Calculation](screenshots/02-calculation.png) |
+| Formula list / 計算式一覧 | Calculation / 計算 |
+| ![Money results](screenshots/03-money-results.png) | ![Reverse solve](screenshots/04-reverse-solve.png) |
+| Money results / 金額結果 | Reverse solve / 逆算 |
+| ![Templates](screenshots/05-templates.png) | ![Formula editor](screenshots/06-formula-editor.png) |
+| Templates / テンプレート | Formula editor / 計算式エディタ |
+| ![Settings](screenshots/07-settings.png) | ![Collection settings](screenshots/08-collection-settings.png) |
+| Settings / 設定 | Collection settings / コレクション設定 |
+
 ## License
-[AGPL-3.0](LICENSE)
+[AGPL-3.0](LICENSE) · © KTEC
