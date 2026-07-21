@@ -370,7 +370,7 @@
     'Biology': '🧬', 'Earth science': '🌍', 'Engineering': '🔧',
     'Quantum physics': '🌀', 'Relativity': '🌌', 'Fluid mechanics': '🌊', 'Optics': '🔍',
     'Photonics': '💡', 'Acoustics': '🔊', 'Electronics': '🔌', 'Signal processing': '📶',
-    'Structural engineering': '🏗️', 'Mechanical engineering': '⚙️', 'Aerospace': '🚀',
+    'Civil engineering': '🏗️', 'Mechanical engineering': '⚙️', 'Aerospace': '🚀',
     'Orbital mechanics': '🛰️', 'Cosmology': '🌠', 'Nuclear physics': '☢️',
     'Electromagnetism': '🧲', 'Physical chemistry': '⚗️', 'Electrochemistry': '🔋',
     'Statistical mechanics': '🎲', 'Meteorology': '🌦️', 'Oceanography': '🐋',
@@ -379,7 +379,7 @@
     'Finance': '📈', 'Economics': '🏦', 'Accounting': '🧾', 'Probability': '🎲',
     'Information theory': '📡', 'Cryptography': '🔐', 'Machine learning': '🤖',
     'Computer graphics': '🎨', 'Networking': '🌐', 'Robotics': '🦾', 'Navigation': '🧭',
-    'Surveying': '📏', 'Sports science': '🏃', 'Music': '🎵', 'Automotive': '🚗',
+    'Sports science': '🏃', 'Music': '🎵', 'Automotive': '🚗',
     'Aviation': '✈️', 'Marine': '⚓', 'Pharmacology': '💊', 'Epidemiology': '🦠',
     'Genetics': '🧬', 'Ecology': '🌿', 'Agriculture': '🌾', 'Number theory': '🔢',
   };
@@ -1687,7 +1687,7 @@ return function render(_ctx, _cache) {
                           (!_ctx.tplCache[g.cat])
                             ? (_openBlock(), _createElementBlock("p", _hoisted_186, _toDisplayString(_ctx.t('Loading…')), 1 /* TEXT */))
                             : _createCommentVNode("v-if", true),
-                          (_openBlock(true), _createElementBlock(_Fragment, null, _renderList((_ctx.tplCache[g.cat] || []), (tp) => {
+                          (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_ctx.catItems(g), (tp) => {
                             return (_openBlock(), _createElementBlock("div", {
                               class: "tpl-card",
                               key: tp.name
@@ -2551,6 +2551,14 @@ return function render(_ctx, _cache) {
         const opening = !this.tplOpen[cat];
         this.tplOpen = Object.assign({}, this.tplOpen, { [cat]: opening });
         if (opening) this.ensureCatLoaded(cat);
+      },
+      // tplCache holds every template in the category regardless of search; restrict what's
+      // actually rendered to the names that matched in templatesByCat (the search index pass).
+      catItems(g) {
+        const cached = this.tplCache[g.cat] || [];
+        if (!(this.tplSearch || '').trim()) return cached;
+        const names = new Set(g.items.map((it) => it.name));
+        return cached.filter((tp) => names.has(tp.name));
       },
       isGroupOpen(cat) { if ((this.tplSearch || '').trim()) return true; return !!this.tplOpen[cat]; },
       catIcon(cat) { return CAT_ICONS[cat] || '🧮'; },

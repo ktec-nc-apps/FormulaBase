@@ -12402,6 +12402,7 @@ OC.L10N.register(
     "Electrochemistry": "Electrochemistry",
     "Statistical mechanics": "Statistical mechanics",
     "Structural engineering": "Structural engineering",
+    "Civil engineering": "Civil engineering",
     "Mechanical engineering": "Mechanical engineering",
     "Materials science": "Materials science",
     "Aerospace": "Aerospace",

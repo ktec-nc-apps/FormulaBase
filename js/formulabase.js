@@ -370,7 +370,7 @@
     'Biology': '🧬', 'Earth science': '🌍', 'Engineering': '🔧',
     'Quantum physics': '🌀', 'Relativity': '🌌', 'Fluid mechanics': '🌊', 'Optics': '🔍',
     'Photonics': '💡', 'Acoustics': '🔊', 'Electronics': '🔌', 'Signal processing': '📶',
-    'Structural engineering': '🏗️', 'Mechanical engineering': '⚙️', 'Aerospace': '🚀',
+    'Civil engineering': '🏗️', 'Mechanical engineering': '⚙️', 'Aerospace': '🚀',
     'Orbital mechanics': '🛰️', 'Cosmology': '🌠', 'Nuclear physics': '☢️',
     'Electromagnetism': '🧲', 'Physical chemistry': '⚗️', 'Electrochemistry': '🔋',
     'Statistical mechanics': '🎲', 'Meteorology': '🌦️', 'Oceanography': '🐋',
@@ -379,7 +379,7 @@
     'Finance': '📈', 'Economics': '🏦', 'Accounting': '🧾', 'Probability': '🎲',
     'Information theory': '📡', 'Cryptography': '🔐', 'Machine learning': '🤖',
     'Computer graphics': '🎨', 'Networking': '🌐', 'Robotics': '🦾', 'Navigation': '🧭',
-    'Surveying': '📏', 'Sports science': '🏃', 'Music': '🎵', 'Automotive': '🚗',
+    'Sports science': '🏃', 'Music': '🎵', 'Automotive': '🚗',
     'Aviation': '✈️', 'Marine': '⚓', 'Pharmacology': '💊', 'Epidemiology': '🦠',
     'Genetics': '🧬', 'Ecology': '🌿', 'Agriculture': '🌾', 'Number theory': '🔢',
   };
@@ -679,7 +679,7 @@
             </button>
             <div class="tpl-grid" v-if="isGroupOpen(g.cat)">
               <p v-if="!tplCache[g.cat]" class="empty-hint sm">{{ t('Loading…') }}</p>
-              <div class="tpl-card" v-for="tp in (tplCache[g.cat] || [])" :key="tp.name">
+              <div class="tpl-card" v-for="tp in catItems(g)" :key="tp.name">
                 <div class="tpl-card-h">
                   <button class="tpl-add" @click="addTemplate(tp)" :title="t('Add')" :aria-label="t('Add')">＋</button>
                   <div class="tpl-name">{{ t(tp.name) }}</div>
@@ -1330,6 +1330,14 @@
         const opening = !this.tplOpen[cat];
         this.tplOpen = Object.assign({}, this.tplOpen, { [cat]: opening });
         if (opening) this.ensureCatLoaded(cat);
+      },
+      // tplCache holds every template in the category regardless of search; restrict what's
+      // actually rendered to the names that matched in templatesByCat (the search index pass).
+      catItems(g) {
+        const cached = this.tplCache[g.cat] || [];
+        if (!(this.tplSearch || '').trim()) return cached;
+        const names = new Set(g.items.map((it) => it.name));
+        return cached.filter((tp) => names.has(tp.name));
       },
       isGroupOpen(cat) { if ((this.tplSearch || '').trim()) return true; return !!this.tplOpen[cat]; },
       catIcon(cat) { return CAT_ICONS[cat] || '🧮'; },

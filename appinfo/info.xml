@@ -2,14 +2,14 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>formulabase</id>
 	<name>FormulaBase</name>
-	<summary>Save your own formulas — plus 2,971 built-in templates — and calculate instantly by typing in numbers</summary>
-	<summary lang="ja">よく使う計算式を保存 ― 2,971件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
+	<summary>Save your own formulas — plus 3,047 built-in templates — and calculate instantly by typing in numbers</summary>
+	<summary lang="ja">よく使う計算式を保存 ― 3,047件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
 	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
 
 Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
 
 Features:
-- Nearly 3,000 built-in formula templates across 64 categories (physics, geometry, finance, health, chemistry, electricity, astronomy, computing, and many more) — searchable, and ready to drop into your own collections
+- Nearly 3,000 built-in formula templates across 63 categories (physics, geometry, finance, health, chemistry, electricity, astronomy, computing, and many more) — searchable, and ready to drop into your own collections
 - Collections of reusable formulas
 - Named variables with labels, units and default values
 - Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
@@ -21,16 +21,14 @@ Features:
 計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。
 
 主な機能:
-- 64ジャンル・約3,000件の組み込み公式テンプレート（物理・幾何・金融・健康・化学・電気・天文・情報など多分野）― 検索可能で、そのまま自分のコレクションに追加できます
+- 63ジャンル・約3,000件の組み込み公式テンプレート（物理・幾何・金融・健康・化学・電気・天文・情報など多分野）― 検索可能で、そのまま自分のコレクションに追加できます
 - よく使う計算式をコレクションで整理
 - ラベル・単位・初期値付きの変数を名前で管理
 - 安全な数式エンジン：+ - * / % ^、括弧、関数（sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e）
 - 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
-- RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
-
-Made in Japan.]]></description>
-	<version>0.4.7</version>
+- RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）]]></description>
+	<version>0.4.8</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
