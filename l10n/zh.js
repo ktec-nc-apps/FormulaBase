@@ -1,6 +1,16 @@
 OC.L10N.register(
     "formulabase",
     {
+    "Smileys & Emotion" : "表情与情感",
+    "People & Body" : "人物与身体",
+    "Animals & Nature" : "动物与自然",
+    "Food & Drink" : "食物与饮料",
+    "Travel & Places" : "旅行与地点",
+    "Activities" : "活动",
+    "Flags" : "旗帜",
+    "Search emoji" : "搜索表情符号",
+    "No matching emoji" : "没有匹配的表情符号",
+    "{n} items" : "{n} 项",
     "Solve this variable from the result" : "从结果反推此变量",
     "Target result" : "目标结果",
     "Enter the desired result" : "输入期望的结果",

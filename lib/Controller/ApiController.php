@@ -26,6 +26,7 @@ use OCP\IRequest;
 use OCP\ITempManager;
 use OCP\IUserManager;
 use OCP\IUserSession;
+use OCP\L10N\IFactory;
 
 class ApiController extends Controller {
 	/** Theme is an appearance mode only (matches RegiBase): follow Nextcloud, or force light/dark. */
@@ -48,6 +49,7 @@ class ApiController extends Controller {
 		private FormulaMapper $formulas,
 		private HistoryMapper $historyMapper,
 		private ShareMapper $shares,
+		private IFactory $l10nFactory,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -122,6 +124,33 @@ class ApiController extends Controller {
 		}
 		$data = json_decode((string)file_get_contents($path), true);
 		return new JSONResponse(['translations' => $data['translations'] ?? []]);
+	}
+
+	/**
+	 * The full Unicode 14.0 emoji set for the icon picker, plus the CLDR names and
+	 * keywords in $lang so the picker can be searched in the user's own language.
+	 * Fetched lazily (only when the picker is first opened) — it is ~150 KB.
+	 * 'auto' follows the Nextcloud language; anything unknown falls back to English.
+	 */
+	#[NoAdminRequired]
+	public function getEmoji(string $lang = 'auto'): JSONResponse {
+		if (!in_array($lang, $this->languageCodes(), true)) {
+			$lang = substr($this->l10nFactory->findLanguage(Application::APP_ID), 0, 2);
+		}
+		$base = realpath(__DIR__ . '/../../data/emoji');
+		if ($base === false) {
+			return new JSONResponse(['error' => 'not found'], Http::STATUS_NOT_FOUND);
+		}
+		$names = realpath($base . '/' . $lang . '.json');
+		if ($names === false || strpos($names, $base) !== 0) {
+			$names = $base . '/en.json';
+		}
+		$list = json_decode((string)file_get_contents($base . '/list.json'), true);
+		return new JSONResponse([
+			'version' => $list['version'] ?? '',
+			'groups' => $list['groups'] ?? [],
+			'names' => json_decode((string)file_get_contents($names), true) ?: [],
+		]);
 	}
 
 	/**

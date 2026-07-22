@@ -1,5 +1,15 @@
 {
     "translations": {
+        "Smileys & Emotion": "स्माइली और भाव",
+        "People & Body": "लोग और शरीर",
+        "Animals & Nature": "जानवर और प्रकृति",
+        "Food & Drink": "खाना और पेय",
+        "Travel & Places": "यात्रा और स्थान",
+        "Activities": "गतिविधियाँ",
+        "Flags": "झंडे",
+        "Search emoji": "इमोजी खोजें",
+        "No matching emoji": "कोई मेल खाता इमोजी नहीं",
+        "{n} items": "{n} आइटम",
         "Solve this variable from the result": "इस चर को परिणाम से हल करें",
         "Target result": "लक्ष्य परिणाम",
         "Enter the desired result": "वांछित परिणाम दर्ज करें",

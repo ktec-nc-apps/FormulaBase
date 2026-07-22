@@ -40,6 +40,7 @@ return [
 		['name' => 'api#getSettings', 'url' => '/api/settings', 'verb' => 'GET'],
 		['name' => 'api#updateSettings', 'url' => '/api/settings', 'verb' => 'PUT'],
 		['name' => 'api#getI18n', 'url' => '/api/i18n/{lang}', 'verb' => 'GET'],
+		['name' => 'api#getEmoji', 'url' => '/api/emoji/{lang}', 'verb' => 'GET'],
 
 		// formula templates (lazy-loaded: lightweight index + per-category bodies)
 		['name' => 'api#templatesIndex', 'url' => '/api/templates/index', 'verb' => 'GET'],

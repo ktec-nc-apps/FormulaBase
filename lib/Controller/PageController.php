@@ -27,6 +27,7 @@ class PageController extends Controller {
 		Util::addStyle(Application::APP_ID, 'formulabase');
 		// Runtime-only Vue + precompiled render function (no template compiler → no eval).
 		Util::addScript(Application::APP_ID, 'vue.runtime.global.prod');
+		Util::addScript(Application::APP_ID, 'vue-private');
 		Util::addScript(Application::APP_ID, 'formulabase.dist');
 
 		return new TemplateResponse(Application::APP_ID, 'main', [

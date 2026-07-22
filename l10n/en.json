@@ -1,5 +1,15 @@
 {
     "translations": {
+        "Smileys & Emotion": "Smileys & Emotion",
+        "People & Body": "People & Body",
+        "Animals & Nature": "Animals & Nature",
+        "Food & Drink": "Food & Drink",
+        "Travel & Places": "Travel & Places",
+        "Activities": "Activities",
+        "Flags": "Flags",
+        "Search emoji": "Search emoji",
+        "No matching emoji": "No matching emoji",
+        "{n} items": "{n} items",
         "Solve this variable from the result": "Solve this variable from the result",
         "Target result": "Target result",
         "Enter the desired result": "Enter the desired result",

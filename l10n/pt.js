@@ -1,6 +1,16 @@
 OC.L10N.register(
     "formulabase",
     {
+    "Smileys & Emotion" : "Rostos e emoções",
+    "People & Body" : "Pessoas e corpo",
+    "Animals & Nature" : "Animais e natureza",
+    "Food & Drink" : "Comida e bebida",
+    "Travel & Places" : "Viagens e lugares",
+    "Activities" : "Atividades",
+    "Flags" : "Bandeiras",
+    "Search emoji" : "Pesquisar emoji",
+    "No matching emoji" : "Nenhum emoji correspondente",
+    "{n} items" : "{n} itens",
     "Solve this variable from the result" : "Resolver esta variável a partir do resultado",
     "Target result" : "Resultado pretendido",
     "Enter the desired result" : "Introduza o resultado pretendido",

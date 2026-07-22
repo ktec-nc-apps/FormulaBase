@@ -5,6 +5,10 @@
  * no eval / no new Function (App Store: no unsafe-eval). */
 (function () {
   'use strict';
+  // vue-private.js moved the runtime off window.Vue (see the note there).
+  // Shadow the global for this whole IIFE — the precompiled render function
+  // destructures `Vue` too, and window.Vue is intentionally not set.
+  const Vue = window.__FormulaBaseVue || window.Vue;
   const { createApp } = Vue;
 
   const BASE = ((window.OC && OC.generateUrl) ? OC.generateUrl('/apps/formulabase') : '/apps/formulabase') + '/';
@@ -13,6 +17,11 @@
   // In-app language override map (fetched from /api/i18n/<lang>); null → follow Nextcloud's own locale.
   let i18nOverride = null;
 
+  // Fold to lower case and hiragana → katakana, so emoji search matches however the
+  // user types it (CLDR Japanese names use katakana: "ねこ" must find "ネコの顔").
+  function kana(s) {
+    return String(s).toLowerCase().replace(/[\u3041-\u3096]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
+  }
   function i18nSubst(s, vars) {
     return vars ? String(s).replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m)) : s;
   }
@@ -289,16 +298,10 @@
 
   // Emoji palette for the collection icon picker. Grouped by theme; the label is an
   // English translation key (t()-wrapped in the template) so ja/en both render.
+  // Curated calculation/maths emoji shown as the first tab of the icon picker. The rest of
+  // the palette is the full Unicode 14.0 set, fetched from /api/emoji when first opened.
   const ICONS = [
-    { key: 'Calculation', emojis: '🧮 📐 📏 🔢 ➕ ➖ ✖️ ➗ 🟰 📊 📈 📉 💹 💲 💱 🔟'.split(' ') },
-    { key: 'Faces & emotion', emojis: '😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥸 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 ☹️ 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😥 😓 🤗 🤔 🫡 🤭 🫢 🤫 😴 😷 🤒 🤕 🤢 🤮 🥴 😵 🤠'.split(' ') },
-    { key: 'Hands', emojis: '👍 👎 👌 🤌 🤏 ✌️ 🤞 🫰 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤝 🙏 ✍️ 💪 👏 🙌 👐 🤲 🫶'.split(' ') },
-    { key: 'People', emojis: '👶 🧒 👦 👧 🧑 👨 👩 🧓 👴 👵 👮 🕵️ 💂 👷 🤴 👸 👰 🤵 🧕 🎅 🤶 🦸 🦹 🧙 🧚 🧛 🧜 🧝 👤 👥 🚶 🏃'.split(' ') },
-    { key: 'Animals & nature', emojis: '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐞 🐜 🐢 🐍 🦖 🐙 🦑 🦀 🐠 🐟 🐬 🐳 🐋 🦈 🌸 🌷 🌹 🌻 🌼 🌵 🌲 🌳 🍀 🍁 🍂 🌾 ⭐ 🌙 ☀️ ⛅ ☁️ 🌈 ⚡ ❄️ 🔥 💧 🌊'.split(' ') },
-    { key: 'Food & drink', emojis: '🍎 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒 🍑 🥭 🍍 🥝 🍅 🥑 🥦 🌽 🥕 🥔 🍞 🥐 🥯 🧀 🥚 🍳 🥓 🍔 🍟 🍕 🌭 🥪 🌮 🌯 🍜 🍝 🍣 🍱 🍚 🍙 🍘 🍢 🍡 🍧 🍨 🍦 🍰 🎂 🧁 🍩 🍪 🍫 🍬 🍭 ☕ 🍵 🍶 🍺 🍻 🍷 🥂 🍸 🍹 🥤'.split(' ') },
-    { key: 'Travel & places', emojis: '🚗 🚕 🚙 🚌 🚑 🚒 🚓 🏎️ 🚄 🚅 🚆 🚇 🚉 ✈️ 🚀 🛸 🚁 ⛵ 🚤 🚢 🏠 🏡 🏢 🏥 🏦 🏨 🏫 🏪 🗼 🗽 ⛩️ 🏰 🎡 🎢 🗻 🏔️ 🌋 🏖️ 🏝️'.split(' ') },
-    { key: 'Objects', emojis: '📱 💻 ⌨️ 🖥️ 🖨️ 📷 📸 🎥 📺 ⏰ ⌚ 📚 📖 ✏️ 📝 📌 📎 🔒 🔑 💡 🔦 🔧 🔨 ⚙️ 🎁 🎈 🎉 🎊 🎀 💰 💳 💎 🔔 🎵 🎶 ⚽ 🏀 ⚾ 🎾 🏐 🏈 🎯 🎮 🎲 ♠️ ♥️ ♦️ ♣️'.split(' ') },
-    { key: 'Symbols', emojis: '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 ✅ ❌ ⭕ ❗ ❓ ⚠️ 💯 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪ ✨ ⭐ 🌟'.split(' ') },
+    { key: 'Calculation', tab: '🧮', e: '🧮 📐 📏 🔢 ➕ ➖ ✖️ ➗ 🟰 📊 📈 📉 💹 💲 💱 🔟'.split(' ') },
   ];
 
   /* Input-assist palette for the formula editor. Each button inserts its `t` at the caret;
@@ -524,16 +527,22 @@
           <div class="field">
             <label>😀 {{ t('Icon') }}</label>
             <div class="iconpick-head">
-              <button type="button" class="iconpick-cur" :class="{open: iconPickerOpen}" @click.stop="iconPickerOpen = !iconPickerOpen" :title="t('Click to choose an icon')">{{ collForm.icon || '🧮' }}</button>
-              <input v-model="collForm.icon" maxlength="8" :placeholder="t('Emoji')" />
+              <button type="button" class="iconpick-cur" :class="{open: iconPickerOpen}" @click.stop="openIconPicker" :title="t('Click to choose an icon')">{{ collForm.icon || '🧮' }}</button>
+              <input v-model="collForm.icon" maxlength="16" :placeholder="t('Emoji')" />
               <div v-if="iconPickerOpen" class="emoji-popup" @click.stop>
+                <input class="emoji-search" v-model="emojiQuery" :placeholder="t('Search emoji')" />
+                <div class="emoji-tabs">
+                  <button type="button" class="emoji-tab" v-for="g in iconGroupsAll" :key="g.key"
+                          :class="{sel: !emojiQuery && emojiTab===g.key}" :title="t(g.key)"
+                          @click="emojiTab = g.key; emojiQuery = ''">{{ g.tab }}</button>
+                </div>
                 <div class="emoji-palette">
-                  <div class="emoji-group" v-for="g in iconGroups" :key="g.key">
-                    <div class="emoji-cat">{{ t(g.key) }}</div>
-                    <div class="emoji-grid">
-                      <button type="button" class="emoji-btn" v-for="em in g.emojis" :key="em"
-                              :class="{sel: collForm.icon===em}" @click="collForm.icon = em; iconPickerOpen = false" :title="em">{{ em }}</button>
-                    </div>
+                  <div class="emoji-cat">{{ emojiQuery ? t('{n} items', {n: emojiShown.length}) : t(emojiTab) }}</div>
+                  <div v-if="emojiLoading" class="emoji-none">{{ t('Loading…') }}</div>
+                  <div v-else-if="!emojiShown.length" class="emoji-none">{{ t('No matching emoji') }}</div>
+                  <div class="emoji-grid">
+                    <button type="button" class="emoji-btn" v-for="em in emojiShown" :key="em"
+                            :class="{sel: collForm.icon===em}" @click="collForm.icon = em; iconPickerOpen = false" :title="emojiName(em)">{{ em }}</button>
                   </div>
                 </div>
               </div>
@@ -815,6 +824,10 @@
         tplOpen: {},
         iconGroups: ICONS,
         iconPickerOpen: false,
+        // Full Unicode 14.0 emoji set (1,849 emoji in the 9 Unicode groups) plus the CLDR
+        // names/keywords for the active language, fetched on first use and kept for the session.
+        emoji: { groups: [], names: {} },
+        emojiTab: 'Calculation', emojiQuery: '', emojiLoading: false,
         toast: null,
         copiedKey: null,
         modal: null,
@@ -839,6 +852,29 @@
     },
     computed: {
       current() { return this.collections.find((c) => c.id === this.currentId) || null; },
+      // The curated calculation set stays the first tab, followed by the nine Unicode
+      // groups in the official emoji-ordering sequence.
+      iconGroupsAll() { return [...this.iconGroups, ...this.emoji.groups]; },
+      // Emoji shown in the grid: the active tab, or — while searching — every emoji whose
+      // CLDR name or keywords match, in group order (capped so typing stays responsive).
+      emojiShown() {
+        const q = this.emojiQuery.trim().toLowerCase();
+        const groups = this.iconGroupsAll;
+        if (!q) {
+          const g = groups.find((x) => x.key === this.emojiTab) || groups[0];
+          return g ? g.e : [];
+        }
+        const nq = kana(q);
+        const out = [], seen = {}, names = this.emoji.names;
+        for (const g of groups) {
+          for (const em of g.e) {
+            if (seen[em]) continue;
+            if (em === q || kana(names[em] || '').includes(nq)) { seen[em] = true; out.push(em); }
+            if (out.length >= 400) return out;
+          }
+        }
+        return out;
+      },
       // ---- sharing permissions for the current collection ----
       curPerm() { return this.current ? (this.current.perm || 'owner') : 'owner'; },
       isOwner() { return this.current ? this.current.is_owner !== false : true; },
@@ -995,6 +1031,8 @@
           catch (e) { i18nOverride = null; }
         }
         this.locale++;
+        // emoji names/keywords are language-specific too — drop them so the picker refetches
+        this.emoji = { groups: [], names: {} };
       },
       async loadSettings() {
         try {
@@ -1136,6 +1174,27 @@
       },
       async clearHistory(f) {
         try { await api('formulas/' + f.id + '/history', { method: 'DELETE' }); this.history[f.id] = []; } catch (e) { this.notify(T('Could not clear history.'), 'error'); }
+      },
+      /* icon (emoji) picker — the Unicode set is ~150 KB, so it is loaded on first use only */
+      async loadEmoji() {
+        if (this.emoji.groups.length || this.emojiLoading) return;
+        this.emojiLoading = true;
+        try {
+          const r = await api('emoji/' + encodeURIComponent(this.language || 'auto'));
+          this.emoji = { groups: r.groups || [], names: r.names || {} };
+        } catch (e) { /* the calculation tab still works without it */ }
+        this.emojiLoading = false;
+      },
+      openIconPicker() {
+        this.iconPickerOpen = !this.iconPickerOpen;
+        if (!this.iconPickerOpen) return;
+        this.emojiQuery = '';
+        this.loadEmoji();
+      },
+      // CLDR short name for the tooltip; the stored value is "name|keyword keyword".
+      emojiName(em) {
+        const n = this.emoji.names[em];
+        return n ? n.split('|')[0] : em;
       },
       /* collections */
       openCollectionModal(c) {
