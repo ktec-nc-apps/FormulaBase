@@ -2,8 +2,8 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>formulabase</id>
 	<name>FormulaBase</name>
-	<summary>Save your own formulas — plus 3,047 built-in templates — and calculate instantly by typing in numbers</summary>
-	<summary lang="ja">よく使う計算式を保存 ― 3,047件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
+	<summary>Save your own formulas — plus 3,122 built-in templates — and calculate instantly by typing in numbers</summary>
+	<summary lang="ja">よく使う計算式を保存 ― 3,122件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
 	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
 
 Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
@@ -28,7 +28,7 @@ Features:
 - 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）]]></description>
-	<version>0.4.8</version>
+	<version>0.4.9</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
