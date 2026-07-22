@@ -15,7 +15,9 @@ Features:
 - Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
 - Live result as you type, with unit and decimal-place control
 - Share a collection with other Nextcloud users at three levels (view / edit / delete)
-- Same clean, themable design as RegiBase (light / dark)]]></description>
+- Same clean, themable design as RegiBase (light / dark)
+
+The template library is large (3,122 formulas) and not all of it has been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
 	<description lang="ja"><![CDATA[FormulaBaseは、値上げ計算・単位換算・ローン返済額・配合比率・工学定数など、よく使う計算式を何度でもすぐに使える軽量な計算アプリです。
 
 計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。
@@ -27,8 +29,10 @@ Features:
 - 安全な数式エンジン：+ - * / % ^、括弧、関数（sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e）
 - 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
-- RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）]]></description>
-	<version>0.4.9</version>
+- RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
+
+テンプレートライブラリは3,122件と件数が多く、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
+	<version>0.4.10</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>

@@ -43,6 +43,10 @@ Buildless Vue 3 (Options API). The template is precompiled to an eval-free rende
 
 Requires Nextcloud 30–32.
 
+### Help us test the template library
+
+The built-in library now covers 3,122 formulas across 63 categories, including a large batch aimed at Japanese university entrance-exam prep (math, physics, chemistry, biology). That's too many for one person to hand-verify. If you spot a wrong formula, a bad default, a mistranslation, or a missing unit, please [open an issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even a one-line report helps.
+
 ---
 
 <a id="japanese"></a>
@@ -74,6 +78,10 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - UI・テンプレートとも多言語対応 — 日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など
 
 Nextcloud 30〜32 対応。
+
+### テンプレートの動作確認にご協力ください
+
+組み込みライブラリは現在63ジャンル・3,122件まで拡大しており、大学受験（数学・物理・化学・生物）向けの公式もまとまった数を追加しています。件数が多く、一人で全数を検証しきれていません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた方は、[Issueを作成](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)して教えていただけると助かります（一行程度の簡単な報告で構いません）。
 
 ---
 

@@ -1,0 +1,33 @@
+name: Formula accuracy report / 公式の誤り報告
+description: Report a wrong formula, bad default value, mistranslation, or missing unit in the built-in template library. / 組み込みテンプレートの誤り（式・初期値・翻訳・単位など）を報告する
+title: "[Formula] "
+labels: ["formula-accuracy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking a template! One or two lines is enough — you don't need to write a full report.
+        テンプレートの確認、ありがとうございます。詳しい報告は不要です。一言だけでも構いません。
+  - type: input
+    id: template-name
+    attributes:
+      label: Template name / テンプレート名
+      description: The formula's name as shown in the app (and its category, if you know it). / アプリ上で表示される公式名（分かればカテゴリも）
+      placeholder: "e.g. Molar Mass from Freezing Point Depression (Chemistry)"
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What's wrong? / 何が問題ですか？
+      description: The formula, a default value, a label/translation, a unit, decimals, anything that looks off. / 式・初期値・ラベルや翻訳・単位・小数桁数など、おかしいと感じた点
+      placeholder: "e.g. The expression gives a negative result for the default values."
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language you were viewing it in / 表示していた言語
+      placeholder: "e.g. Japanese / 日本語"
+    validations:
+      required: false
