@@ -41,7 +41,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 ### Tech
 Buildless Vue 3 (Options API). The template is precompiled to an eval-free render function (`formulabase-build.mjs` using `@vue/compiler-dom`); the runtime loads `vue.runtime.global.prod.js` + `formulabase.dist.js`. Backend: Nextcloud AppFramework (PHP), three tables (`formulabase_colls`, `formulabase_formulas`, `formulabase_history`).
 
-Requires Nextcloud 30–32.
+Requires Nextcloud 30–33.
 
 ### Help us test the template library
 
@@ -77,7 +77,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - **内部共有** — コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - UI・テンプレートとも多言語対応 — 日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など
 
-Nextcloud 30〜32 対応。
+Nextcloud 30〜33 対応。
 
 ### テンプレートの動作確認にご協力ください
 
