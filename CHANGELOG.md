@@ -2,6 +2,13 @@
 
 All notable changes to FormulaBase.
 
+## 0.4.17 — 2026-08-06
+
+### Compatibility
+
+- Declared support for **Nextcloud 34** (verified on Nextcloud 34.0.2 with PHP 8.5 — install,
+  migrations and the collection/formula views all pass). No code changes.
+
 ## 0.4.15 — 2026-07-23
 
 ### Emoji are drawn by the app, not by the viewer's device

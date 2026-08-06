@@ -32,7 +32,7 @@ The template library is large (3,122 formulas) and not all of it has been hand-v
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
 
 テンプレートライブラリは3,122件と件数が多く、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
-	<version>0.4.16</version>
+	<version>0.4.17</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
@@ -50,7 +50,7 @@ The template library is large (3,122 formulas) and not all of it has been hand-v
 	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/07-settings.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/ktec-nc-apps/FormulaBase/main/screenshots/08-collection-settings.png</screenshot>
 	<dependencies>
-		<nextcloud min-version="30" max-version="33"/>
+		<nextcloud min-version="30" max-version="34"/>
 	</dependencies>
 	<navigations>
 		<navigation>
