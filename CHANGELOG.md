@@ -2,6 +2,14 @@
 
 All notable changes to FormulaBase.
 
+## 0.4.18 — 2026-08-13
+
+### Copy and export the calculation trace
+
+- The "Calculation steps" panel now has **Copy** and **Download as Markdown (.md)** buttons —
+  export the formula, its input values, and the full substitution/reduction trace as plain
+  Markdown text, ready to paste into a report or hand to a student/colleague.
+
 ## 0.4.17 — 2026-08-06
 
 ### Compatibility

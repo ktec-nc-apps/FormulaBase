@@ -482,7 +482,10 @@
 
         <aside class="fb-side" v-if="current && activeFormula">
           <div class="fb-side-sec">
-            <div class="fb-side-h">🧭 {{ t('Calculation steps') }}</div>
+            <div class="fb-side-h">🧭 {{ t('Calculation steps') }}
+              <button class="btn xs" v-if="stepData" @click="copySteps(activeFormula)" :title="t('Copy calculation')">{{ copiedKey==='steps'+activeFormula.id ? '✓' : '📋' }}</button>
+              <button class="btn xs" v-if="stepData" @click="downloadStepsMd(activeFormula)" :title="t('Download as Markdown (.md)')">⬇</button>
+            </div>
             <div class="fb-side-sub">{{ t(activeFormula.name) }}</div>
             <template v-if="stepData">
               <ol class="fb-steps">
@@ -957,6 +960,33 @@
       copyHistory(h, mode) {
         const txt = mode === 'line' ? (h.label + ' = ' + h.result + (h.unit ? ' ' + h.unit : '')) : h.result;
         return this.copyValue('h' + h.id + '-' + (mode || 'value'), txt);
+      },
+      // Plain-text/Markdown rendering of the substitution/reduction trace, reusing pr() (the
+      // same AST->text function the trace panel uses internally to detect step changes).
+      stepsMarkdown(f) {
+        const sd = this.stepData; if (!sd) return '';
+        const lines = ['### ' + this.t(f.name), '', '**' + this.t('Expression') + ':** `' + f.expression + '`'];
+        const ins = this.inputs[f.id] || {};
+        const varLines = (f.variables || [])
+          .filter((v) => ins[v.key] !== undefined && ins[v.key] !== '' && !this.isSolving(f, v.key))
+          .map((v) => '- ' + (v.label ? this.t(v.label) : v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
+        if (varLines.length) lines.push('', '**' + this.t('Values') + ':**', ...varLines);
+        lines.push('', '**' + this.t('Calculation steps') + ':**', '', '```');
+        sd.nodes.forEach((nd, i) => lines.push((i > 0 ? '= ' : '') + pr(nd)));
+        if (sd.value != null) lines.push('= ' + this.fmt(sd.value, f.decimals) + (f.result_unit ? ' ' + f.result_unit : ''));
+        lines.push('```');
+        return lines.join('\n');
+      },
+      copySteps(f) { const txt = this.stepsMarkdown(f); if (!txt) return; return this.copyValue('steps' + f.id, txt); },
+      downloadStepsMd(f) {
+        const txt = this.stepsMarkdown(f); if (!txt) return;
+        const blob = new Blob([txt], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (this.t(f.name) || 'formula').replace(/[\\/:*?"<>|]/g, '_') + '.md';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       },
       te(m) {
         if (!m) return m;

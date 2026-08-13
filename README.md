@@ -33,7 +33,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - Named variables with labels, units and default values
 - **Safe expression engine** — a small parser/AST evaluator, **no `eval` / no `new Function`** (no `unsafe-eval`): `+ - * / % ^`, parentheses, and functions `sqrt cbrt abs round floor ceil trunc sign exp ln log log2 sin cos tan asin acos atan min max pow mod hypot root`, constants `pi e tau`. Unicode (incl. Japanese) variable names supported.
 - **Live result** as you type, with unit and decimal-place control
-- **Step-by-step trace** of the calculation
+- **Step-by-step trace** of the calculation — copy it or download it as Markdown (.md)
 - **Server-side history** per formula (record / restore / delete / clear), scoped per user
 - **Internal sharing** — share a collection with other Nextcloud users at three permission levels (view / edit / delete)
 - Multi-language UI and template library — English, Japanese, Spanish, Chinese, French, German, Portuguese and more
@@ -41,7 +41,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 ### Tech
 Buildless Vue 3 (Options API). The template is precompiled to an eval-free render function (`formulabase-build.mjs` using `@vue/compiler-dom`); the runtime loads `vue.runtime.global.prod.js` + `formulabase.dist.js`. Backend: Nextcloud AppFramework (PHP), three tables (`formulabase_colls`, `formulabase_formulas`, `formulabase_history`).
 
-Requires Nextcloud 30–33.
+Requires Nextcloud 30–34.
 
 ### Help us test the template library
 
@@ -72,12 +72,12 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - ラベル・単位・初期値つきの名前付き変数
 - **安全な数式エンジン** — 小さなパーサ／AST 評価器で **`eval`・`new Function` 不使用**（`unsafe-eval` なし）。`+ - * / % ^`・括弧・各種関数・定数に対応。日本語などの変数名も可
 - 入力に応じて**即時に結果**を表示（単位・小数桁数の指定つき）
-- **計算過程の可視化**
+- **計算過程の可視化** — コピー、またはMarkdown（.md）として書き出し可能
 - 式ごとの**サーバー保存の履歴**（記録／復元／削除／全消去、ユーザー単位）
 - **内部共有** — コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - UI・テンプレートとも多言語対応 — 日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など
 
-Nextcloud 30〜33 対応。
+Nextcloud 30〜34 対応。
 
 ### テンプレートの動作確認にご協力ください
 
