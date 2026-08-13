@@ -13,6 +13,11 @@ return [
 		['name' => 'api#deleteCollection', 'url' => '/api/collections/{id}', 'verb' => 'DELETE'],
 		['name' => 'api#exportCollection', 'url' => '/api/collections/{id}/export', 'verb' => 'GET'],
 
+		// export a single formula (calculation trace / calculable spreadsheet) into the user's Files
+		['name' => 'api#browseFiles', 'url' => '/api/files/browse', 'verb' => 'GET'],
+		['name' => 'api#exportFormulaMarkdown', 'url' => '/api/formulas/{id}/export/markdown', 'verb' => 'POST'],
+		['name' => 'api#exportFormulaOds', 'url' => '/api/formulas/{id}/export/ods', 'verb' => 'POST'],
+
 		// internal sharing (permission-only, no encryption)
 		['name' => 'api#collectionShares', 'url' => '/api/collections/{id}/shares', 'verb' => 'GET'],
 		['name' => 'api#addShare', 'url' => '/api/collections/{id}/shares', 'verb' => 'POST'],

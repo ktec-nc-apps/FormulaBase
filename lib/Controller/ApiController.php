@@ -13,7 +13,9 @@ use OCA\FormulaBase\Db\HistoryEntity;
 use OCA\FormulaBase\Db\HistoryMapper;
 use OCA\FormulaBase\Db\ShareEntity;
 use OCA\FormulaBase\Db\ShareMapper;
+use OCA\FormulaBase\Service\FilesService;
 use OCA\FormulaBase\Service\ForbiddenException;
+use OCA\FormulaBase\Service\FormulaCompiler;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Controller;
@@ -50,6 +52,8 @@ class ApiController extends Controller {
 		private HistoryMapper $historyMapper,
 		private ShareMapper $shares,
 		private IFactory $l10nFactory,
+		private FilesService $files,
+		private FormulaCompiler $compiler,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -370,6 +374,75 @@ class ApiController extends Controller {
 		);
 	}
 
+	/** List a Files folder for the app's own folder picker (used by the export-to-Files flow). */
+	#[NoAdminRequired]
+	public function browseFiles(): JSONResponse {
+		$path = (string)$this->request->getParam('path', '');
+		$listing = $this->files->browse($this->uid(), $path);
+		if ($listing === null) {
+			return new JSONResponse(['error' => $this->l->t('Could not open the folder')], Http::STATUS_NOT_FOUND);
+		}
+		return new JSONResponse($listing);
+	}
+
+	/** Save the client-built calculation-trace Markdown into a Files folder the user picked. */
+	#[NoAdminRequired]
+	public function exportFormulaMarkdown(int $id): JSONResponse {
+		$f = $this->resolvedFormula($id);
+		if (!$f) {
+			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		$content = (string)$this->request->getParam('content', '');
+		if (trim($content) === '') {
+			return new JSONResponse(['error' => $this->l->t('Nothing to export')], Http::STATUS_BAD_REQUEST);
+		}
+		$folder = (string)$this->request->getParam('folder', '');
+		$filename = $this->sanitizeFilename((string)$this->request->getParam('filename', ''));
+		if ($filename === '') {
+			$filename = $this->sanitizeFilename($f->getName()) ?: 'formula';
+		}
+		try {
+			$saved = $this->files->saveFile($this->uid(), $folder, $filename . '.md', $content);
+		} catch (\RuntimeException $e) {
+			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
+		}
+		return new JSONResponse($saved);
+	}
+
+	/**
+	 * Save a formula as a real, calculable OpenDocument Spreadsheet: variable values go in
+	 * editable cells, the result cell holds an actual spreadsheet formula referencing them
+	 * (compiled by FormulaCompiler), and the client-rendered formula image is embedded above.
+	 */
+	#[NoAdminRequired]
+	public function exportFormulaOds(int $id): JSONResponse {
+		$f = $this->resolvedFormula($id);
+		if (!$f) {
+			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		$values = $this->request->getParam('values', []);
+		$image = (string)$this->request->getParam('image', '');
+		if (!is_array($values)) {
+			$values = [];
+		}
+		try {
+			$content = $this->buildCalcOds($f, $values, $image);
+		} catch (\RuntimeException $e) {
+			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
+		}
+		$folder = (string)$this->request->getParam('folder', '');
+		$filename = $this->sanitizeFilename((string)$this->request->getParam('filename', ''));
+		if ($filename === '') {
+			$filename = $this->sanitizeFilename($f->getName()) ?: 'formula';
+		}
+		try {
+			$saved = $this->files->saveFile($this->uid(), $folder, $filename . '.ods', $content);
+		} catch (\RuntimeException $e) {
+			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
+		}
+		return new JSONResponse($saved);
+	}
+
 	/** Strip path/reserved characters so the value is safe as a download filename. */
 	private function sanitizeFilename(string $name): string {
 		$name = str_replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|', "\0", "\r", "\n"], ' ', $name);
@@ -528,6 +601,177 @@ class ApiController extends Controller {
 		$bytes = (string)file_get_contents($tmp);
 		@unlink($tmp);
 		return $bytes;
+	}
+
+	/**
+	 * Build a single-formula .ods with a live spreadsheet formula: one row per variable
+	 * (value cells B4..B(3+k), editable), a Result row whose cell is a real table:formula
+	 * compiled from the expression, and the client-rendered formula image embedded above.
+	 * @param array<string,mixed> $values variable key => current numeric value (from the app)
+	 * @throws \RuntimeException on a malformed expression or unreadable image data
+	 */
+	private function buildCalcOds(FormulaEntity $f, array $values, string $imageBase64): string {
+		$vars = json_decode((string)$f->getVariables(), true);
+		$vars = is_array($vars) ? array_values(array_filter($vars, 'is_array')) : [];
+
+		$firstRow = 4; // rows 1-3 are the image / expression / header
+		$cellMap = [];
+		$defaults = [];
+		foreach ($vars as $i => $v) {
+			$key = trim((string)($v['key'] ?? ''));
+			if ($key === '') {
+				continue;
+			}
+			$cellMap[$key] = 'B' . ($firstRow + $i);
+			$defaults[$key] = is_numeric($v['default'] ?? null) ? (float)$v['default'] : 0.0;
+		}
+
+		$ast = $this->compiler->parse($f->getExpression());
+		$formulaOdf = $this->compiler->toOdf($ast, $cellMap);
+		$scope = [];
+		foreach ($cellMap as $key => $addr) {
+			$scope[$key] = is_numeric($values[$key] ?? null) ? (float)$values[$key] : $defaults[$key];
+		}
+		$cachedValue = 0.0;
+		try {
+			$cachedValue = $this->compiler->evaluate($ast, $scope);
+			if (!is_finite($cachedValue)) {
+				$cachedValue = 0.0;
+			}
+		} catch (\Throwable $e) {
+			// leave the cached value at 0; the real table:formula will still recompute on open
+		}
+
+		// ---- rows ----
+		$rows = '';
+		// Row 1: title + embedded formula image (as-char, inline in the cell).
+		$hasImage = $imageBase64 !== '';
+		$imgCell = $hasImage
+			? '<table:table-cell table:number-columns-spanned="3" office:value-type="string">'
+				. '<text:p>' . '<draw:frame draw:name="FormulaImage" text:anchor-type="as-char" svg:width="10cm" svg:height="3cm">'
+				. '<draw:image xlink:href="Pictures/formula.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
+				. '</draw:frame></text:p></table:table-cell>'
+			: '<table:table-cell table:number-columns-spanned="3" table:style-name="ceHead" office:value-type="string">'
+				. '<text:p>' . $this->mlEsc($f->getName()) . '</text:p></table:table-cell>';
+		$rows .= '<table:table-row>' . $imgCell . '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+
+		// Row 2: the raw expression text, for reference.
+		$rows .= '<table:table-row>'
+			. $this->odsTextCell([$this->l->t('Expression')])
+			. '<table:table-cell table:number-columns-spanned="2" office:value-type="string">'
+			. '<text:p>' . $this->mlEsc($f->getExpression()) . '</text:p></table:table-cell>'
+			. '<table:covered-table-cell/></table:table-row>';
+
+		// Row 3: column headers.
+		$rows .= '<table:table-row>'
+			. '<table:table-cell table:style-name="ceHead" office:value-type="string"><text:p>' . $this->mlEsc($this->l->t('Variable')) . '</text:p></table:table-cell>'
+			. '<table:table-cell table:style-name="ceHead" office:value-type="string"><text:p>' . $this->mlEsc($this->l->t('Value')) . '</text:p></table:table-cell>'
+			. '<table:table-cell table:style-name="ceHead" office:value-type="string"><text:p>' . $this->mlEsc($this->l->t('Unit')) . '</text:p></table:table-cell>'
+			. '</table:table-row>';
+
+		// One editable row per variable.
+		foreach ($vars as $i => $v) {
+			$key = trim((string)($v['key'] ?? ''));
+			if ($key === '' || !isset($cellMap[$key])) {
+				continue;
+			}
+			$label = trim((string)($v['label'] ?? '')) ?: $key;
+			$unit = (string)($v['unit'] ?? '');
+			$val = $scope[$key] ?? 0.0;
+			$rows .= '<table:table-row>'
+				. $this->odsTextCell([$label])
+				. $this->odsNumberCell($val)
+				. $this->odsTextCell([$unit])
+				. '</table:table-row>';
+		}
+
+		// Result row: a real, recalculating spreadsheet formula.
+		$vStr = $this->odsNumFmt($cachedValue);
+		$rows .= '<table:table-row>'
+			. $this->odsTextCell([$this->l->t('Result')])
+			. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($vStr) . '"'
+			. ' table:formula="of:=' . $this->mlEsc($formulaOdf) . '">'
+			. '<text:p>' . $this->mlEsc($vStr) . '</text:p></table:table-cell>'
+			. $this->odsTextCell([(string)$f->getResultUnit()])
+			. '</table:table-row>';
+
+		$sheetName = str_replace("'", ' ', $this->sanitizeFilename($f->getName())) ?: 'Sheet1';
+
+		$content = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-content'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"'
+			. ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"'
+			. ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+			. ' xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"'
+			. ' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+			. ' xmlns:xlink="http://www.w3.org/1999/xlink"'
+			. ' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+			. ' office:version="1.2">'
+			. '<office:automatic-styles>'
+			. '<style:style style:name="ceHead" style:family="table-cell">'
+			. '<style:text-properties fo:font-weight="bold"/></style:style>'
+			. '</office:automatic-styles>'
+			. '<office:body><office:spreadsheet>'
+			. '<table:table table:name="' . $this->mlEsc($sheetName) . '">'
+			. '<table:table-column table:number-columns-repeated="3"/>'
+			. $rows
+			. '</table:table>'
+			. '</office:spreadsheet></office:body></office:document-content>';
+
+		$manifest = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">'
+			. '<manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>'
+			. '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+			. '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'
+			. '<manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>'
+			. ($hasImage ? '<manifest:file-entry manifest:full-path="Pictures/formula.png" manifest:media-type="image/png"/>' : '')
+			. '</manifest:manifest>';
+
+		$styles = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-styles'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+			. ' office:version="1.2"><office:styles/></office:document-styles>';
+
+		$meta = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-meta'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"'
+			. ' office:version="1.2"><office:meta>'
+			. '<meta:generator>FormulaBase</meta:generator>'
+			. '</office:meta></office:document-meta>';
+
+		$imgBytes = '';
+		if ($hasImage) {
+			$raw = preg_replace('#^data:image/png;base64,#', '', $imageBase64);
+			$imgBytes = base64_decode((string)$raw, true) ?: '';
+			if ($imgBytes === '') {
+				throw new \RuntimeException('Invalid image data');
+			}
+		}
+
+		$tmp = $this->tempManager->getTemporaryFile('.ods');
+		$zip = new \ZipArchive();
+		$zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+		$zip->addFromString('mimetype', 'application/vnd.oasis.opendocument.spreadsheet');
+		$zip->setCompressionName('mimetype', \ZipArchive::CM_STORE);
+		$zip->addFromString('content.xml', $content);
+		$zip->addFromString('styles.xml', $styles);
+		$zip->addFromString('meta.xml', $meta);
+		$zip->addFromString('META-INF/manifest.xml', $manifest);
+		if ($hasImage) {
+			$zip->addFromString('Pictures/formula.png', $imgBytes);
+		}
+		$zip->close();
+		$bytes = (string)file_get_contents($tmp);
+		@unlink($tmp);
+		return $bytes;
+	}
+
+	/** Format a float the same way odsNumberCell does, without wrapping it in a cell. */
+	private function odsNumFmt(float $value): string {
+		return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
 	}
 
 	#[NoAdminRequired]

@@ -484,7 +484,8 @@
           <div class="fb-side-sec">
             <div class="fb-side-h">🧭 {{ t('Calculation steps') }}
               <button class="btn xs" v-if="stepData" @click="copySteps(activeFormula)" :title="t('Copy calculation')">{{ copiedKey==='steps'+activeFormula.id ? '✓' : '📋' }}</button>
-              <button class="btn xs" v-if="stepData" @click="downloadStepsMd(activeFormula)" :title="t('Download as Markdown (.md)')">⬇</button>
+              <button class="btn xs" v-if="stepData" @click="openExportPicker(activeFormula,'md')" :title="t('Save as Markdown to Nextcloud')">📝</button>
+              <button class="btn xs" v-if="stepData" @click="openExportPicker(activeFormula,'ods')" :title="t('Save as ODS (calculable spreadsheet)')">📊</button>
             </div>
             <div class="fb-side-sub">{{ t(activeFormula.name) }}</div>
             <template v-if="stepData">
@@ -796,6 +797,30 @@
       </div>
     </div>
 
+    <div class="modal-mask cropper-mask" v-if="filePicker.open" @click.self="fpCancel()">
+      <div class="modal">
+        <div class="modal-head"><h3>📂 {{ t('Choose a folder') }}</h3><button class="icon-btn" @click="fpCancel()">✕</button></div>
+        <div class="modal-body">
+          <div class="fp-path">
+            <button type="button" class="btn sm" :disabled="filePicker.parent===null || filePicker.loading" @click="fpUp()">{{ t('⬆ Up') }}</button>
+            <span class="fp-cur">/{{ filePicker.path }}</span>
+          </div>
+          <p v-if="filePicker.loading" class="empty-hint sm">{{ t('Loading…') }}</p>
+          <p v-else-if="filePicker.error" class="empty-hint sm">{{ filePicker.error }}</p>
+          <p v-else-if="!filePicker.entries.length" class="empty-hint sm">{{ t('No subfolders here.') }}</p>
+          <div v-else class="fp-list">
+            <button type="button" v-for="x in filePicker.entries" :key="x.path" class="note-item fp-item" @click="fpLoad(x.path)">
+              <span class="ni-title">📁 {{ x.name }}</span><span class="ni-cat">›</span>
+            </button>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn" @click="fpCancel()">{{ t('Cancel') }}</button>
+          <button type="button" class="btn primary" :disabled="filePicker.loading" @click="fpConfirmFolder()">{{ t('Select this folder') }}</button>
+        </div>
+      </div>
+    </div>
+
     <div class="fb-toast" :class="'fb-toast-'+toast.kind" v-if="toast" role="status">{{ toast.msg }}</div>
   </div>`;
 
@@ -834,6 +859,8 @@
         toast: null,
         copiedKey: null,
         modal: null,
+        // Folder picker for exporting a formula (Markdown trace / calculable ODS) into Files.
+        filePicker: { open: false, kind: null, formula: null, path: '', parent: null, entries: [], loading: false, error: '' },
         collForm: { id: null, name: '', icon: '🧮', color: '#2563eb', description: '' },
         fForm: { id: null, name: '', expression: '', description: '', variables: [], result_unit: '', decimals: 2, notes: '', exprError: '' },
         mdPreview: false,
@@ -978,15 +1005,90 @@
         return lines.join('\n');
       },
       copySteps(f) { const txt = this.stepsMarkdown(f); if (!txt) return; return this.copyValue('steps' + f.id, txt); },
-      downloadStepsMd(f) {
-        const txt = this.stepsMarkdown(f); if (!txt) return;
-        const blob = new Blob([txt], { type: 'text/markdown;charset=utf-8' });
+      // ---- export a formula (Markdown trace / calculable ODS) into the user's own Files ----
+      openExportPicker(f, kind) {
+        this.filePicker = { open: true, kind, formula: f, path: '', parent: null, entries: [], loading: true, error: '' };
+        this.fpLoad('');
+      },
+      async fpLoad(path) {
+        this.filePicker.loading = true; this.filePicker.error = '';
+        try {
+          const r = await api('files/browse?path=' + encodeURIComponent(path));
+          this.filePicker.path = r.path || '';
+          this.filePicker.parent = (r.parent === undefined ? null : r.parent);
+          this.filePicker.entries = Array.isArray(r.entries) ? r.entries.filter((x) => x.is_dir) : [];
+        } catch (e) {
+          this.filePicker.error = T('Could not open the folder');
+          this.filePicker.entries = [];
+        } finally { this.filePicker.loading = false; }
+      },
+      fpUp() { if (this.filePicker.parent !== null && !this.filePicker.loading) this.fpLoad(this.filePicker.parent); },
+      fpCancel() { this.filePicker.open = false; },
+      fpConfirmFolder() {
+        const { kind, formula, path } = this.filePicker;
+        this.filePicker.open = false;
+        if (kind === 'md') this.doExportMarkdown(formula, path);
+        else if (kind === 'ods') this.doExportOds(formula, path);
+      },
+      async doExportMarkdown(f, folder) {
+        const txt = this.stepsMarkdown(f);
+        if (!txt) return;
+        try {
+          const r = await api('formulas/' + f.id + '/export/markdown', {
+            method: 'POST',
+            body: JSON.stringify({ folder, content: txt, filename: this.t(f.name) }),
+          });
+          this.notify(T('Saved to {name}', { name: r.name }), 'success');
+        } catch (e) { this.notify(T('Save failed'), 'error'); }
+      },
+      async doExportOds(f, folder) {
+        let image = '';
+        try { image = await this.renderFormulaPng(f); } catch (e) { image = ''; }
+        const ins = this.inputs[f.id] || {};
+        const values = {};
+        (f.variables || []).forEach((v) => {
+          if (ins[v.key] !== undefined && ins[v.key] !== '' && isFinite(Number(ins[v.key]))) values[v.key] = Number(ins[v.key]);
+        });
+        try {
+          const r = await api('formulas/' + f.id + '/export/ods', {
+            method: 'POST',
+            body: JSON.stringify({ folder, values, image, filename: this.t(f.name) }),
+          });
+          this.notify(T('Saved to {name}', { name: r.name }), 'success');
+        } catch (e) { this.notify(T('Save failed'), 'error'); }
+      },
+      // Rasterise the same MathML the app displays into a PNG (svg+foreignObject -> canvas),
+      // so the ODS embeds a real image of the formula rather than re-implementing math typesetting.
+      async renderFormulaPng(f) {
+        const width = 640; const scale = 2;
+        const inner = '<div style="font-size:18px;font-weight:700;margin-bottom:10px;">' + mlEscape(this.t(f.name)) + '</div>'
+          + '<div style="font-size:26px;">' + this.mathml(f.expression) + '</div>';
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + width + 'px;background:#ffffff;'
+          + 'padding:16px;font-family:Arial,Helvetica,sans-serif;color:#111111;box-sizing:border-box;';
+        wrap.innerHTML = inner;
+        document.body.appendChild(wrap);
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const height = Math.ceil(wrap.getBoundingClientRect().height) + 4;
+        document.body.removeChild(wrap);
+        const svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">'
+          + '<foreignObject width="' + width + '" height="' + height + '">'
+          + '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;background:#ffffff;'
+          + 'padding:16px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#111111;">' + inner + '</div>'
+          + '</foreignObject></svg>';
+        const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (this.t(f.name) || 'formula').replace(/[\\/:*?"<>|]/g, '_') + '.md';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        try {
+          const img = new Image();
+          await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+          const canvas = document.createElement('canvas');
+          canvas.width = width * scale; canvas.height = height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(scale, scale);
+          ctx.drawImage(img, 0, 0, width, height);
+          return canvas.toDataURL('image/png');
+        } finally { URL.revokeObjectURL(url); }
       },
       te(m) {
         if (!m) return m;

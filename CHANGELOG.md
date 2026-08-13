@@ -2,6 +2,18 @@
 
 All notable changes to FormulaBase.
 
+## 0.4.19 — 2026-08-13
+
+### Export to a real, calculable spreadsheet
+
+- The Markdown export from 0.4.18 no longer downloads through the browser — it now writes
+  straight into a folder you pick in your own Nextcloud Files, via a small built-in folder
+  picker.
+- New: **Save as ODS**. Exports a formula as a genuine OpenDocument Spreadsheet — variable
+  values land in editable cells, the result cell holds a real spreadsheet formula (compiled
+  from the expression, not just its text) that recalculates when you change a value, and the
+  formula's rendered math is embedded above it as an image.
+
 ## 0.4.18 — 2026-08-13
 
 ### Copy and export the calculation trace
