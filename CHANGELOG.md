@@ -2,17 +2,66 @@
 
 All notable changes to FormulaBase.
 
-## 0.4.19 — 2026-08-13
+## 0.5.1 — 2026-08-14
 
-### Export to a real, calculable spreadsheet
+### Fixed: ODS/ODT export — broken formula results and missing images
 
-- The Markdown export from 0.4.18 no longer downloads through the browser — it now writes
-  straight into a folder you pick in your own Nextcloud Files, via a small built-in folder
-  picker.
-- New: **Save as ODS**. Exports a formula as a genuine OpenDocument Spreadsheet — variable
-  values land in editable cells, the result cell holds a real spreadsheet formula (compiled
-  from the expression, not just its text) that recalculates when you change a value, and the
-  formula's rendered math is embedded above it as an image.
+- **ODS "Result" cell showed a formula error ("Err:510") instead of the computed value.** The
+  generated `table:formula` attribute used an `of:=` dialect prefix without declaring its XML
+  namespace, which real LibreOffice rejects. Formulas are now written as plain `=...`, and the
+  Result cell recalculates correctly when opened.
+- **The embedded formula image didn't appear at all in ODS or ODT exports**, despite the file
+  looking structurally correct (valid manifest, correct image bytes, well-formed XML). Verified
+  against real LibreOffice (headless rendering, not just XML inspection): an image anchored
+  inside a spreadsheet cell's paragraph is silently dropped by Calc. Images are now embedded as
+  a table-level floating shape (`<table:shapes>`) — the same structure Calc itself writes when
+  you paste a picture into a sheet — which renders correctly.
+- Fixed a follow-on bug the image fix introduced: the blank rows reserved above the image
+  shifted the variable/result rows down, so the Result formula's cell references (`B4`, `B5`,
+  …) pointed at the wrong rows and evaluated to 0. Row numbering is now computed from the
+  image's actual height instead of a fixed offset.
+
+### Changed: Copy is now two explicit choices, not one ambiguous button
+
+- The Output dialog's single "Copy" button (which wrote text and image together, letting the
+  paste target guess which one to use) is now two buttons: **Copy as text** (Markdown trace
+  only) and **Copy as image** (the rendered formula picture only) — so pasting into a chat, a
+  document, or an image field reliably gets the type you meant, not whichever a mixed
+  clipboard write happened to prefer.
+- The small "Copy result" button next to a live calculation result now shows visible **Copy**
+  text (and **Copied** when clicked) instead of a bare, unlabeled clipboard icon.
+
+### New: resizable calculation-steps panel
+
+- The boundary between the formula list and the "🧭 Calculation steps" / history panel can now
+  be dragged to resize it.
+- A new Settings field, **Calculation steps panel width**, sets it precisely with a slider
+  (20%–50%, default 30%) instead of dragging. Both the drag and the slider save to the same
+  per-user setting, so the width you left it at — however you set it — is restored the next
+  time you open FormulaBase.
+
+## 0.4.20 — 2026-08-13
+
+### One "Output" button — copy or save, in your choice of format
+
+- Replaced the small icon buttons in the side "Calculation steps" panel with a single
+  **Output** button on every formula card, next to Edit/Delete — easier to find, and no
+  longer limited to whichever formula happens to be active.
+- The button opens a dialog: an "include the calculation steps" checkbox, then **Copy** or
+  **Save**.
+  - **Copy** writes the formula to the clipboard as text AND as its rendered-math image at
+    once — a `text/html` entry carries both together for paste targets that support rich
+    text, alongside plain `text/plain` and `image/png` fallbacks.
+  - **Save** picks ONE format — **Markdown**, a real calculable **ODS** spreadsheet (variable
+    values in editable cells, the result cell a genuine recalculating formula, not just its
+    text), or an **ODT** report — then writes it into your own Nextcloud Files (no browser
+    download) via a small built-in folder picker. Every format embeds the formula both ways,
+    as text and as its rendered-math image (inline for Markdown, a real embedded picture for
+    ODS/ODT).
+  - The picker also lets you target an existing file instead of a plain destination folder —
+    overwrite it, or append to the end.
+- New Settings field, **Formula save destination**, sets the default folder Save opens to
+  (root folder if left empty).
 
 ## 0.4.18 — 2026-08-13
 

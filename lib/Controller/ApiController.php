@@ -88,6 +88,11 @@ class ApiController extends Controller {
 			'theme' => $this->config->getUserValue($uid, Application::APP_ID, 'theme', 'auto'),
 			'language' => $this->config->getUserValue($uid, Application::APP_ID, 'language', 'auto'),
 			'languages' => $this->availableLanguages(),
+			// Default Files-relative folder for "save formula" exports; '' = the Nextcloud root.
+			'export_folder' => $this->config->getUserValue($uid, Application::APP_ID, 'export_folder', ''),
+			// Width of the calculation-steps side panel, as a percentage of the content area
+			// (20-50); set from Settings or by dragging the panel's boundary directly.
+			'steps_width_pct' => (int)$this->config->getUserValue($uid, Application::APP_ID, 'steps_width_pct', '30'),
 		];
 	}
 
@@ -111,6 +116,14 @@ class ApiController extends Controller {
 			if ($lang === 'auto' || in_array($lang, $this->languageCodes(), true)) {
 				$this->config->setUserValue($uid, Application::APP_ID, 'language', $lang);
 			}
+		}
+		if (array_key_exists('export_folder', $params)) {
+			$folder = trim(str_replace('\\', '/', (string)$params['export_folder']), '/');
+			$this->config->setUserValue($uid, Application::APP_ID, 'export_folder', $folder);
+		}
+		if (array_key_exists('steps_width_pct', $params) && is_numeric($params['steps_width_pct'])) {
+			$pct = (int)max(20, min(50, (float)$params['steps_width_pct']));
+			$this->config->setUserValue($uid, Application::APP_ID, 'steps_width_pct', (string)$pct);
 		}
 		return new JSONResponse($this->settingsPayload($uid));
 	}
@@ -385,61 +398,109 @@ class ApiController extends Controller {
 		return new JSONResponse($listing);
 	}
 
-	/** Save the client-built calculation-trace Markdown into a Files folder the user picked. */
-	#[NoAdminRequired]
-	public function exportFormulaMarkdown(int $id): JSONResponse {
-		$f = $this->resolvedFormula($id);
-		if (!$f) {
-			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
-		}
-		$content = (string)$this->request->getParam('content', '');
-		if (trim($content) === '') {
-			return new JSONResponse(['error' => $this->l->t('Nothing to export')], Http::STATUS_BAD_REQUEST);
-		}
-		$folder = (string)$this->request->getParam('folder', '');
-		$filename = $this->sanitizeFilename((string)$this->request->getParam('filename', ''));
-		if ($filename === '') {
-			$filename = $this->sanitizeFilename($f->getName()) ?: 'formula';
-		}
-		try {
-			$saved = $this->files->saveFile($this->uid(), $folder, $filename . '.md', $content);
-		} catch (\RuntimeException $e) {
-			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
-		}
-		return new JSONResponse($saved);
-	}
-
 	/**
-	 * Save a formula as a real, calculable OpenDocument Spreadsheet: variable values go in
-	 * editable cells, the result cell holds an actual spreadsheet formula referencing them
-	 * (compiled by FormulaCompiler), and the client-rendered formula image is embedded above.
+	 * Save a formula into the user's Files in ONE chosen format: the client-built Markdown
+	 * trace (.md), a real calculable OpenDocument Spreadsheet (.ods — variable values in
+	 * editable cells, the result cell a live table:formula compiled by FormulaCompiler), or
+	 * an OpenDocument report (.odt) with the same content laid out as text. ODS/ODT embed the
+	 * client-rendered formula image, and (if $steps is non-empty) the calculation trace.
+	 *
+	 * Normally the file is auto-named into $folder (collision-safe). If the caller picked an
+	 * EXISTING file (`target`), it's overwritten or appended to instead.
 	 */
 	#[NoAdminRequired]
-	public function exportFormulaOds(int $id): JSONResponse {
+	public function exportFormula(int $id): JSONResponse {
 		$f = $this->resolvedFormula($id);
 		if (!$f) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
+		$format = (string)$this->request->getParam('format', 'md');
+		if (!in_array($format, ['md', 'ods', 'odt'], true)) {
+			$format = 'md';
+		}
+		$content = (string)$this->request->getParam('content', '');
 		$values = $this->request->getParam('values', []);
-		$image = (string)$this->request->getParam('image', '');
 		if (!is_array($values)) {
 			$values = [];
 		}
-		try {
-			$content = $this->buildCalcOds($f, $values, $image);
-		} catch (\RuntimeException $e) {
-			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
+		$image = (string)$this->request->getParam('image', '');
+		$imgW = (int)$this->request->getParam('imageWidth', 0);
+		$imgH = (int)$this->request->getParam('imageHeight', 0);
+		$steps = $this->request->getParam('steps', []);
+		$steps = is_array($steps) ? array_map('strval', array_values($steps)) : [];
+		if ($format === 'md' && trim($content) === '') {
+			return new JSONResponse(['error' => $this->l->t('Nothing to export')], Http::STATUS_BAD_REQUEST);
 		}
+
 		$folder = (string)$this->request->getParam('folder', '');
 		$filename = $this->sanitizeFilename((string)$this->request->getParam('filename', ''));
 		if ($filename === '') {
 			$filename = $this->sanitizeFilename($f->getName()) ?: 'formula';
 		}
+
+		$target = $this->request->getParam('target', null);
+		$targetPath = is_array($target) ? (string)($target['path'] ?? '') : '';
+		$targetMode = is_array($target) ? (string)($target['mode'] ?? '') : '';
+		if (!in_array($targetMode, ['overwrite', 'append'], true)) {
+			$targetMode = '';
+		}
+
+		$uid = $this->uid();
 		try {
-			$saved = $this->files->saveFile($this->uid(), $folder, $filename . '.ods', $content);
+			if ($format === 'md') {
+				$bytes = $content;
+				if ($targetMode === 'append') {
+					$existing = $this->files->readFile($uid, $targetPath);
+					if ($existing === null) {
+						throw new \RuntimeException('File not found');
+					}
+					$bytes = rtrim($existing) . "\n\n---\n\n" . $content;
+				}
+			} elseif ($format === 'ods') {
+				if ($targetMode === 'append') {
+					$existing = $this->files->readFile($uid, $targetPath);
+					if ($existing === null) {
+						throw new \RuntimeException('File not found');
+					}
+					$data = $this->odsCalcData($f, $values, $this->odsFirstVarRow($image !== '', $imgW, $imgH));
+					$bytes = $this->appendIntoOdf(
+						$existing,
+						'</table:table>',
+						function (string $imgHref) use ($f, $data, $steps, $imgW, $imgH): string {
+							$r = $this->odsRowsXml($f, $data, $imgHref, $imgHref !== '', $steps, $imgW, $imgH);
+							return $r['shapes'] . $r['rows'];
+						},
+						$image
+					);
+				} else {
+					$bytes = $this->buildCalcOds($f, $values, $image, $steps, $imgW, $imgH);
+				}
+			} else { // odt
+				if ($targetMode === 'append') {
+					$existing = $this->files->readFile($uid, $targetPath);
+					if ($existing === null) {
+						throw new \RuntimeException('File not found');
+					}
+					$bytes = $this->appendIntoOdf(
+						$existing,
+						'</office:text>',
+						fn (string $imgHref) => $this->odtBodyXml($f, $values, $imgHref, $imgHref !== '', $steps, $imgW, $imgH),
+						$image
+					);
+				} else {
+					$bytes = $this->buildCalcOdt($f, $values, $image, $steps, $imgW, $imgH);
+				}
+			}
+
+			if ($targetMode !== '') {
+				$saved = $this->files->overwriteFile($uid, $targetPath, $bytes);
+			} else {
+				$saved = $this->files->saveFile($uid, $folder, $filename . '.' . $format, $bytes);
+			}
 		} catch (\RuntimeException $e) {
 			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
 		}
+
 		return new JSONResponse($saved);
 	}
 
@@ -604,17 +665,35 @@ class ApiController extends Controller {
 	}
 
 	/**
-	 * Build a single-formula .ods with a live spreadsheet formula: one row per variable
-	 * (value cells B4..B(3+k), editable), a Result row whose cell is a real table:formula
-	 * compiled from the expression, and the client-rendered formula image embedded above.
+	 * Resolve a formula's variables/cell-map/scope/compiled-formula/cached-value, shared by
+	 * both the fresh-document and append-into-existing-document ODS builders.
 	 * @param array<string,mixed> $values variable key => current numeric value (from the app)
-	 * @throws \RuntimeException on a malformed expression or unreadable image data
+	 * @return array{vars:array,cellMap:array<string,string>,scope:array<string,float>,formulaOdf:string,cachedValue:float}
+	 * @throws \RuntimeException on a malformed expression
 	 */
-	private function buildCalcOds(FormulaEntity $f, array $values, string $imageBase64): string {
+	/**
+	 * Number of blank spacer rows odsRowsXml() reserves above the data rows when embedding the
+	 * formula image (the <table:shapes> floats over these at an absolute position). Factored out
+	 * so callers can compute where the variable rows actually start before building the cell map.
+	 */
+	private function odsImageSpacerRows(int $imgW, int $imgH): int {
+		[, $frameH] = $this->imageFrameSize($imgW, $imgH);
+		$hCm = (float)str_replace('cm', '', $frameH);
+		return (int)max(1, min(60, ceil($hCm / 0.45) + 1));
+	}
+
+	/**
+	 * The 1-indexed row the first variable row starts at: row 1..N are the image spacer rows (or
+	 * just the title row if there's no image), then the expression row, then the header row.
+	 */
+	private function odsFirstVarRow(bool $hasImage, int $imgW, int $imgH): int {
+		return $hasImage ? $this->odsImageSpacerRows($imgW, $imgH) + 3 : 4;
+	}
+
+	private function odsCalcData(FormulaEntity $f, array $values, int $firstRow): array {
 		$vars = json_decode((string)$f->getVariables(), true);
 		$vars = is_array($vars) ? array_values(array_filter($vars, 'is_array')) : [];
 
-		$firstRow = 4; // rows 1-3 are the image / expression / header
 		$cellMap = [];
 		$defaults = [];
 		foreach ($vars as $i => $v) {
@@ -641,19 +720,67 @@ class ApiController extends Controller {
 		} catch (\Throwable $e) {
 			// leave the cached value at 0; the real table:formula will still recompute on open
 		}
+		return ['vars' => $vars, 'cellMap' => $cellMap, 'scope' => $scope, 'formulaOdf' => $formulaOdf, 'cachedValue' => $cachedValue];
+	}
 
-		// ---- rows ----
+	/**
+	 * The physical size to draw the embedded formula image's ODF frame at, from its actual pixel
+	 * dimensions. Without this the frame was a fixed 10cm x 3cm box — fine for a short formula,
+	 * but the client's canvas image now varies hugely in aspect ratio (one term vs. Heron's
+	 * nested fractions), so a fixed box either squashed a wide image or stranded a small one in
+	 * empty space. The client renders at 2x pixel density, so pixels are treated as 192 DPI.
+	 * @return array{0: string, 1: string} [width, height], each like "12.34cm"
+	 */
+	private function imageFrameSize(int $pxW, int $pxH): array {
+		if ($pxW <= 0 || $pxH <= 0) {
+			return ['10cm', '3cm'];
+		}
+		$dpi = 192.0;
+		$wCm = $pxW / $dpi * 2.54;
+		$hCm = $pxH / $dpi * 2.54;
+		$maxW = 16.0; // stay inside a normal page width regardless of source resolution
+		if ($wCm > $maxW) {
+			$hCm *= $maxW / $wCm;
+			$wCm = $maxW;
+		}
+		return [sprintf('%.2fcm', max(1.0, $wCm)), sprintf('%.2fcm', max(0.5, $hCm))];
+	}
+
+	/**
+	 * The <table:table-row> fragment for one formula: image/title row, expression row, column
+	 * headers, one editable row per variable, the live-formula Result row, and (if $steps is
+	 * non-empty) a trailing text block listing the substitution/reduction trace.
+	 * @param string[] $steps plain-text calculation-step lines (pr() output); [] to omit
+	 * @return array{rows: string, shapes: string} $shapes is a <table:shapes> fragment (possibly
+	 *  empty) that the caller must place as a direct child of <table:table>, alongside the rows.
+	 */
+	private function odsRowsXml(FormulaEntity $f, array $data, string $imgHref, bool $hasImage, array $steps, int $imgW = 0, int $imgH = 0): array {
+		['cellMap' => $cellMap, 'scope' => $scope, 'formulaOdf' => $formulaOdf, 'cachedValue' => $cachedValue] = $data;
+		$vars = $data['vars'];
+
 		$rows = '';
-		// Row 1: title + embedded formula image (as-char, inline in the cell).
-		$hasImage = $imageBase64 !== '';
-		$imgCell = $hasImage
-			? '<table:table-cell table:number-columns-spanned="3" office:value-type="string">'
-				. '<text:p>' . '<draw:frame draw:name="FormulaImage" text:anchor-type="as-char" svg:width="10cm" svg:height="3cm">'
-				. '<draw:image xlink:href="Pictures/formula.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
-				. '</draw:frame></text:p></table:table-cell>'
-			: '<table:table-cell table:number-columns-spanned="3" table:style-name="ceHead" office:value-type="string">'
-				. '<text:p>' . $this->mlEsc($f->getName()) . '</text:p></table:table-cell>';
-		$rows .= '<table:table-row>' . $imgCell . '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+		$shapes = '';
+		[$frameW, $frameH] = $this->imageFrameSize($imgW, $imgH);
+		if ($hasImage) {
+			// An image anchored *inside* a table-cell's paragraph (the obvious approach) is
+			// silently dropped by real Calc — confirmed by rendering with LibreOffice headless.
+			// A table-level floating shape (<table:shapes>, the same structure Calc itself writes
+			// when you paste a picture into a sheet) is what actually renders. It floats over the
+			// sheet at an absolute x/y, so this reserves blank spacer rows roughly tall enough for
+			// it (~0.45cm default row height) rather than needing a precise named row style.
+			$spacerRows = $this->odsImageSpacerRows($imgW, $imgH);
+			for ($i = 0; $i < $spacerRows; $i++) {
+				$rows .= '<table:table-row><table:table-cell table:number-columns-spanned="3" office:value-type="string"><text:p/></table:table-cell>'
+					. '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+			}
+			$shapes = '<table:shapes><draw:frame draw:name="FormulaImage" svg:x="0.1cm" svg:y="0.1cm" svg:width="' . $frameW . '" svg:height="' . $frameH . '">'
+				. '<draw:image xlink:href="' . $this->mlEsc($imgHref) . '" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
+				. '</draw:frame></table:shapes>';
+		} else {
+			$rows .= '<table:table-row><table:table-cell table:number-columns-spanned="3" table:style-name="ceHead" office:value-type="string">'
+				. '<text:p>' . $this->mlEsc($f->getName()) . '</text:p></table:table-cell>'
+				. '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+		}
 
 		// Row 2: the raw expression text, for reference.
 		$rows .= '<table:table-row>'
@@ -690,10 +817,41 @@ class ApiController extends Controller {
 		$rows .= '<table:table-row>'
 			. $this->odsTextCell([$this->l->t('Result')])
 			. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($vStr) . '"'
-			. ' table:formula="of:=' . $this->mlEsc($formulaOdf) . '">'
+			. ' table:formula="=' . $this->mlEsc($formulaOdf) . '">'
 			. '<text:p>' . $this->mlEsc($vStr) . '</text:p></table:table-cell>'
 			. $this->odsTextCell([(string)$f->getResultUnit()])
 			. '</table:table-row>';
+
+		// Optional: the substitution/reduction trace, as reference text (the Result cell above
+		// is already the live, recalculating version of the same computation).
+		if ($steps) {
+			$rows .= '<table:table-row>'
+				. '<table:table-cell table:number-columns-spanned="3" table:style-name="ceHead" office:value-type="string">'
+				. '<text:p>' . $this->mlEsc($this->l->t('Calculation steps')) . '</text:p></table:table-cell>'
+				. '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+			foreach ($steps as $line) {
+				$rows .= '<table:table-row>'
+					. '<table:table-cell table:number-columns-spanned="3" office:value-type="string">'
+					. '<text:p>' . $this->mlEsc((string)$line) . '</text:p></table:table-cell>'
+					. '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
+			}
+		}
+
+		return ['rows' => $rows, 'shapes' => $shapes];
+	}
+
+	/**
+	 * Build a single-formula .ods with a live spreadsheet formula: one row per variable
+	 * (value cells B4..B(3+k), editable), a Result row whose cell is a real table:formula
+	 * compiled from the expression, and the client-rendered formula image embedded above.
+	 * @param array<string,mixed> $values variable key => current numeric value (from the app)
+	 * @param string[] $steps plain-text calculation-step lines, or [] to omit that section
+	 * @throws \RuntimeException on a malformed expression or unreadable image data
+	 */
+	private function buildCalcOds(FormulaEntity $f, array $values, string $imageBase64, array $steps = [], int $imgW = 0, int $imgH = 0): string {
+		$hasImage = $imageBase64 !== '';
+		$data = $this->odsCalcData($f, $values, $this->odsFirstVarRow($hasImage, $imgW, $imgH));
+		['rows' => $rows, 'shapes' => $shapes] = $this->odsRowsXml($f, $data, 'Pictures/formula.png', $hasImage, $steps, $imgW, $imgH);
 
 		$sheetName = str_replace("'", ' ', $this->sanitizeFilename($f->getName())) ?: 'Sheet1';
 
@@ -715,6 +873,7 @@ class ApiController extends Controller {
 			. '<office:body><office:spreadsheet>'
 			. '<table:table table:name="' . $this->mlEsc($sheetName) . '">'
 			. '<table:table-column table:number-columns-repeated="3"/>'
+			. $shapes
 			. $rows
 			. '</table:table>'
 			. '</office:spreadsheet></office:body></office:document-content>';
@@ -772,6 +931,244 @@ class ApiController extends Controller {
 	/** Format a float the same way odsNumberCell does, without wrapping it in a cell. */
 	private function odsNumFmt(float $value): string {
 		return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+	}
+
+	/**
+	 * The office:text body fragment for one formula: heading, embedded formula image, the
+	 * expression as text, a small variable/value/unit table, the result, and (if $steps is
+	 * non-empty) the substitution/reduction trace as plain paragraphs. Read-only report style —
+	 * unlike the .ods, there is no live spreadsheet formula in a text document.
+	 * @param array<string,mixed> $values
+	 * @param string[] $steps
+	 */
+	private function odtBodyXml(FormulaEntity $f, array $values, string $imgHref, bool $hasImage, array $steps, int $imgW = 0, int $imgH = 0): string {
+		$vars = json_decode((string)$f->getVariables(), true);
+		$vars = is_array($vars) ? array_values(array_filter($vars, 'is_array')) : [];
+		$defaults = [];
+		foreach ($vars as $v) {
+			$key = trim((string)($v['key'] ?? ''));
+			if ($key !== '') {
+				$defaults[$key] = is_numeric($v['default'] ?? null) ? (float)$v['default'] : 0.0;
+			}
+		}
+		$scope = [];
+		foreach ($defaults as $key => $def) {
+			$scope[$key] = is_numeric($values[$key] ?? null) ? (float)$values[$key] : $def;
+		}
+		$cachedValue = null;
+		try {
+			$cachedValue = $this->compiler->evaluate($this->compiler->parse($f->getExpression()), $scope);
+			if (!is_finite($cachedValue)) {
+				$cachedValue = null;
+			}
+		} catch (\Throwable $e) {
+			$cachedValue = null;
+		}
+
+		$out = '<text:h text:outline-level="1">' . $this->mlEsc($f->getName()) . '</text:h>';
+		if ($hasImage) {
+			[$frameW, $frameH] = $this->imageFrameSize($imgW, $imgH);
+			$out .= '<text:p><draw:frame draw:name="FormulaImage" text:anchor-type="as-char" svg:width="' . $frameW . '" svg:height="' . $frameH . '">'
+				. '<draw:image xlink:href="' . $this->mlEsc($imgHref) . '" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
+				. '</draw:frame></text:p>';
+		}
+		$out .= '<text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Expression')) . ':</text:span> '
+			. $this->mlEsc($f->getExpression()) . '</text:p>';
+
+		if ($vars) {
+			$out .= '<table:table table:name="Variables">'
+				. '<table:table-column table:number-columns-repeated="3"/>'
+				. '<table:table-row>'
+				. '<table:table-cell office:value-type="string"><text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Variable')) . '</text:span></text:p></table:table-cell>'
+				. '<table:table-cell office:value-type="string"><text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Value')) . '</text:span></text:p></table:table-cell>'
+				. '<table:table-cell office:value-type="string"><text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Unit')) . '</text:span></text:p></table:table-cell>'
+				. '</table:table-row>';
+			foreach ($vars as $v) {
+				$key = trim((string)($v['key'] ?? ''));
+				if ($key === '') {
+					continue;
+				}
+				$label = trim((string)($v['label'] ?? '')) ?: $key;
+				$unit = (string)($v['unit'] ?? '');
+				$val = $this->odsNumFmt((float)($scope[$key] ?? 0.0));
+				$out .= '<table:table-row>'
+					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($label) . '</text:p></table:table-cell>'
+					. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($val) . '"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>'
+					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($unit) . '</text:p></table:table-cell>'
+					. '</table:table-row>';
+			}
+			$out .= '</table:table>';
+		}
+
+		if ($cachedValue !== null) {
+			$out .= '<text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Result')) . ':</text:span> '
+				. $this->mlEsc($this->odsNumFmt($cachedValue)) . ($f->getResultUnit() ? ' ' . $this->mlEsc((string)$f->getResultUnit()) : '') . '</text:p>';
+		}
+
+		if ($steps) {
+			$out .= '<text:h text:outline-level="2">' . $this->mlEsc($this->l->t('Calculation steps')) . '</text:h>';
+			foreach ($steps as $line) {
+				$out .= '<text:p>' . $this->mlEsc((string)$line) . '</text:p>';
+			}
+		}
+
+		return $out;
+	}
+
+	/** Build a single-formula report .odt: heading, embedded formula image, expression, a
+	 * variable/value/unit table, the result, and (if $steps) the calculation trace as text.
+	 * @param array<string,mixed> $values
+	 * @param string[] $steps
+	 * @throws \RuntimeException on unreadable image data
+	 */
+	private function buildCalcOdt(FormulaEntity $f, array $values, string $imageBase64, array $steps = [], int $imgW = 0, int $imgH = 0): string {
+		$hasImage = $imageBase64 !== '';
+		$body = $this->odtBodyXml($f, $values, 'Pictures/formula.png', $hasImage, $steps, $imgW, $imgH);
+
+		$content = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-content'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"'
+			. ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"'
+			. ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+			. ' xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"'
+			. ' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+			. ' xmlns:xlink="http://www.w3.org/1999/xlink"'
+			. ' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+			. ' office:version="1.2">'
+			. '<office:automatic-styles>'
+			. '<style:style style:name="Bold" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>'
+			. '</office:automatic-styles>'
+			. '<office:body><office:text>' . $body . '</office:text></office:body></office:document-content>';
+
+		$manifest = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">'
+			. '<manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.text"/>'
+			. '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+			. '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'
+			. '<manifest:file-entry manifest:full-path="meta.xml" manifest:media-type="text/xml"/>'
+			. ($hasImage ? '<manifest:file-entry manifest:full-path="Pictures/formula.png" manifest:media-type="image/png"/>' : '')
+			. '</manifest:manifest>';
+
+		$styles = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-styles'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+			. ' office:version="1.2"><office:styles/></office:document-styles>';
+
+		$meta = '<?xml version="1.0" encoding="UTF-8"?>'
+			. '<office:document-meta'
+			. ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+			. ' xmlns:meta="urn:oasis:names:tc:opendocument:xmlns:meta:1.0"'
+			. ' office:version="1.2"><office:meta>'
+			. '<meta:generator>FormulaBase</meta:generator>'
+			. '</office:meta></office:document-meta>';
+
+		$imgBytes = '';
+		if ($hasImage) {
+			$raw = preg_replace('#^data:image/png;base64,#', '', $imageBase64);
+			$imgBytes = base64_decode((string)$raw, true) ?: '';
+			if ($imgBytes === '') {
+				throw new \RuntimeException('Invalid image data');
+			}
+		}
+
+		$tmp = $this->tempManager->getTemporaryFile('.odt');
+		$zip = new \ZipArchive();
+		$zip->open($tmp, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+		$zip->addFromString('mimetype', 'application/vnd.oasis.opendocument.text');
+		$zip->setCompressionName('mimetype', \ZipArchive::CM_STORE);
+		$zip->addFromString('content.xml', $content);
+		$zip->addFromString('styles.xml', $styles);
+		$zip->addFromString('meta.xml', $meta);
+		$zip->addFromString('META-INF/manifest.xml', $manifest);
+		if ($hasImage) {
+			$zip->addFromString('Pictures/formula.png', $imgBytes);
+		}
+		$zip->close();
+		$bytes = (string)file_get_contents($tmp);
+		@unlink($tmp);
+		return $bytes;
+	}
+
+	/**
+	 * Append a formula's data into an EXISTING .ods/.odt: splice a fresh fragment (built by
+	 * $buildRows) into the existing content.xml just before $closeTag, keep every other zip
+	 * entry byte-for-byte, and embed a uniquely-named image if provided. Best-effort — this is
+	 * string surgery, not a full ODF merge — but Nextcloud Office is available to fix up any
+	 * edge case it doesn't handle (multiple sheets/sections, unusual existing styles).
+	 * @param callable(string $imgHref): string $buildFragment
+	 * @throws \RuntimeException if the existing file isn't a readable ODF document
+	 */
+	private function appendIntoOdf(string $existingBytes, string $closeTag, callable $buildFragment, string $imageBase64): string {
+		$tmpIn = $this->tempManager->getTemporaryFile('.odf-in');
+		file_put_contents($tmpIn, $existingBytes);
+		$zipIn = new \ZipArchive();
+		if ($zipIn->open($tmpIn) !== true) {
+			@unlink($tmpIn);
+			throw new \RuntimeException('The existing file is not a valid ODF document');
+		}
+		$content = $zipIn->getFromName('content.xml');
+		$manifest = $zipIn->getFromName('META-INF/manifest.xml');
+		if ($content === false || $manifest === false) {
+			$zipIn->close();
+			@unlink($tmpIn);
+			throw new \RuntimeException('The existing file is not a valid ODF document');
+		}
+
+		$hasImage = $imageBase64 !== '';
+		$imgHref = 'Pictures/formula_' . substr(md5(uniqid('', true)), 0, 10) . '.png';
+		$fragment = $buildFragment($hasImage ? $imgHref : '');
+
+		$pos = strrpos($content, $closeTag);
+		if ($pos === false) {
+			$zipIn->close();
+			@unlink($tmpIn);
+			throw new \RuntimeException('The existing file is not a valid ODF document');
+		}
+		$content = substr($content, 0, $pos) . $fragment . substr($content, $pos);
+
+		$imgBytes = '';
+		if ($hasImage) {
+			$raw = preg_replace('#^data:image/png;base64,#', '', $imageBase64);
+			$imgBytes = base64_decode((string)$raw, true) ?: '';
+			if ($imgBytes === '') {
+				$zipIn->close();
+				@unlink($tmpIn);
+				throw new \RuntimeException('Invalid image data');
+			}
+			$manifest = str_replace(
+				'</manifest:manifest>',
+				'<manifest:file-entry manifest:full-path="' . $imgHref . '" manifest:media-type="image/png"/></manifest:manifest>',
+				(string)$manifest
+			);
+		}
+
+		$tmpOut = $this->tempManager->getTemporaryFile('.odf-out');
+		$zipOut = new \ZipArchive();
+		$zipOut->open($tmpOut, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+		for ($i = 0; $i < $zipIn->numFiles; $i++) {
+			$name = $zipIn->getNameIndex($i);
+			if ($name === 'content.xml' || $name === 'META-INF/manifest.xml') {
+				continue;
+			}
+			$data = $zipIn->getFromName($name);
+			$zipOut->addFromString($name, $data === false ? '' : $data);
+			if ($name === 'mimetype') {
+				$zipOut->setCompressionName('mimetype', \ZipArchive::CM_STORE);
+			}
+		}
+		$zipOut->addFromString('content.xml', $content);
+		$zipOut->addFromString('META-INF/manifest.xml', $manifest);
+		if ($hasImage) {
+			$zipOut->addFromString($imgHref, $imgBytes);
+		}
+		$zipOut->close();
+		$zipIn->close();
+		$bytes = (string)file_get_contents($tmpOut);
+		@unlink($tmpIn);
+		@unlink($tmpOut);
+		return $bytes;
 	}
 
 	#[NoAdminRequired]

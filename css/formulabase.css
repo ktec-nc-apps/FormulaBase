@@ -604,10 +604,17 @@
 #formulabase-root .schema-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 #formulabase-root .err-msg { color: var(--danger); font-size: 13px; }
 
-/* content two-column: formulas + step/history side panel */
-#formulabase-root .fb-content { display: flex; gap: 18px; align-items: flex-start; }
+/* content two-column: formulas + step/history side panel, with a draggable boundary between
+   them. .fb-side's width comes from the --fb-side-width custom property (set inline from the
+   Vue-tracked, localStorage-persisted sideWidth) so the mobile media query below — which sets
+   plain, non-variable width/flex values — still wins on small screens via normal cascade order,
+   with no !important needed. */
+#formulabase-root .fb-content { display: flex; gap: 10px; align-items: flex-start; }
 #formulabase-root .fb-listcol { flex: 1; min-width: 0; }
-#formulabase-root .fb-side { width: 340px; flex: 0 0 340px; position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; }
+#formulabase-root .fb-side { width: var(--fb-side-width, 25%); flex: 0 0 var(--fb-side-width, 25%); min-width: 220px; position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; }
+#formulabase-root .fb-resizer { flex: 0 0 6px; width: 6px; align-self: stretch; cursor: col-resize; position: relative; touch-action: none; }
+#formulabase-root .fb-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; border-radius: 2px; background: var(--border); transition: background .15s; }
+#formulabase-root .fb-resizer:hover::after, #formulabase-root .fb-resizer:active::after { background: var(--primary); }
 
 /* formula card */
 #formulabase-root .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
@@ -688,6 +695,7 @@
 @media (max-width: 900px) {
   #formulabase-root .fb-content { flex-direction: column; }
   #formulabase-root .fb-side { width: 100%; flex: 1 1 auto; position: static; }
+  #formulabase-root .fb-resizer { display: none; }
 }
 
 @media (max-width: 480px) {

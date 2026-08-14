@@ -261,6 +261,107 @@
   }
   function mathmlOf(ast) { return '<math xmlns="http://www.w3.org/1998/Math/MathML">' + ml(ast) + '</math>'; }
 
+  /* ---------- AST -> Canvas 2D typesetting (mirrors ml()/mlSide() above) ----------
+   * Rasterising the MathML itself (svg foreignObject -> Image -> canvas) taints the canvas —
+   * Chromium refuses to export pixels derived from foreignObject content, even same-origin. This
+   * draws the same fraction bars / radicals / raised exponents directly with Canvas 2D primitives
+   * (fillText + strokes only, nothing loaded from an image), so the exported picture matches what
+   * the app displays on screen without ever touching an <img>/<svg>.
+   * Returns a layout box: {w, above, below, draw(x, yBaseline)}. */
+  function cLayout(ctx, n, size) {
+    const REG = ''; const ITAL = 'italic ';
+    function font(style, sz) { return style + Math.max(1, sz) + 'px Georgia, "Times New Roman", serif'; }
+    function textBox(text, style, sz) {
+      ctx.font = font(style, sz);
+      const w = ctx.measureText(text).width;
+      return { w, above: sz * 0.72, below: sz * 0.22, draw(x, y) { ctx.font = font(style, sz); ctx.fillText(text, x, y); } };
+    }
+    function hbox(parts) {
+      const w = parts.reduce((s, p) => s + p.w, 0);
+      const above = parts.length ? Math.max.apply(null, parts.map((p) => p.above)) : size * 0.72;
+      const below = parts.length ? Math.max.apply(null, parts.map((p) => p.below)) : size * 0.22;
+      return { w, above, below, draw(x, y) { let cx = x; parts.forEach((p) => { p.draw(cx, y); cx += p.w; }); } };
+    }
+    function parenWrap(inner, sz) { return hbox([textBox('(', REG, sz), inner, textBox(')', REG, sz)]); }
+    function nprec(nd) { return nd.type === 'bin' ? PREC[nd.op] : nd.type === 'unary' ? 4 : 5; }
+    function side(nd, p, eq, sz) {
+      if (nd.type === 'bin' && (nd.op === '/' || nd.op === '^')) return build(nd, sz);
+      const need = eq ? nprec(nd) <= p : nprec(nd) < p;
+      const b = build(nd, sz);
+      return need ? parenWrap(b, sz) : b;
+    }
+    function radical(inner, sz, indexStr) {
+      const hookW = sz * 0.5; const barH = Math.max(1, sz * 0.06); const pad = sz * 0.15;
+      const above = inner.above + sz * 0.25; const below = inner.below;
+      const w = hookW + inner.w + pad * 2 + (indexStr ? sz * 0.35 : 0);
+      const ix = indexStr ? sz * 0.35 : 0;
+      return {
+        w, above, below,
+        draw(x, y) {
+          ctx.save();
+          ctx.strokeStyle = '#111111'; ctx.lineWidth = barH; ctx.lineJoin = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x + ix, y - inner.below - (inner.above + inner.below) * 0.12);
+          ctx.lineTo(x + ix + hookW * 0.35, y + inner.below * 0.6);
+          ctx.lineTo(x + ix + hookW * 0.6, y - above);
+          ctx.lineTo(x + ix + hookW + inner.w + pad * 2, y - above);
+          ctx.stroke();
+          ctx.restore();
+          if (indexStr) { ctx.font = font(REG, sz * 0.5); ctx.fillText(indexStr, x, y - above * 0.7); }
+          inner.draw(x + ix + hookW * 0.6 + pad, y);
+        },
+      };
+    }
+    function build(nd, sz) {
+      switch (nd.type) {
+        case 'num': return textBox(fmtV(nd.v), REG, sz);
+        case 'var': return textBox(nd.name, nd.name.length === 1 ? ITAL : REG, sz);
+        case 'const': { const k = nd.name.toLowerCase(); return textBox(ML_GREEK[k] || nd.name, REG, sz); }
+        case 'unary': return hbox([textBox(nd.op === '-' ? '−' : '+', REG, sz), side(nd.arg, 4, false, sz)]);
+        case 'bin': {
+          if (nd.op === '/') {
+            const num = build(nd.l, sz * 0.92); const den = build(nd.r, sz * 0.92);
+            const w = Math.max(num.w, den.w) + sz * 0.3; const gap = sz * 0.12; const barW = Math.max(1, sz * 0.06);
+            return {
+              w, above: num.above + num.below + gap + barW, below: den.above + den.below + gap + barW,
+              draw(x, y) {
+                num.draw(x + (w - num.w) / 2, y - gap - barW - num.below);
+                den.draw(x + (w - den.w) / 2, y + gap + barW + den.above);
+                ctx.save(); ctx.beginPath(); ctx.lineWidth = barW; ctx.strokeStyle = '#111111';
+                ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke(); ctx.restore();
+              },
+            };
+          }
+          if (nd.op === '^') {
+            const baseNeedsParen = nd.l.type === 'bin' || nd.l.type === 'unary';
+            const base = baseNeedsParen ? parenWrap(build(nd.l, sz), sz) : build(nd.l, sz);
+            const exp = build(nd.r, sz * 0.62);
+            return { w: base.w + exp.w, above: base.above + exp.above * 0.55, below: base.below,
+              draw(x, y) { base.draw(x, y); exp.draw(x + base.w, y - base.above * 0.55); } };
+          }
+          const p = PREC[nd.op];
+          const l = side(nd.l, p, false, sz);
+          const r = side(nd.r, p, (nd.op === '-' || nd.op === '%'), sz);
+          const opStr = nd.op === '%' ? ' mod ' : (' ' + (nd.op === '+' ? '+' : nd.op === '-' ? '−' : '×') + ' ');
+          return hbox([l, textBox(opStr, REG, sz), r]);
+        }
+        case 'call': {
+          const k = nd.name.toLowerCase();
+          if (k === 'sqrt' && nd.args.length === 1) return radical(build(nd.args[0], sz), sz, null);
+          if (k === 'cbrt' && nd.args.length === 1) return radical(build(nd.args[0], sz), sz, '3');
+          if (k === 'root' && nd.args.length === 2) return radical(build(nd.args[0], sz), sz, pr(nd.args[1]));
+          if (k === 'abs' && nd.args.length === 1) return hbox([textBox('|', REG, sz), build(nd.args[0], sz), textBox('|', REG, sz)]);
+          const parts = [textBox(nd.name + '(', REG, sz)];
+          nd.args.forEach((a, i) => { if (i > 0) parts.push(textBox(', ', REG, sz)); parts.push(build(a, sz)); });
+          parts.push(textBox(')', REG, sz));
+          return hbox(parts);
+        }
+      }
+      return textBox('?', REG, sz);
+    }
+    return build(n, size);
+  }
+
   function subst(n, scope) {
     switch (n.type) {
       case 'num': return n;
@@ -387,6 +488,19 @@
     'Genetics': '🧬', 'Ecology': '🌿', 'Agriculture': '🌾', 'Number theory': '🔢',
   };
 
+  // Width of the steps/history side panel, as a percentage of the content area (not raw px, so
+  // it scales with the window instead of stranding a fixed box on a narrow or huge screen). Set
+  // either by dragging the .fb-resizer boundary directly or via the Settings slider — both paths
+  // write the same server-side setting (loadSettings() reads it back as steps_width_pct), so
+  // reloading always restores whichever one was used last, matching "初期値" for both.
+  const SIDE_WIDTH_PCT_MIN = 20;
+  const SIDE_WIDTH_PCT_MAX = 50;
+  const SIDE_WIDTH_PCT_DEFAULT = 30;
+  function clampSideWidthPct(p) {
+    const n = Number(p);
+    return isFinite(n) ? Math.min(SIDE_WIDTH_PCT_MAX, Math.max(SIDE_WIDTH_PCT_MIN, n)) : SIDE_WIDTH_PCT_DEFAULT;
+  }
+
   const TEMPLATE = `
   <div class="layout">
     <aside class="sidebar">
@@ -442,6 +556,7 @@
                 <div class="fb-actions">
                   <button class="btn sm" @click.stop="copyExpr(f)" :title="t('Copy expression')">{{ copiedKey==='ex'+f.id ? '✓' : '⧉' }}</button>
                   <button class="btn sm" v-if="canEdit" @click.stop="openFormulaModal(f)">{{ t('Edit') }}</button>
+                  <button class="btn sm" @click.stop="openExportDialog(f)">📤 {{ t('Output') }}</button>
                   <button class="btn sm danger" v-if="canDelete" @click.stop="removeFormula(f)">{{ t('Delete') }}</button>
                 </div>
               </div>
@@ -472,7 +587,7 @@
                 <span class="fb-rvalue">{{ te(result(f).text) }}</span>
                 <span class="fb-runit" v-if="f.result_unit && result(f).ok">{{ f.result_unit }}</span>
                 <span class="spacer"></span>
-                <button class="btn xs" v-if="result(f).ok" @click.stop="copyResult(f)" :title="t('Copy result')">{{ copiedKey==='res'+f.id ? '✓' : '📋' }}</button>
+                <button class="btn xs" v-if="result(f).ok" @click.stop="copyResult(f)" :title="t('Copy result')">{{ copiedKey==='res'+f.id ? '✓ '+t('Copied') : '📋 '+t('Copy') }}</button>
                 <button class="btn xs" v-if="result(f).ok" @click.stop="record(f)">✔ {{ t('Record') }}</button>
               </div>
               <div class="fb-notes" v-if="f.notes">{{ t(f.notes) }}</div>
@@ -480,13 +595,10 @@
           </template>
         </div>
 
-        <aside class="fb-side" v-if="current && activeFormula">
+        <div class="fb-resizer" v-if="current && activeFormula" @mousedown="startSideResize" @touchstart="startSideResize" :title="t('Drag to resize')"></div>
+        <aside class="fb-side" v-if="current && activeFormula" :style="{ '--fb-side-width': sideWidthPct + '%' }">
           <div class="fb-side-sec">
-            <div class="fb-side-h">🧭 {{ t('Calculation steps') }}
-              <button class="btn xs" v-if="stepData" @click="copySteps(activeFormula)" :title="t('Copy calculation')">{{ copiedKey==='steps'+activeFormula.id ? '✓' : '📋' }}</button>
-              <button class="btn xs" v-if="stepData" @click="openExportPicker(activeFormula,'md')" :title="t('Save as Markdown to Nextcloud')">📝</button>
-              <button class="btn xs" v-if="stepData" @click="openExportPicker(activeFormula,'ods')" :title="t('Save as ODS (calculable spreadsheet)')">📊</button>
-            </div>
+            <div class="fb-side-h">🧭 {{ t('Calculation steps') }}</div>
             <div class="fb-side-sub">{{ t(activeFormula.name) }}</div>
             <template v-if="stepData">
               <ol class="fb-steps">
@@ -733,6 +845,22 @@
             <div class="field-hint">{{ t('The display language switches when you press “Save”.') }}</div>
           </div>
           <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <label>🧭 {{ t('Calculation steps panel width') }}</label>
+            <div class="field-hint" style="margin-bottom:8px">{{ t('How wide the calculation-steps panel opens next to a formula.') }}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <input type="range" min="20" max="50" step="1" v-model.number="settingsForm.stepsWidthPct" @input="previewStepsWidth" style="flex:1">
+              <span style="min-width:40px;text-align:right">{{ settingsForm.stepsWidthPct }}%</span>
+            </div>
+          </div>
+          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <label>📤 {{ t('Formula save destination') }}</label>
+            <div class="field-hint" style="margin-bottom:8px">{{ t('The folder "Save" opens to when exporting a formula.') }}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="fp-cur" style="flex:1">/{{ exportFolder }}</span>
+              <button type="button" class="btn sm" @click="openDefaultFolderPicker">{{ t('Change') }}</button>
+            </div>
+          </div>
+          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
             <label>💾 {{ t('Backup / Restore') }}</label>
             <div class="field-hint" style="margin-bottom:8px">{{ t('Save all your collections and formulas to a ZIP file, or restore them from one.') }}</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -797,6 +925,29 @@
       </div>
     </div>
 
+    <div class="modal-mask" v-if="exportDialog.open" @click.self="exportDialog.open=false">
+      <div class="modal">
+        <div class="modal-head"><h3>📤 {{ exportDialog.formula ? t(exportDialog.formula.name) : '' }}</h3><button class="icon-btn" @click="exportDialog.open=false">✕</button></div>
+        <div class="modal-body">
+          <label class="confirm-check"><input type="checkbox" v-model="exportDialog.includeSteps"> {{ t('Include the calculation steps') }}</label>
+          <div class="field" style="margin-top:14px">
+            <label>{{ t('Save format') }}</label>
+            <div class="radios">
+              <label><input type="radio" value="md" v-model="exportDialog.format"> Markdown (.md)</label>
+              <label><input type="radio" value="ods" v-model="exportDialog.format"> ODS — {{ t('calculable spreadsheet') }} (.ods)</label>
+              <label><input type="radio" value="odt" v-model="exportDialog.format"> ODT — {{ t('report') }} (.odt)</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn" @click="exportDialog.open=false">{{ t('Cancel') }}</button>
+          <button type="button" class="btn" @click="doCopyText()">📄 {{ t('Copy as text') }}</button>
+          <button type="button" class="btn" @click="doCopyImage()">🖼 {{ t('Copy as image') }}</button>
+          <button type="button" class="btn primary" @click="openSaveFolderPicker()">💾 {{ t('Save to Nextcloud') }}</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-mask cropper-mask" v-if="filePicker.open" @click.self="fpCancel()">
       <div class="modal">
         <div class="modal-head"><h3>📂 {{ t('Choose a folder') }}</h3><button class="icon-btn" @click="fpCancel()">✕</button></div>
@@ -807,16 +958,24 @@
           </div>
           <p v-if="filePicker.loading" class="empty-hint sm">{{ t('Loading…') }}</p>
           <p v-else-if="filePicker.error" class="empty-hint sm">{{ filePicker.error }}</p>
-          <p v-else-if="!filePicker.entries.length" class="empty-hint sm">{{ t('No subfolders here.') }}</p>
+          <p v-else-if="!fpVisibleEntries().length" class="empty-hint sm">{{ t('This folder is empty.') }}</p>
           <div v-else class="fp-list">
-            <button type="button" v-for="x in filePicker.entries" :key="x.path" class="note-item fp-item" @click="fpLoad(x.path)">
-              <span class="ni-title">📁 {{ x.name }}</span><span class="ni-cat">›</span>
+            <button type="button" v-for="x in fpVisibleEntries()" :key="x.path" class="note-item fp-item"
+                    :class="{sel: filePicker.selectedFile && filePicker.selectedFile.path===x.path}" @click="fpClick(x)">
+              <span class="ni-title">{{ x.is_dir ? '📁' : '📄' }} {{ x.name }}</span><span class="ni-cat">{{ x.is_dir ? '›' : '' }}</span>
             </button>
           </div>
+          <p v-if="filePicker.purpose==='export' && filePicker.selectedFile" class="field-hint" style="margin-top:8px">
+            {{ t('Selected file: {name}', { name: filePicker.selectedFile.name }) }}
+          </p>
         </div>
         <div class="modal-foot">
           <button type="button" class="btn" @click="fpCancel()">{{ t('Cancel') }}</button>
-          <button type="button" class="btn primary" :disabled="filePicker.loading" @click="fpConfirmFolder()">{{ t('Select this folder') }}</button>
+          <template v-if="filePicker.purpose==='export' && filePicker.selectedFile">
+            <button type="button" class="btn danger" @click="fpConfirm('overwrite')">{{ t('Overwrite') }}</button>
+            <button type="button" class="btn" @click="fpConfirm('append')">{{ t('Append to the end') }}</button>
+          </template>
+          <button type="button" class="btn primary" :disabled="filePicker.loading" @click="fpConfirm('auto')">{{ t('Select this folder') }}</button>
         </div>
       </div>
     </div>
@@ -859,8 +1018,14 @@
         toast: null,
         copiedKey: null,
         modal: null,
-        // Folder picker for exporting a formula (Markdown trace / calculable ODS) into Files.
-        filePicker: { open: false, kind: null, formula: null, path: '', parent: null, entries: [], loading: false, error: '' },
+        // Export dialog (one button per card): choose to include the steps, then Copy or Save.
+        exportDialog: { open: false, formula: null, includeSteps: true, format: 'md' },
+        // Steps/history side panel width, as % of the content area — see clampSideWidthPct()
+        // above. Overwritten from the server setting once loadSettings() resolves.
+        sideWidthPct: SIDE_WIDTH_PCT_DEFAULT,
+        // Folder/file picker, shared by "Save" (purpose:'export') and the Settings default-folder
+        // field (purpose:'default'). In 'export' mode a file can be selected as an overwrite/append target.
+        filePicker: { open: false, purpose: 'export', formula: null, path: '', parent: null, entries: [], selectedFile: null, loading: false, error: '' },
         collForm: { id: null, name: '', icon: '🧮', color: '#2563eb', description: '' },
         fForm: { id: null, name: '', expression: '', description: '', variables: [], result_unit: '', decimals: 2, notes: '', exprError: '' },
         mdPreview: false,
@@ -869,7 +1034,8 @@
         theme: 'auto',
         language: 'auto',
         languages: [{ code: 'auto', name: 'Nextcloud' }],
-        settingsForm: { theme: 'auto', language: 'auto' },
+        exportFolder: '', // default Files-relative destination for "save formula" exports ('' = root)
+        settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT },
         pad: PAD,
         // internal sharing (owner-side panel inside collection settings)
         sharePanel: { shares: [], q: '', results: [], searching: false, recipient: null, recipientName: '', perm: 'view', err: '', busy: false },
@@ -939,17 +1105,7 @@
         return this.templatesByCat.reduce((n, g) => n + g.items.length, 0) + ' / ' + this.tplIndex.length;
       },
       activeFormula() { return this.formulas.find((f) => f.id === this.activeId) || this.formulas[0] || null; },
-      stepData() {
-        const f = this.activeFormula; if (!f) return null;
-        const scope = this.scopeFor(f); if (!scope) return null;
-        let ast; try { ast = parseAST(f.expression); } catch (e) { return null; }
-        const nodes = [ast];
-        let cur = subst(ast, scope);
-        nodes.push(cur);
-        let last = pr(cur); let guard = 0;
-        while (cur.type !== 'num' && guard < 200) { const [nx, ch] = reduceStep(cur); if (!ch) break; cur = nx; const s = pr(cur); if (s !== last) { nodes.push(cur); last = s; } guard++; }
-        return { nodes, value: cur.type === 'num' ? cur.v : null };
-      },
+      stepData() { return this.computeSteps(this.activeFormula); },
       stepError() {
         const f = this.activeFormula; if (!f) return '';
         try { parseAST(f.expression); } catch (e) { return e.message || 'invalid'; }
@@ -988,107 +1144,302 @@
         const txt = mode === 'line' ? (h.label + ' = ' + h.result + (h.unit ? ' ' + h.unit : '')) : h.result;
         return this.copyValue('h' + h.id + '-' + (mode || 'value'), txt);
       },
-      // Plain-text/Markdown rendering of the substitution/reduction trace, reusing pr() (the
-      // same AST->text function the trace panel uses internally to detect step changes).
-      stepsMarkdown(f) {
-        const sd = this.stepData; if (!sd) return '';
-        const lines = ['### ' + this.t(f.name), '', '**' + this.t('Expression') + ':** `' + f.expression + '`'];
+      // The substitution/reduction trace for an arbitrary formula card (not just the active
+      // one, since the export/copy buttons now live on every card, not only the side panel).
+      computeSteps(f) {
+        if (!f) return null;
+        const scope = this.scopeFor(f); if (!scope) return null;
+        let ast; try { ast = parseAST(f.expression); } catch (e) { return null; }
+        const nodes = [ast];
+        let cur = subst(ast, scope);
+        nodes.push(cur);
+        let last = pr(cur); let guard = 0;
+        while (cur.type !== 'num' && guard < 200) { const [nx, ch] = reduceStep(cur); if (!ch) break; cur = nx; const s = pr(cur); if (s !== last) { nodes.push(cur); last = s; } guard++; }
+        return { nodes, value: cur.type === 'num' ? cur.v : null };
+      },
+      // Plain-text lines of the substitution/reduction trace ("expr", "= step1", ..., "= result unit"),
+      // shared by the Markdown export, the ODS/ODT "Calculation steps" section, and the copy-as-image render.
+      stepsPlainLines(f) {
+        const sd = this.computeSteps(f); if (!sd) return [];
+        const lines = sd.nodes.map((nd, i) => (i > 0 ? '= ' : '') + pr(nd));
+        if (sd.value != null) lines.push('= ' + this.fmt(sd.value, f.decimals) + (f.result_unit ? ' ' + f.result_unit : ''));
+        return lines;
+      },
+      // Markdown rendering of the formula (name/expression/values), optionally with the
+      // substitution/reduction trace appended as a fenced code block. The formula is always
+      // represented BOTH ways: as text (the `Expression:` line) and, when an image is given,
+      // as the rendered-math picture (an inline data-URI image), matching the ODS/ODT output.
+      stepsMarkdown(f, includeSteps, image) {
+        const lines = ['### ' + this.t(f.name), ''];
+        if (image) lines.push('![' + this.t(f.name).replace(/[[\]]/g, '') + '](' + image + ')', '');
+        lines.push('**' + this.t('Expression') + ':** `' + f.expression + '`');
         const ins = this.inputs[f.id] || {};
         const varLines = (f.variables || [])
           .filter((v) => ins[v.key] !== undefined && ins[v.key] !== '' && !this.isSolving(f, v.key))
           .map((v) => '- ' + (v.label ? this.t(v.label) : v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
         if (varLines.length) lines.push('', '**' + this.t('Values') + ':**', ...varLines);
-        lines.push('', '**' + this.t('Calculation steps') + ':**', '', '```');
-        sd.nodes.forEach((nd, i) => lines.push((i > 0 ? '= ' : '') + pr(nd)));
-        if (sd.value != null) lines.push('= ' + this.fmt(sd.value, f.decimals) + (f.result_unit ? ' ' + f.result_unit : ''));
-        lines.push('```');
+        if (includeSteps) {
+          const stepLines = this.stepsPlainLines(f);
+          if (stepLines.length) lines.push('', '**' + this.t('Calculation steps') + ':**', '', '```', ...stepLines, '```');
+        } else {
+          const r = this.result(f);
+          if (r.ok) lines.push('', '**' + this.t('Result') + ':** ' + r.text + (f.result_unit ? ' ' + f.result_unit : ''));
+        }
         return lines.join('\n');
       },
-      copySteps(f) { const txt = this.stepsMarkdown(f); if (!txt) return; return this.copyValue('steps' + f.id, txt); },
-      // ---- export a formula (Markdown trace / calculable ODS) into the user's own Files ----
-      openExportPicker(f, kind) {
-        this.filePicker = { open: true, kind, formula: f, path: '', parent: null, entries: [], loading: true, error: '' };
-        this.fpLoad('');
+      // Drag the boundary between the formula list and the side panel. Width (%) is derived
+      // fresh from the pointer position each move (not accumulated deltas) so it can't drift,
+      // and is only saved once the drag ends — not on every pixel of movement.
+      startSideResize(e) {
+        const content = e.currentTarget.closest('.fb-content');
+        if (!content) return;
+        e.preventDefault();
+        const rect = content.getBoundingClientRect();
+        const move = (ev) => {
+          const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+          if (ev.cancelable) ev.preventDefault();
+          this.sideWidthPct = Math.round(clampSideWidthPct((rect.right - x) / rect.width * 100));
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', move);
+          document.removeEventListener('mouseup', up);
+          document.removeEventListener('touchmove', move);
+          document.removeEventListener('touchend', up);
+          this.saveSideWidthPct();
+        };
+        document.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', up);
+        document.addEventListener('touchmove', move, { passive: false });
+        document.addEventListener('touchend', up);
       },
-      async fpLoad(path) {
-        this.filePicker.loading = true; this.filePicker.error = '';
-        try {
-          const r = await api('files/browse?path=' + encodeURIComponent(path));
-          this.filePicker.path = r.path || '';
-          this.filePicker.parent = (r.parent === undefined ? null : r.parent);
-          this.filePicker.entries = Array.isArray(r.entries) ? r.entries.filter((x) => x.is_dir) : [];
-        } catch (e) {
-          this.filePicker.error = T('Could not open the folder');
-          this.filePicker.entries = [];
-        } finally { this.filePicker.loading = false; }
+      // Fire-and-forget persist, mirroring setDefaultExportFolder(): a direct-manipulation
+      // preference (drag or the Settings slider) that should stick without an explicit Save.
+      async saveSideWidthPct() {
+        try { await api('settings', { method: 'PUT', body: JSON.stringify({ steps_width_pct: Math.round(this.sideWidthPct) }) }); } catch (e) { /* best-effort */ }
       },
-      fpUp() { if (this.filePicker.parent !== null && !this.filePicker.loading) this.fpLoad(this.filePicker.parent); },
-      fpCancel() { this.filePicker.open = false; },
-      fpConfirmFolder() {
-        const { kind, formula, path } = this.filePicker;
-        this.filePicker.open = false;
-        if (kind === 'md') this.doExportMarkdown(formula, path);
-        else if (kind === 'ods') this.doExportOds(formula, path);
+      // ---- unified export dialog: one button per card opens this, offering Copy / Save ----
+      openExportDialog(f) {
+        this.exportDialog = { open: true, formula: f, includeSteps: true, format: 'md' };
       },
-      async doExportMarkdown(f, folder) {
-        const txt = this.stepsMarkdown(f);
-        if (!txt) return;
-        try {
-          const r = await api('formulas/' + f.id + '/export/markdown', {
-            method: 'POST',
-            body: JSON.stringify({ folder, content: txt, filename: this.t(f.name) }),
-          });
-          this.notify(T('Saved to {name}', { name: r.name }), 'success');
-        } catch (e) { this.notify(T('Save failed'), 'error'); }
-      },
-      async doExportOds(f, folder) {
-        let image = '';
-        try { image = await this.renderFormulaPng(f); } catch (e) { image = ''; }
+      currentValues(f) {
         const ins = this.inputs[f.id] || {};
         const values = {};
         (f.variables || []).forEach((v) => {
           if (ins[v.key] !== undefined && ins[v.key] !== '' && isFinite(Number(ins[v.key]))) values[v.key] = Number(ins[v.key]);
         });
+        return values;
+      },
+      // Copy as text: the same Markdown trace the Save-as-.md format writes, as plain text only —
+      // for paste targets where an embedded picture would be unwanted noise (a chat message, a
+      // code block, a spreadsheet cell).
+      doCopyText() {
+        const { formula: f, includeSteps } = this.exportDialog;
+        this.exportDialog.open = false;
+        this.copyText(this.stepsMarkdown(f, includeSteps))
+          .then((ok) => this.notify(ok ? T('Copied') : T('Copy failed'), ok ? 'success' : 'error'));
+      },
+      // Copy as image: renders the on-screen formula typesetting (+ optional calculation-step
+      // trace) to a canvas and writes *only* image/png to the clipboard, so a paste target that
+      // reads a single MIME type (chat, an image field, Nextcloud Text) reliably gets the picture
+      // instead of a target-chosen fallback to whichever type it preferred out of a mixed write.
+      //
+      // navigator.clipboard.write() is called synchronously, right here in the click handler (the
+      // MIME type gets a *Promise* of its Blob rather than an already-resolved one) so the call
+      // itself doesn't lose the click's "user activation" window while the canvas renders. If the
+      // write is rejected anyway, this falls back to the plain-text copy so something is always
+      // copied, and logs the real rejection reason to the console instead of only a generic toast.
+      doCopyImage() {
+        const { formula: f, includeSteps } = this.exportDialog;
+        this.exportDialog.open = false;
+        const fallbackToText = (reason) => {
+          if (reason) console.error('[FormulaBase] image copy failed, falling back to plain text:', reason);
+          this.copyText(this.stepsMarkdown(f, includeSteps))
+            .then((ok) => this.notify(ok ? T('Copied') : T('Copy failed'), ok ? 'success' : 'error'));
+        };
+        if (!navigator.clipboard || !window.ClipboardItem) { fallbackToText('no Async Clipboard / ClipboardItem support'); return; }
         try {
-          const r = await api('formulas/' + f.id + '/export/ods', {
+          const pngPromise = this.buildFormulaCanvas(f, includeSteps).then((canvas) => new Promise((resolve, reject) =>
+            canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png')));
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })])
+            .then(() => this.notify(T('Copied'), 'success'))
+            .catch(fallbackToText);
+        } catch (e) { fallbackToText(e); }
+      },
+      // Save = opens the folder/file picker; confirming there calls doSaveExport().
+      openSaveFolderPicker() {
+        const { formula, format } = this.exportDialog;
+        this.exportDialog.open = false;
+        this.filePicker = {
+          open: true, purpose: 'export', formula, format, path: this.exportFolder || '', parent: null,
+          entries: [], selectedFile: null, loading: true, error: '',
+        };
+        this.fpLoad(this.exportFolder || '');
+      },
+      async fpLoad(path) {
+        this.filePicker.loading = true; this.filePicker.error = ''; this.filePicker.selectedFile = null;
+        try {
+          const r = await api('files/browse?path=' + encodeURIComponent(path));
+          this.filePicker.path = r.path || '';
+          this.filePicker.parent = (r.parent === undefined ? null : r.parent);
+          this.filePicker.entries = Array.isArray(r.entries) ? r.entries : [];
+        } catch (e) {
+          this.filePicker.error = T('Could not open the folder');
+          this.filePicker.entries = [];
+        } finally { this.filePicker.loading = false; }
+      },
+      // In 'export' mode, only folders and files matching the chosen save format can be picked
+      // as an overwrite/append target — a Markdown trace can't sensibly land inside an .ods.
+      fpVisibleEntries() {
+        if (this.filePicker.purpose === 'default') return this.filePicker.entries.filter((x) => x.is_dir);
+        const ext = '.' + (this.filePicker.format || 'md');
+        return this.filePicker.entries.filter((x) => x.is_dir || x.name.toLowerCase().endsWith(ext));
+      },
+      fpClick(x) {
+        if (x.is_dir) { this.fpLoad(x.path); return; }
+        if (this.filePicker.purpose !== 'export') return;
+        this.filePicker.selectedFile = (this.filePicker.selectedFile && this.filePicker.selectedFile.path === x.path) ? null : x;
+      },
+      fpUp() { if (this.filePicker.parent !== null && !this.filePicker.loading) this.fpLoad(this.filePicker.parent); },
+      fpCancel() { this.filePicker.open = false; },
+      fpConfirm(mode) {
+        if (this.filePicker.purpose === 'default') {
+          this.filePicker.open = false;
+          this.setDefaultExportFolder(this.filePicker.path);
+          return;
+        }
+        const { formula, path, selectedFile } = this.filePicker;
+        this.filePicker.open = false;
+        const target = (mode !== 'auto' && selectedFile) ? { path: selectedFile.path, mode } : null;
+        this.doSaveExport(formula, path, target);
+      },
+      async doSaveExport(f, folder, target) {
+        const { includeSteps, format } = this.exportDialog;
+        const steps = includeSteps ? this.stepsPlainLines(f) : [];
+        // Every format gets the formula both ways: as text, and (unless rendering fails) as the
+        // rendered-math picture — embedded inline for Markdown, embedded as a real image for ODS/ODT.
+        // The image's own pixel size varies a lot (a one-term formula vs. Heron's nested fractions),
+        // so its width/height go along too — the ODF frame is sized to match, not a fixed box that
+        // would squash or crop whatever doesn't happen to fit a 10cm x 3cm rectangle.
+        let image = ''; let imageWidth = 0; let imageHeight = 0;
+        try {
+          const rendered = await this.renderFormulaPng(f, includeSteps);
+          image = rendered.dataUrl; imageWidth = rendered.width; imageHeight = rendered.height;
+        } catch (e) { image = ''; }
+        const content = format === 'md' ? this.stepsMarkdown(f, includeSteps, image) : '';
+        const values = this.currentValues(f);
+        try {
+          const r = await api('formulas/' + f.id + '/export', {
             method: 'POST',
-            body: JSON.stringify({ folder, values, image, filename: this.t(f.name) }),
+            body: JSON.stringify({ format, folder, filename: this.t(f.name), content, values, image, imageWidth, imageHeight, steps, target }),
           });
           this.notify(T('Saved to {name}', { name: r.name }), 'success');
         } catch (e) { this.notify(T('Save failed'), 'error'); }
       },
-      // Rasterise the same MathML the app displays into a PNG (svg+foreignObject -> canvas),
-      // so the ODS embeds a real image of the formula rather than re-implementing math typesetting.
-      async renderFormulaPng(f) {
-        const width = 640; const scale = 2;
-        const inner = '<div style="font-size:18px;font-weight:700;margin-bottom:10px;">' + mlEscape(this.t(f.name)) + '</div>'
-          + '<div style="font-size:26px;">' + this.mathml(f.expression) + '</div>';
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + width + 'px;background:#ffffff;'
-          + 'padding:16px;font-family:Arial,Helvetica,sans-serif;color:#111111;box-sizing:border-box;';
-        wrap.innerHTML = inner;
-        document.body.appendChild(wrap);
-        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-        const height = Math.ceil(wrap.getBoundingClientRect().height) + 4;
-        document.body.removeChild(wrap);
-        const svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">'
-          + '<foreignObject width="' + width + '" height="' + height + '">'
-          + '<div xmlns="http://www.w3.org/1999/xhtml" style="width:' + width + 'px;background:#ffffff;'
-          + 'padding:16px;box-sizing:border-box;font-family:Arial,Helvetica,sans-serif;color:#111111;">' + inner + '</div>'
-          + '</foreignObject></svg>';
-        const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        try {
-          const img = new Image();
-          await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
-          const canvas = document.createElement('canvas');
-          canvas.width = width * scale; canvas.height = height * scale;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.scale(scale, scale);
-          ctx.drawImage(img, 0, 0, width, height);
-          return canvas.toDataURL('image/png');
-        } finally { URL.revokeObjectURL(url); }
+      // Render the formula into a <canvas> — shared by "copy as image" and the ODS/ODT export
+      // (embedded formula image). Uses cLayout() to typeset the same AST the app's own MathML
+      // view renders (fraction bars, radicals, raised exponents) with plain Canvas 2D drawing
+      // commands (fillText + strokes) only — no <img>, no SVG, no foreignObject. Those were
+      // tainting the canvas (Chrome refuses to export pixels derived from foreignObject content,
+      // even same-origin: "Tainted canvases may not be exported"), which made every copy/save
+      // that needed the image silently fail. Nothing here is loaded from an external source, so
+      // the canvas can never be tainted, and the picture matches what's on screen — not a
+      // flattened one-line rewrite.
+      async buildFormulaCanvas(f, includeSteps) {
+        const pad = 16; const scale = 2;
+        const titleSize = 18; const exprSize = 26; const stepSize = 17;
+        const gap = 14; const arrowGap = 6;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'alphabetic';
+
+        let exprAst = null;
+        try { exprAst = parseAST(f.expression); } catch (e) { exprAst = null; }
+        const title = this.t(f.name);
+        const exprBox = exprAst ? cLayout(ctx, exprAst, exprSize) : null;
+
+        // Reuse the same reduction trace the "Calculation steps" panel shows (real AST nodes,
+        // not flattened text), each laid out with the same typesetting engine.
+        let stepBoxes = [];
+        let resultLine = '';
+        if (includeSteps) {
+          const sd = this.computeSteps(f);
+          if (sd) {
+            stepBoxes = sd.nodes.map((nd) => cLayout(ctx, nd, stepSize));
+            if (sd.value != null) resultLine = '= ' + this.fmt(sd.value, f.decimals) + (f.result_unit ? ' ' + f.result_unit : '');
+          }
+        }
+
+        // Width follows the content — a fixed width clipped wide expressions/traces (e.g. Heron's
+        // formula's nested fractions) off the right edge of the image.
+        ctx.font = '700 ' + titleSize + 'px Arial, Helvetica, sans-serif';
+        let contentW = ctx.measureText(title).width;
+        if (exprBox) contentW = Math.max(contentW, exprBox.w);
+        stepBoxes.forEach((b, i) => { contentW = Math.max(contentW, b.w + (i > 0 ? stepSize * 0.9 : 0)); });
+        if (resultLine) { ctx.font = '700 ' + stepSize + 'px Arial, Helvetica, sans-serif'; contentW = Math.max(contentW, ctx.measureText(resultLine).width); }
+        const width = Math.max(280, Math.ceil(contentW) + pad * 2);
+
+        // ---- measure total height ----
+        let height = pad * 2 + titleSize * 1.3;
+        if (exprBox) height += gap + exprBox.above + exprBox.below;
+        if (stepBoxes.length) {
+          height += gap;
+          stepBoxes.forEach((b, i) => { height += (i > 0 ? arrowGap : 0) + b.above + b.below; });
+          if (resultLine) height += arrowGap + stepSize * 1.3;
+        }
+
+        canvas.width = Math.ceil(width * scale);
+        canvas.height = Math.ceil(height * scale);
+        ctx.scale(scale, scale);
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#111111';
+
+        let y = pad;
+        ctx.font = '700 ' + titleSize + 'px Arial, Helvetica, sans-serif';
+        ctx.fillText(title, pad, y + titleSize * 0.9, width - pad * 2);
+        y += titleSize * 1.3;
+
+        if (exprBox) {
+          y += gap + exprBox.above;
+          exprBox.draw(pad, y);
+          y += exprBox.below;
+        }
+
+        if (stepBoxes.length) {
+          y += gap;
+          stepBoxes.forEach((b, i) => {
+            if (i > 0) { ctx.font = stepSize + 'px Arial, Helvetica, sans-serif'; ctx.fillText('↓', pad, y + arrowGap + b.above); y += arrowGap; }
+            y += b.above;
+            b.draw(pad + (i > 0 ? stepSize * 0.9 : 0), y);
+            y += b.below;
+          });
+          if (resultLine) {
+            y += arrowGap + stepSize * 1.1;
+            ctx.font = '700 ' + stepSize + 'px Arial, Helvetica, sans-serif';
+            ctx.fillStyle = '#1a7a3c';
+            ctx.fillText(resultLine, pad, y);
+          }
+        }
+
+        return canvas;
+      },
+      async renderFormulaPng(f, includeSteps) {
+        const canvas = await this.buildFormulaCanvas(f, includeSteps);
+        return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+      },
+      // ---- default export folder (Settings) ----
+      openDefaultFolderPicker() {
+        this.filePicker = {
+          open: true, purpose: 'default', formula: null, path: this.exportFolder || '', parent: null,
+          entries: [], selectedFile: null, loading: true, error: '',
+        };
+        this.fpLoad(this.exportFolder || '');
+      },
+      async setDefaultExportFolder(path) {
+        this.exportFolder = path || '';
+        try { await api('settings', { method: 'PUT', body: JSON.stringify({ export_folder: this.exportFolder }) }); } catch (e) { /* best-effort */ }
       },
       te(m) {
         if (!m) return m;
@@ -1172,18 +1523,39 @@
           this.theme = s.theme || 'auto';
           this.language = s.language || 'auto';
           this.languages = s.languages || this.languages;
+          this.exportFolder = s.export_folder || '';
+          this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
           this.applyTheme();
           await this.applyLanguage(this.language);
         } catch (e) { this.applyTheme(); }
       },
-      openSettings() { this._themeBefore = this.theme; this.settingsForm = { theme: this.theme, language: this.language }; this.modal = 'settings'; },
-      cancelSettings() { this.theme = this._themeBefore || 'auto'; this.applyTheme(); this.modal = null; },
+      openSettings() {
+        this._themeBefore = this.theme;
+        this._sideWidthPctBefore = this.sideWidthPct;
+        this.settingsForm = { theme: this.theme, language: this.language, stepsWidthPct: this.sideWidthPct };
+        this.modal = 'settings';
+      },
+      cancelSettings() {
+        this.theme = this._themeBefore || 'auto';
+        this.sideWidthPct = clampSideWidthPct(this._sideWidthPctBefore);
+        this.applyTheme();
+        this.modal = null;
+      },
+      previewStepsWidth() { this.sideWidthPct = clampSideWidthPct(this.settingsForm.stepsWidthPct); },
       async saveSettings() {
         try {
-          const s = await api('settings', { method: 'PUT', body: JSON.stringify({ theme: this.settingsForm.theme, language: this.settingsForm.language }) });
+          const s = await api('settings', {
+            method: 'PUT',
+            body: JSON.stringify({
+              theme: this.settingsForm.theme,
+              language: this.settingsForm.language,
+              steps_width_pct: this.settingsForm.stepsWidthPct,
+            }),
+          });
           this.theme = s.theme || 'auto';
           this.language = s.language || 'auto';
           this.languages = s.languages || this.languages;
+          this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
           this.applyTheme();
           await this.applyLanguage(this.language);
           this.modal = null;
@@ -1464,8 +1836,17 @@
       /* formulas */
       md(s) { return mdRender(s); },
       openFormulaModal(f) {
+        // Edit what's actually on screen, not the raw stored string: older formulas (and
+        // anything added from a template before it was localized at add-time) may still hold
+        // the English canonical text used as the t() lookup key. Prefilling with t(...) means
+        // the edit form always matches the displayed card, and saving without further changes
+        // quietly upgrades that one record to real text in the current language.
         this.fForm = f
-          ? { id: f.id, name: f.name, expression: f.expression, description: f.description || '', variables: JSON.parse(JSON.stringify(f.variables || [])), result_unit: f.result_unit, decimals: f.decimals, notes: f.notes, exprError: '' }
+          ? {
+            id: f.id, name: this.t(f.name), expression: f.expression, description: f.description ? this.t(f.description) : '',
+            variables: JSON.parse(JSON.stringify(f.variables || [])).map((v) => Object.assign(v, { label: v.label ? this.t(v.label) : v.label })),
+            result_unit: f.result_unit, decimals: f.decimals, notes: f.notes ? this.t(f.notes) : '', exprError: '',
+          }
           : { id: null, name: '', expression: '', description: '', variables: [], result_unit: '', decimals: 2, notes: '', exprError: '' };
         this.mdPreview = false;
         this.onExpr(); this.modal = 'formula';
@@ -1538,7 +1919,20 @@
             const created = await api('collections', { method: 'POST', body: JSON.stringify({ name: T('My formulas'), icon: '🧮', color: '#2563eb' }) });
             this.collections.push(created); this.currentId = created.id;
           }
-          const body = JSON.stringify({ name: tp.name, expression: tp.expression, description: tp.description || '', variables: tp.variables, result_unit: tp.result_unit || '', decimals: tp.decimals == null ? 2 : tp.decimals, notes: tp.notes || '' });
+          // Templates are stored/matched by their English canonical string (used as the t()
+          // lookup key), so the browse list and card can show it translated. But once added,
+          // this becomes the user's OWN formula: bake in the current UI language's text now,
+          // so it edits and reads the same as anything they typed themselves — not an English
+          // key that only *looks* translated because it happens to pass through t() on display.
+          const body = JSON.stringify({
+            name: this.t(tp.name),
+            expression: tp.expression,
+            description: tp.description ? this.t(tp.description) : '',
+            variables: (tp.variables || []).map((v) => Object.assign({}, v, { label: v.label ? this.t(v.label) : v.label })),
+            result_unit: tp.result_unit || '',
+            decimals: tp.decimals == null ? 2 : tp.decimals,
+            notes: tp.notes ? this.t(tp.notes) : '',
+          });
           await api('collections/' + this.currentId + '/formulas', { method: 'POST', body });
           await this.loadFormulas();
           this.notify(T('Added'), 'success');

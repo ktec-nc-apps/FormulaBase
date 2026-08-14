@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace OCA\FormulaBase\Service;
 
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotPermittedException;
 
 /**
- * Writes exported formulas (Markdown / ODS) into the user's own Files area.
+ * Writes exported formulas (Markdown / ODS / ODT) into the user's own Files area.
  * Mirrors RegiBase's ImageService browse/save pattern so the two apps behave
  * the same way when picking a destination folder.
  */
@@ -29,12 +30,21 @@ class FilesService {
 		return mb_substr($name, 0, 120);
 	}
 
-	/** Allow a multi-segment relative path (e.g. "Documents/Formulas"). */
+	/**
+	 * Allow a multi-segment relative path (e.g. "Documents/Formulas"); empty/"."/".." segments
+	 * are dropped rather than sanitized, so an empty path (root) stays empty instead of being
+	 * turned into a folder literally named "folder" (sanitizeName()'s fallback for a *file* name,
+	 * wrongly applied here to every path segment including the empty one root produces).
+	 */
 	private function sanitizePath(string $path): string {
-		$parts = array_filter(
-			array_map([$this, 'sanitizeName'], explode('/', str_replace('\\', '/', $path))),
-			fn ($p) => $p !== ''
-		);
+		$parts = [];
+		foreach (explode('/', str_replace('\\', '/', $path)) as $seg) {
+			$seg = trim($seg, " \t.");
+			if ($seg === '') {
+				continue;
+			}
+			$parts[] = $this->sanitizeName($seg);
+		}
 		return implode('/', $parts);
 	}
 
@@ -136,5 +146,49 @@ class FilesService {
 		} catch (NotPermittedException $e) {
 			throw new \RuntimeException('Cannot write to the destination folder');
 		}
+	}
+
+	/** Resolve an existing file by its Files-relative path (e.g. picked from the folder browser). */
+	public function getFile(string $userId, string $path): ?File {
+		try {
+			$userFolder = $this->rootFolder->getUserFolder($userId);
+			$node = $userFolder->get(ltrim($path, '/'));
+		} catch (\Throwable $e) {
+			return null;
+		}
+		return $node instanceof File ? $node : null;
+	}
+
+	/** Raw bytes of an existing file, or null if it can't be read. */
+	public function readFile(string $userId, string $path): ?string {
+		$node = $this->getFile($userId, $path);
+		if ($node === null) {
+			return null;
+		}
+		try {
+			return $node->getContent();
+		} catch (\Throwable $e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Replace an existing file's content in place (used by the overwrite/append save modes).
+	 * @return array{id: int, name: string, path: string}
+	 * @throws \RuntimeException if the file doesn't exist or can't be written
+	 */
+	public function overwriteFile(string $userId, string $path, string $content): array {
+		$node = $this->getFile($userId, $path);
+		if ($node === null) {
+			throw new \RuntimeException('File not found');
+		}
+		try {
+			$node->putContent($content);
+		} catch (NotPermittedException $e) {
+			throw new \RuntimeException('Cannot write to the destination folder');
+		}
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		$rel = ltrim((string)($userFolder->getRelativePath($node->getPath()) ?? ''), '/');
+		return ['id' => $node->getId(), 'name' => $node->getName(), 'path' => $rel];
 	}
 }
