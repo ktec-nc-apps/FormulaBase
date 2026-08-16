@@ -56,7 +56,7 @@ The template library is large (3,122 formulas) and not all of it has been hand-v
 		<navigation>
 			<name>FormulaBase</name>
 			<route>formulabase.page.index</route>
-			<icon>app-fb2.svg</icon>
+			<icon>app.svg</icon>
 			<order>81</order>
 		</navigation>
 	</navigations>
