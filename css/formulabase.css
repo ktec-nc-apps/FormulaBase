@@ -188,8 +188,9 @@
   display: flex; flex-direction: column; min-height: 0;
 }
 #formulabase-root .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 12px; font-weight: 800; font-size: 20px; letter-spacing: .3px; cursor: default; -webkit-user-select: none; user-select: none; }
-#formulabase-root .brand .logo { font-size: 24px; }
-#formulabase-root .logo svg { width: 1em; height: 1em; display: inline-block; vertical-align: middle; }
+#formulabase-root .brand .logo { display: flex; align-items: center; }
+#formulabase-root .logo svg { width: auto; height: 1em; display: inline-block; vertical-align: middle; }
+#formulabase-root .brand .logo svg { height: 28px; }
 #formulabase-root .coll-home { display: flex; align-items: center; gap: 8px; width: calc(100% - 20px); margin: 2px 10px 4px; padding: 10px 12px; text-align: left; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 10px; font-size: 14px; font-weight: 600; }
 #formulabase-root .coll-home:hover { background: var(--surface-2); border-color: var(--primary); }
 #formulabase-root .coll-home.active { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
