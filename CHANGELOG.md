@@ -2,6 +2,18 @@
 
 All notable changes to FormulaBase.
 
+## 0.5.2 — 2026-08-17
+
+### New: brand-new logo
+
+- Replaced the old placeholder icon everywhere it appeared — the Nextcloud app
+  icon (top navigation bar and Settings > Apps), the in-app header, the welcome
+  screen, and the loading screen — with FormulaBase's new two-color mark.
+- Fixed the logo's on-screen size and proportions: cropped the icon artwork to
+  its actual visible bounds (removing built-in empty margin) and corrected the
+  CSS so the logo scales by its own aspect ratio instead of being forced into a
+  square, which had been shrinking it inside its own space.
+
 ## 0.5.1 — 2026-08-14
 
 ### Fixed: ODS/ODT export — broken formula results and missing images
