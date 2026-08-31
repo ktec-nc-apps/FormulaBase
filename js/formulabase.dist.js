@@ -1090,7 +1090,7 @@ return function render(_ctx, _cache) {
                       onClick: $event => (_ctx.activeId=f.id)
                     }, [
                       _createElementVNode("div", _hoisted_37, [
-                        _createElementVNode("div", _hoisted_38, _toDisplayString(_ctx.t(f.name)), 1 /* TEXT */),
+                        _createElementVNode("div", _hoisted_38, _toDisplayString(f.name), 1 /* TEXT */),
                         (_ctx.isReversible(f))
                           ? (_openBlock(), _createElementBlock("span", {
                               key: 0,
@@ -1128,7 +1128,7 @@ return function render(_ctx, _cache) {
                         ? (_openBlock(), _createElementBlock("div", {
                             key: 0,
                             class: "fb-desc fb-md",
-                            innerHTML: _ctx.md(_ctx.t(f.description))
+                            innerHTML: _ctx.md(f.description)
                           }, null, 8 /* PROPS */, _hoisted_45))
                         : _createCommentVNode("v-if", true),
                       _createElementVNode("div", {
@@ -1143,7 +1143,7 @@ return function render(_ctx, _cache) {
                                 key: v.key
                               }, [
                                 _createElementVNode("span", _hoisted_48, [
-                                  _createTextVNode(_toDisplayString(v.label ? _ctx.t(v.label) : v.key) + " ", 1 /* TEXT */),
+                                  _createTextVNode(_toDisplayString(v.label || v.key) + " ", 1 /* TEXT */),
                                   (_ctx.isReversible(f))
                                     ? (_openBlock(), _createElementBlock("button", {
                                         key: 0,
@@ -1223,7 +1223,7 @@ return function render(_ctx, _cache) {
                           : _createCommentVNode("v-if", true)
                       ], 2 /* CLASS */),
                       (f.notes)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_66, _toDisplayString(_ctx.t(f.notes)), 1 /* TEXT */))
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_66, _toDisplayString(f.notes), 1 /* TEXT */))
                         : _createCommentVNode("v-if", true)
                     ], 42 /* CLASS, PROPS, NEED_HYDRATION */, _hoisted_36))
                   }), 128 /* KEYED_FRAGMENT */))
@@ -2616,13 +2616,13 @@ return function render(_ctx, _cache) {
       // represented BOTH ways: as text (the `Expression:` line) and, when an image is given,
       // as the rendered-math picture (an inline data-URI image), matching the ODS/ODT output.
       stepsMarkdown(f, includeSteps, image) {
-        const lines = ['### ' + this.t(f.name), ''];
-        if (image) lines.push('![' + this.t(f.name).replace(/[[\]]/g, '') + '](' + image + ')', '');
+        const lines = ['### ' + f.name, ''];
+        if (image) lines.push('![' + f.name.replace(/[[\]]/g, '') + '](' + image + ')', '');
         lines.push('**' + this.t('Expression') + ':** `' + f.expression + '`');
         const ins = this.inputs[f.id] || {};
         const varLines = (f.variables || [])
           .filter((v) => ins[v.key] !== undefined && ins[v.key] !== '' && !this.isSolving(f, v.key))
-          .map((v) => '- ' + (v.label ? this.t(v.label) : v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
+          .map((v) => '- ' + (v.label || v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
         if (varLines.length) lines.push('', '**' + this.t('Values') + ':**', ...varLines);
         if (includeSteps) {
           const stepLines = this.stepsPlainLines(f);
@@ -2776,7 +2776,7 @@ return function render(_ctx, _cache) {
         try {
           const r = await api('formulas/' + f.id + '/export', {
             method: 'POST',
-            body: JSON.stringify({ format, folder, filename: this.t(f.name), content, values, image, imageWidth, imageHeight, steps, target }),
+            body: JSON.stringify({ format, folder, filename: f.name, content, values, image, imageWidth, imageHeight, steps, target }),
           });
           this.notify(T('Saved to {name}', { name: r.name }), 'success');
         } catch (e) { this.notify(T('Save failed'), 'error'); }
@@ -2801,7 +2801,7 @@ return function render(_ctx, _cache) {
 
         let exprAst = null;
         try { exprAst = parseAST(f.expression); } catch (e) { exprAst = null; }
-        const title = this.t(f.name);
+        const title = f.name;
         const exprBox = exprAst ? cLayout(ctx, exprAst, exprSize) : null;
 
         // Reuse the same reduction trace the "Calculation steps" panel shows (real AST nodes,
@@ -3107,7 +3107,7 @@ return function render(_ctx, _cache) {
         const r = this.result(f); if (!r.ok) return;
         const src = this.inputs[f.id] || {};
         const snap = {}; const parts = [];
-        for (const v of f.variables) { const val = (src[v.key] === '' || src[v.key] == null) ? v.default : src[v.key]; snap[v.key] = val; parts.push((v.label ? T(v.label) : v.key) + '=' + val + (v.unit ? v.unit : '')); }
+        for (const v of f.variables) { const val = (src[v.key] === '' || src[v.key] == null) ? v.default : src[v.key]; snap[v.key] = val; parts.push((v.label || v.key) + '=' + val + (v.unit ? v.unit : '')); }
         const body = JSON.stringify({ inputs: snap, label: parts.join(', '), result: r.text, unit: f.result_unit || '' });
         try {
           const entry = await api('formulas/' + f.id + '/history', { method: 'POST', body });

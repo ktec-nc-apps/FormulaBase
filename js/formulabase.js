@@ -551,7 +551,7 @@
             <p v-if="!formulas.length" class="empty-hint">{{ t('No formulas yet. Add one or pick a template to start calculating.') }}</p>
             <div v-for="f in formulas" :key="f.id" class="card fb-card" :class="{active: f.id===activeId}" @focusin="activeId=f.id" @click="activeId=f.id">
               <div class="fb-head">
-                <div class="fb-name">{{ t(f.name) }}</div>
+                <div class="fb-name">{{ f.name }}</div>
                 <span class="badge-outline" v-if="isReversible(f)" :title="t('This formula can be reverse-calculated (solve for a variable from the result).')">⇄ {{ t('Reversible') }}</span>
                 <div class="fb-actions">
                   <button class="btn sm" @click.stop="copyExpr(f)" :title="t('Copy expression')">{{ copiedKey==='ex'+f.id ? '✓' : '⧉' }}</button>
@@ -560,12 +560,12 @@
                   <button class="btn sm danger" v-if="canDelete" @click.stop="removeFormula(f)">{{ t('Delete') }}</button>
                 </div>
               </div>
-              <div class="fb-desc fb-md" v-if="f.description" v-html="md(t(f.description))"></div>
+              <div class="fb-desc fb-md" v-if="f.description" v-html="md(f.description)"></div>
               <div class="fb-expr" v-html="mathml(f.expression)"></div>
               <div class="fb-vars" v-if="f.variables.length">
                 <label class="fb-var" v-for="v in f.variables" :key="v.key" :class="{ solving: isSolving(f, v.key) }">
                   <span class="fb-vlabel">
-                    {{ v.label ? t(v.label) : v.key }}
+                    {{ v.label || v.key }}
                     <button v-if="isReversible(f)" type="button" class="fb-solve-btn" :class="{ active: isSolving(f, v.key) }" @click.stop="toggleSolve(f, v.key)" :title="t('Solve this variable from the result')">🎯</button>
                   </span>
                   <span class="fb-vinput">
@@ -590,7 +590,7 @@
                 <button class="btn xs" v-if="result(f).ok" @click.stop="copyResult(f)" :title="t('Copy result')">{{ copiedKey==='res'+f.id ? '✓ '+t('Copied') : '📋 '+t('Copy') }}</button>
                 <button class="btn xs" v-if="result(f).ok" @click.stop="record(f)">✔ {{ t('Record') }}</button>
               </div>
-              <div class="fb-notes" v-if="f.notes">{{ t(f.notes) }}</div>
+              <div class="fb-notes" v-if="f.notes">{{ f.notes }}</div>
             </div>
           </template>
         </div>
@@ -1170,13 +1170,13 @@
       // represented BOTH ways: as text (the `Expression:` line) and, when an image is given,
       // as the rendered-math picture (an inline data-URI image), matching the ODS/ODT output.
       stepsMarkdown(f, includeSteps, image) {
-        const lines = ['### ' + this.t(f.name), ''];
-        if (image) lines.push('![' + this.t(f.name).replace(/[[\]]/g, '') + '](' + image + ')', '');
+        const lines = ['### ' + f.name, ''];
+        if (image) lines.push('![' + f.name.replace(/[[\]]/g, '') + '](' + image + ')', '');
         lines.push('**' + this.t('Expression') + ':** `' + f.expression + '`');
         const ins = this.inputs[f.id] || {};
         const varLines = (f.variables || [])
           .filter((v) => ins[v.key] !== undefined && ins[v.key] !== '' && !this.isSolving(f, v.key))
-          .map((v) => '- ' + (v.label ? this.t(v.label) : v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
+          .map((v) => '- ' + (v.label || v.key) + ' = ' + ins[v.key] + (v.unit ? ' ' + v.unit : ''));
         if (varLines.length) lines.push('', '**' + this.t('Values') + ':**', ...varLines);
         if (includeSteps) {
           const stepLines = this.stepsPlainLines(f);
@@ -1330,7 +1330,7 @@
         try {
           const r = await api('formulas/' + f.id + '/export', {
             method: 'POST',
-            body: JSON.stringify({ format, folder, filename: this.t(f.name), content, values, image, imageWidth, imageHeight, steps, target }),
+            body: JSON.stringify({ format, folder, filename: f.name, content, values, image, imageWidth, imageHeight, steps, target }),
           });
           this.notify(T('Saved to {name}', { name: r.name }), 'success');
         } catch (e) { this.notify(T('Save failed'), 'error'); }
@@ -1355,7 +1355,7 @@
 
         let exprAst = null;
         try { exprAst = parseAST(f.expression); } catch (e) { exprAst = null; }
-        const title = this.t(f.name);
+        const title = f.name;
         const exprBox = exprAst ? cLayout(ctx, exprAst, exprSize) : null;
 
         // Reuse the same reduction trace the "Calculation steps" panel shows (real AST nodes,
@@ -1661,7 +1661,7 @@
         const r = this.result(f); if (!r.ok) return;
         const src = this.inputs[f.id] || {};
         const snap = {}; const parts = [];
-        for (const v of f.variables) { const val = (src[v.key] === '' || src[v.key] == null) ? v.default : src[v.key]; snap[v.key] = val; parts.push((v.label ? T(v.label) : v.key) + '=' + val + (v.unit ? v.unit : '')); }
+        for (const v of f.variables) { const val = (src[v.key] === '' || src[v.key] == null) ? v.default : src[v.key]; snap[v.key] = val; parts.push((v.label || v.key) + '=' + val + (v.unit ? v.unit : '')); }
         const body = JSON.stringify({ inputs: snap, label: parts.join(', '), result: r.text, unit: f.result_unit || '' });
         try {
           const entry = await api('formulas/' + f.id + '/history', { method: 'POST', body });
