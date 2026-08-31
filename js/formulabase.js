@@ -774,9 +774,33 @@
         <div class="field"><label>{{ t('Notes') }}</label><textarea class="control" v-model="fForm.notes" rows="2"></textarea></div>
         </div>
         <div class="modal-foot">
+          <button v-if="fForm.id" type="button" class="btn" @click="openVersions(fForm.id)">🕐 {{ t('Versions') }}</button>
           <span class="spacer"></span>
           <button class="btn" @click="modal=null">{{ t('Cancel') }}</button>
           <button class="btn primary" @click="saveFormula">{{ t('Save') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Versions kept beside a formula. Floats above the formula edit modal. -->
+    <div class="modal-mask" v-if="vers.open" @click.self="vers.open=false">
+      <div class="modal">
+        <div class="modal-head"><h3>{{ t('Versions of “{name}”', {name: vers.title}) }}</h3><button class="icon-btn" @click="vers.open=false">✕</button></div>
+        <div class="modal-body">
+          <p v-if="!vers.list.length" class="empty-hint sm">{{ t('None yet. One is kept each time the formula is edited, if versions are switched on in the settings.') }}</p>
+          <ol v-else style="list-style:none;margin:0;padding:0">
+            <li v-for="v in vers.list" :key="v.number" style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+              <span class="mono" style="color:var(--muted)">#{{ String(v.number).padStart(2,'0') }}</span>
+              <span style="flex:1;font-size:13px">{{ fmtVerTime(v.created_at) }}</span>
+              <span style="font-size:12px;color:var(--muted)">{{ v.size }} B</span>
+              <button type="button" class="btn xs" @click="restoreVersion(v.number)">{{ t('Put this one back') }}</button>
+            </li>
+          </ol>
+          <p class="field-hint" style="margin-top:10px">{{ t('Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.') }}</p>
+        </div>
+        <div class="modal-foot">
+          <span class="spacer"></span>
+          <button type="button" class="btn primary" @click="vers.open=false">{{ t('Done') }}</button>
         </div>
       </div>
     </div>
@@ -850,6 +874,22 @@
             <div style="display:flex;align-items:center;gap:10px">
               <input type="range" min="20" max="50" step="1" v-model.number="settingsForm.stepsWidthPct" @input="previewStepsWidth" style="flex:1">
               <span style="min-width:40px;text-align:right">{{ settingsForm.stepsWidthPct }}%</span>
+            </div>
+          </div>
+          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <label>🕐 {{ t('Formula versions') }}</label>
+            <div class="field-hint" style="margin-bottom:8px">{{ t('The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.') }}</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:13px;color:var(--muted)">{{ t('Keep up to') }}</span>
+              <input type="number" min="0" max="99" step="1" v-model.number="settingsForm.versionKeep" style="width:88px">
+              <span style="font-size:13px;color:var(--muted)">{{ t('versions per formula') }}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+              <span style="font-size:13px;color:var(--muted)">{{ t('A version is kept') }}</span>
+              <select v-model="settingsForm.versionWhen">
+                <option value="manual">{{ t('only when you ask for one') }}</option>
+                <option value="auto">{{ t('every time a formula is edited') }}</option>
+              </select>
             </div>
           </div>
           <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
@@ -1035,7 +1075,10 @@
         language: 'auto',
         languages: [{ code: 'auto', name: 'Nextcloud' }],
         exportFolder: '', // default Files-relative destination for "save formula" exports ('' = root)
-        settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT },
+        versionKeep: 10, versionWhen: 'manual',
+        // versions kept beside a formula (floats above the formula edit modal)
+        vers: { open: false, id: null, title: '', list: [] },
+        settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT, versionKeep: 10, versionWhen: 'manual' },
         pad: PAD,
         // internal sharing (owner-side panel inside collection settings)
         sharePanel: { shares: [], q: '', results: [], searching: false, recipient: null, recipientName: '', perm: 'view', err: '', busy: false },
@@ -1525,6 +1568,8 @@
           this.languages = s.languages || this.languages;
           this.exportFolder = s.export_folder || '';
           this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
+          this.versionKeep = s.version_keep == null ? 10 : s.version_keep;
+          this.versionWhen = s.version_when || 'manual';
           this.applyTheme();
           await this.applyLanguage(this.language);
         } catch (e) { this.applyTheme(); }
@@ -1532,7 +1577,7 @@
       openSettings() {
         this._themeBefore = this.theme;
         this._sideWidthPctBefore = this.sideWidthPct;
-        this.settingsForm = { theme: this.theme, language: this.language, stepsWidthPct: this.sideWidthPct };
+        this.settingsForm = { theme: this.theme, language: this.language, stepsWidthPct: this.sideWidthPct, versionKeep: this.versionKeep, versionWhen: this.versionWhen };
         this.modal = 'settings';
       },
       cancelSettings() {
@@ -1550,12 +1595,16 @@
               theme: this.settingsForm.theme,
               language: this.settingsForm.language,
               steps_width_pct: this.settingsForm.stepsWidthPct,
+              version_keep: this.settingsForm.versionKeep,
+              version_when: this.settingsForm.versionWhen,
             }),
           });
           this.theme = s.theme || 'auto';
           this.language = s.language || 'auto';
           this.languages = s.languages || this.languages;
           this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
+          this.versionKeep = s.version_keep == null ? 10 : s.version_keep;
+          this.versionWhen = s.version_when || 'manual';
           this.applyTheme();
           await this.applyLanguage(this.language);
           this.modal = null;
@@ -1875,6 +1924,33 @@
           else await api('collections/' + this.currentId + '/formulas', { method: 'POST', body });
           this.modal = null; await this.loadFormulas();
         } catch (e) { this.notify(T('Could not save.'), 'error'); }
+      },
+      // ---- per-formula version history ----
+      async openVersions(id) {
+        if (!id) return;
+        const f = this.formulas.find((x) => x.id === id);
+        this.vers = { open: true, id, title: (f && this.t(f.name)) || '', list: [] };
+        await this.reloadVersions();
+      },
+      async reloadVersions() {
+        try {
+          const r = await api('formulas/' + this.vers.id + '/versions');
+          this.vers.list = r.versions || [];
+        } catch (e) { this.notify(T('Could not read the versions.'), 'error'); }
+      },
+      async restoreVersion(number) {
+        if (!window.confirm(T('Put version #{n} back? What is in the formula now is kept as a version of its own.', { n: String(number).padStart(2, '0') }))) return;
+        try {
+          const back = await api('formulas/' + this.vers.id + '/versions/restore', { method: 'POST', body: JSON.stringify({ number }) });
+          await this.reloadVersions();
+          await this.loadFormulas();
+          if (this.fForm.id === this.vers.id && back) this.openFormulaModal(back);
+          this.notify(T('Version #{n} restored', { n: String(number).padStart(2, '0') }), 'success');
+        } catch (e) { this.notify(T('Could not restore.'), 'error'); }
+      },
+      fmtVerTime(s) {
+        try { const d = new Date(s); if (isNaN(d)) return s; return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+        catch (e) { return s; }
       },
       async removeFormula(f) {
         if (!window.confirm(T('Delete this formula?'))) return;

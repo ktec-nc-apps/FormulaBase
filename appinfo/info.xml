@@ -14,6 +14,7 @@ Features:
 - Named variables with labels, units and default values
 - Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
 - Live result as you type, with unit and decimal-place control
+- Version history per formula — the version before each edit is kept beside it, numbered and restorable, separate from the calculation history
 - Share a collection with other Nextcloud users at three levels (view / edit / delete)
 - Same clean, themable design as RegiBase (light / dark)
 
@@ -28,11 +29,12 @@ The template library is large (3,122 formulas) and not all of it has been hand-v
 - ラベル・単位・初期値付きの変数を名前で管理
 - 安全な数式エンジン：+ - * / % ^、括弧、関数（sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e）
 - 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
+- 数式ごとのバージョン履歴 ― 編集の直前の内容を番号付きで保存・復元可能（計算履歴とは別の仕組み）
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
 
 テンプレートライブラリは3,122件と件数が多く、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
-	<version>0.5.2</version>
+	<version>0.6.0</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>

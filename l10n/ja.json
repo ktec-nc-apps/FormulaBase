@@ -13346,7 +13346,24 @@
         "Copy as image": "画像としてコピー",
         "Drag to resize": "ドラッグしてサイズ変更",
         "Calculation steps panel width": "計算経過パネルの幅",
-        "How wide the calculation-steps panel opens next to a formula.": "計算式の横に開く計算経過パネルの幅です。"
+        "How wide the calculation-steps panel opens next to a formula.": "計算式の横に開く計算経過パネルの幅です。",
+        "A version is kept": "バージョンを残すとき",
+        "Could not read the versions.": "バージョンを読み込めませんでした。",
+        "Could not restore.": "復元できませんでした。",
+        "Done": "完了",
+        "Formula versions": "数式のバージョン",
+        "Keep up to": "最大",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "まだありません。設定でバージョン機能をオンにすると、数式を編集するたびに残ります。",
+        "Put this one back": "これに戻す",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "バージョン #{n} に戻しますか？ 今の内容はバージョンとして残ります。",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "戻すときは、今の内容を先にバージョンとして残すので、戻したこと自体も元に戻せます。",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "編集する直前の内容が数式のそばに残り、#01（最新）から番号が振られます。下の上限を超えると古いものから消えます。0にすると残しません。",
+        "Version #{n} restored": "バージョン #{n} に戻しました",
+        "Versions": "バージョン",
+        "Versions of “{name}”": "「{name}」のバージョン",
+        "every time a formula is edited": "数式を編集するたび",
+        "only when you ask for one": "自分で指示したときだけ",
+        "versions per formula": "件（数式ごと）"
     },
     "pluralForm": "nplurals=1; plural=0;"
 }

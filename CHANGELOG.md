@@ -2,6 +2,38 @@
 
 All notable changes to FormulaBase.
 
+## 0.6.0 — 2026-09-01
+
+### New: per-formula version history
+
+- Every edit to a formula now keeps the version before it beside the formula
+  itself — numbered #01 (newest) upward, with the oldest falling off past a
+  configurable limit (default 10, up to 99, or 0 to turn it off).
+- Configurable in Settings: how many versions to keep per formula, and
+  whether one is taken automatically on every edit or only when you ask for
+  one (the "Versions" button in the formula editor).
+- Open "Versions" on any formula to see the list and put an earlier one back;
+  restoring a version keeps the current content as a version of its own
+  first, so a restore can itself be undone the same way.
+- This is separate from the existing per-formula calculation history
+  (record / restore / delete a calculation) — that log is untouched.
+
+### Fixed: a formula added from a template could re-translate itself when you changed the display language
+
+- Adding a formula from a template bakes its name, description, variable
+  labels and notes into the language you were viewing at that moment — by
+  design, so the formula becomes fully your own and can be edited like
+  anything you typed yourself.
+- The card display was re-running that text through the translator on every
+  render. For a formula added while viewing in English, its text happened to
+  still match the original English lookup key, so it kept getting
+  re-translated on every later language switch — while the same formula
+  added under any other language stayed correctly frozen. Now the stored
+  text is shown as-is, so a formula's language stays whatever it was at the
+  moment it was added or last saved, regardless of later language switches.
+  Opening "Edit" still lets you re-save a formula in the current language on
+  purpose, same as before.
+
 ## 0.5.2 — 2026-08-17
 
 ### New: brand-new logo

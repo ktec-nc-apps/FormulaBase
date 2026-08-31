@@ -13346,7 +13346,24 @@
         "Copy as image": "Копировать как изображение",
         "Drag to resize": "Перетащите, чтобы изменить размер",
         "Calculation steps panel width": "Ширина панели этапов вычисления",
-        "How wide the calculation-steps panel opens next to a formula.": "Насколько широко открывается панель этапов вычисления рядом с формулой."
+        "How wide the calculation-steps panel opens next to a formula.": "Насколько широко открывается панель этапов вычисления рядом с формулой.",
+        "A version is kept": "Версия сохраняется",
+        "Could not read the versions.": "Не удалось прочитать версии.",
+        "Could not restore.": "Не удалось восстановить.",
+        "Done": "Готово",
+        "Formula versions": "Версии формулы",
+        "Keep up to": "Хранить до",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "Пока нет ни одной. Версия сохраняется при каждом изменении формулы, если версии включены в настройках.",
+        "Put this one back": "Восстановить эту",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "Восстановить версию #{n}? Текущее содержимое формулы будет сохранено как отдельная версия.",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "При восстановлении версии текущее содержимое сначала сохраняется как отдельная версия, поэтому это тоже можно отменить.",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "Версия перед каждым изменением сохраняется рядом с формулой, начиная с #01 (самая новая); самая старая удаляется при превышении лимита ниже. Ноль означает, что версии не сохраняются.",
+        "Version #{n} restored": "Версия #{n} восстановлена",
+        "Versions": "Версии",
+        "Versions of “{name}”": "Версии «{name}»",
+        "every time a formula is edited": "при каждом изменении формулы",
+        "only when you ask for one": "только когда вы сами это укажете",
+        "versions per formula": "версий на формулу"
     },
     "pluralForm": "nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);"
 }

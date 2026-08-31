@@ -13346,7 +13346,24 @@
         "Copy as image": "Copiar como imagen",
         "Drag to resize": "Arrastrar para redimensionar",
         "Calculation steps panel width": "Ancho del panel de pasos de cálculo",
-        "How wide the calculation-steps panel opens next to a formula.": "El ancho con el que se abre el panel de pasos de cálculo junto a una fórmula."
+        "How wide the calculation-steps panel opens next to a formula.": "El ancho con el que se abre el panel de pasos de cálculo junto a una fórmula.",
+        "A version is kept": "Se guarda una versión",
+        "Could not read the versions.": "No se pudieron leer las versiones.",
+        "Could not restore.": "No se pudo restaurar.",
+        "Done": "Listo",
+        "Formula versions": "Versiones de la fórmula",
+        "Keep up to": "Conservar hasta",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "Aún no hay ninguna. Se guarda una versión cada vez que se edita la fórmula, si las versiones están activadas en los ajustes.",
+        "Put this one back": "Restaurar esta",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "¿Restaurar la versión #{n}? Lo que hay ahora en la fórmula se guarda como una versión propia.",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "Al restaurar una versión, lo que hay ahora se guarda primero como una versión propia, así que también se puede deshacer del mismo modo.",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "La versión previa a cada edición se guarda junto a la fórmula, numerada desde #01 (la más reciente) en adelante; la más antigua se descarta al superar el límite de abajo. Cero no conserva ninguna.",
+        "Version #{n} restored": "Versión #{n} restaurada",
+        "Versions": "Versiones",
+        "Versions of “{name}”": "Versiones de «{name}»",
+        "every time a formula is edited": "cada vez que se edita una fórmula",
+        "only when you ask for one": "solo cuando lo pidas",
+        "versions per formula": "versiones por fórmula"
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

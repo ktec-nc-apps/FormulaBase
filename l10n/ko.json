@@ -13346,7 +13346,24 @@
         "Copy as image": "이미지로 복사",
         "Drag to resize": "드래그하여 크기 조절",
         "Calculation steps panel width": "계산 과정 패널 너비",
-        "How wide the calculation-steps panel opens next to a formula.": "수식 옆에 열리는 계산 과정 패널의 너비입니다."
+        "How wide the calculation-steps panel opens next to a formula.": "수식 옆에 열리는 계산 과정 패널의 너비입니다.",
+        "A version is kept": "버전이 저장되는 시점",
+        "Could not read the versions.": "버전을 읽을 수 없습니다.",
+        "Could not restore.": "복원할 수 없습니다.",
+        "Done": "완료",
+        "Formula versions": "수식 버전",
+        "Keep up to": "최대 보관 개수",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "아직 없습니다. 설정에서 버전 기능을 켜면 수식을 수정할 때마다 하나씩 저장됩니다.",
+        "Put this one back": "이 버전으로 되돌리기",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "버전 #{n}(으)로 되돌릴까요? 지금 수식 내용은 별도의 버전으로 저장됩니다.",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "버전을 되돌리면 지금 내용이 먼저 하나의 버전으로 저장되므로, 이 되돌리기도 같은 방법으로 취소할 수 있습니다.",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "수정 직전의 상태가 수식과 함께 저장되며, #01(최신)부터 번호가 매겨집니다. 아래 한도를 넘으면 가장 오래된 것부터 사라집니다. 0으로 설정하면 저장하지 않습니다.",
+        "Version #{n} restored": "버전 #{n}(으)로 복원되었습니다",
+        "Versions": "버전",
+        "Versions of “{name}”": "\"{name}\"의 버전",
+        "every time a formula is edited": "수식을 수정할 때마다",
+        "only when you ask for one": "직접 요청했을 때만",
+        "versions per formula": "수식당 버전 수"
     },
     "pluralForm": "nplurals=1; plural=0;"
 }

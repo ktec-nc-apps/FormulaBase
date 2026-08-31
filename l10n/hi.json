@@ -13346,7 +13346,24 @@
         "Copy as image": "छवि के रूप में कॉपी करें",
         "Drag to resize": "आकार बदलने के लिए खींचें",
         "Calculation steps panel width": "गणना चरण पैनल की चौड़ाई",
-        "How wide the calculation-steps panel opens next to a formula.": "सूत्र के बगल में खुलने वाले गणना चरण पैनल की चौड़ाई।"
+        "How wide the calculation-steps panel opens next to a formula.": "सूत्र के बगल में खुलने वाले गणना चरण पैनल की चौड़ाई।",
+        "A version is kept": "एक संस्करण सहेजा जाता है",
+        "Could not read the versions.": "संस्करण नहीं पढ़े जा सके।",
+        "Could not restore.": "पुनर्स्थापित नहीं किया जा सका।",
+        "Done": "हो गया",
+        "Formula versions": "सूत्र के संस्करण",
+        "Keep up to": "अधिकतम रखें",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "अभी तक कोई नहीं। सेटिंग्स में संस्करण चालू होने पर, सूत्र संपादित करने पर हर बार एक संस्करण सहेजा जाता है।",
+        "Put this one back": "इसे वापस लगाएं",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "संस्करण #{n} वापस लगाएं? सूत्र में अभी जो है वह अपने आप में एक संस्करण के रूप में सहेजा जाएगा।",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "किसी संस्करण को वापस लगाने पर, अभी जो है उसे पहले एक संस्करण के रूप में सहेज लिया जाता है, ताकि इसे भी उसी तरह वापस लिया जा सके।",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "हर संपादन से पहले की स्थिति सूत्र के साथ सहेजी जाती है, #01 (नवीनतम) से आगे क्रमांकित; नीचे दी गई सीमा से अधिक होने पर सबसे पुराना हट जाता है। शून्य पर कोई नहीं रखा जाता।",
+        "Version #{n} restored": "संस्करण #{n} पुनर्स्थापित किया गया",
+        "Versions": "संस्करण",
+        "Versions of “{name}”": "\"{name}\" के संस्करण",
+        "every time a formula is edited": "जब भी कोई सूत्र संपादित हो",
+        "only when you ask for one": "केवल तभी जब आप कहें",
+        "versions per formula": "संस्करण प्रति सूत्र"
     },
     "pluralForm": "nplurals=2; plural=(n != 1);"
 }

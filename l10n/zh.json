@@ -13346,7 +13346,24 @@
         "Copy as image": "复制为图片",
         "Drag to resize": "拖动以调整大小",
         "Calculation steps panel width": "计算过程面板宽度",
-        "How wide the calculation-steps panel opens next to a formula.": "计算过程面板在公式旁打开时的宽度。"
+        "How wide the calculation-steps panel opens next to a formula.": "计算过程面板在公式旁打开时的宽度。",
+        "A version is kept": "保存版本的时机",
+        "Could not read the versions.": "无法读取版本记录。",
+        "Could not restore.": "无法恢复。",
+        "Done": "完成",
+        "Formula versions": "公式版本",
+        "Keep up to": "最多保留",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "暂无记录。在设置中开启版本功能后，每次编辑公式都会保留一个版本。",
+        "Put this one back": "恢复这个版本",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "恢复版本 #{n}？当前内容会作为一个版本保留下来。",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "恢复版本时，当前内容会先作为一个版本保留，因此也可以用同样的方式撤销。",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "每次编辑前的状态都会保存在公式旁边，从 #01（最新）开始编号；超出下方上限后，最旧的会被清除。设为 0 则不保留。",
+        "Version #{n} restored": "已恢复版本 #{n}",
+        "Versions": "版本",
+        "Versions of “{name}”": "“{name}” 的版本",
+        "every time a formula is edited": "每次编辑公式时",
+        "only when you ask for one": "仅在手动保存时",
+        "versions per formula": "个版本（每个公式）"
     },
     "pluralForm": "nplurals=1; plural=0;"
 }

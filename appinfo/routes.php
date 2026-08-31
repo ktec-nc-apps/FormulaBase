@@ -30,6 +30,11 @@ return [
 		['name' => 'api#updateFormula', 'url' => '/api/formulas/{id}', 'verb' => 'PUT'],
 		['name' => 'api#deleteFormula', 'url' => '/api/formulas/{id}', 'verb' => 'DELETE'],
 
+		// per-formula version history
+		['name' => 'api#formulaVersions', 'url' => '/api/formulas/{id}/versions', 'verb' => 'GET'],
+		['name' => 'api#readFormulaVersion', 'url' => '/api/formulas/{id}/versions/{number}', 'verb' => 'GET'],
+		['name' => 'api#restoreFormulaVersion', 'url' => '/api/formulas/{id}/versions/restore', 'verb' => 'POST'],
+
 		// calculation history (per user)
 		['name' => 'api#history', 'url' => '/api/formulas/{id}/history', 'verb' => 'GET'],
 		['name' => 'api#addHistory', 'url' => '/api/formulas/{id}/history', 'verb' => 'POST'],

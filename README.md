@@ -23,7 +23,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **You don't start from a blank page.** FormulaBase ships with **3,122 ready-made formula templates across 63 categories** — physics, geometry, finance, health & medicine, chemistry, electricity & electronics, astronomy, computing, statistics, materials science, and many more. Search the library, drop a template straight into your own collection, and start calculating — no need to type out the formula yourself.
 - **Nothing leaves your browser.** The expression engine is a small hand-written parser/AST evaluator — **no `eval`, no `new Function`, no `unsafe-eval`**. Every calculation runs client-side, instantly, with no round-trip to the server and no code-injection surface.
 - **You can see the math, not just the answer.** The step-by-step trace panel substitutes your values into the formula and reduces it one operation at a time, so you (or a student, or a colleague) can follow exactly how the result was reached.
-- **Your work is never lost.** Every formula keeps its own history on the server — record a calculation, restore it later, delete what you don't need, scoped per user.
+- **Your work is never lost.** Every formula keeps its own calculation history on the server — record a calculation, restore it later, delete what you don't need, scoped per user. Edits to a formula itself are protected too: the version before each edit is kept beside it, numbered and restorable, so a bad edit is never the end of the story.
 - **Built for teams, not just individuals.** Share a collection with other Nextcloud users at three permission levels (view / edit / delete), so a department can maintain one shared set of formulas instead of everyone reinventing them.
 - **Speaks your language.** The UI and the entire 3,122-formula template library are localized — English, Japanese, Spanish, Chinese, French, German, Portuguese and more, with full technical/scientific terminology, not just menu labels.
 
@@ -35,6 +35,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **Live result** as you type, with unit and decimal-place control
 - **Step-by-step trace** of the calculation — one Output button copies it as text or as an image, or saves it into your Nextcloud Files in your choice of format: Markdown, a real calculable ODS spreadsheet, or an ODT report
 - **Server-side history** per formula (record / restore / delete / clear), scoped per user
+- **Version history** per formula — the version before each edit is kept beside it (numbered, restorable), independent of the calculation history above; how many to keep, and whether one is taken on every edit or only on request, is configurable in Settings
 - **Internal sharing** — share a collection with other Nextcloud users at three permission levels (view / edit / delete)
 - Multi-language UI and template library — English, Japanese, Spanish, Chinese, French, German, Portuguese and more
 
@@ -62,7 +63,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - **ゼロから式を作る必要がありません。** 物理・幾何・金融・健康医療・化学・電気電子・天文・情報・統計・材料科学など、**63ジャンル・3,122件の組み込み公式テンプレート**をあらかじめ搭載。ライブラリから検索して、そのまま自分のコレクションに追加するだけで使い始められます。
 - **計算はすべてブラウザ内で完結。** 数式エンジンは自前実装の小さなパーサ／AST評価器で、**`eval`・`new Function` は一切不使用**（`unsafe-eval` なし）。サーバーへの通信も発生せず、コード実行のリスクもありません。
 - **答えだけでなく、計算の過程が見えます。** 変数に値を代入し、1演算ずつ簡約していく様子をそのまま表示するので、自分自身の確認にも、学生や同僚への説明にも使えます。
-- **入力した計算は失われません。** 式ごとにサーバー保存の履歴を持ち、記録・復元・削除ができます（ユーザーごとに独立）。
+- **入力した計算は失われません。** 式ごとにサーバー保存の計算履歴を持ち、記録・復元・削除ができます（ユーザーごとに独立）。式そのものの編集も保護されており、編集の直前の内容が番号付きで保存され、いつでも復元できます。
 - **チームでも使えます。** コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有でき、部署内で1つの式集を管理・共用できます。
 - **多言語対応。** UIだけでなく、3,122件のテンプレート本体も日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など多言語に対応し、専門用語もきちんと翻訳されています。
 
@@ -74,6 +75,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - 入力に応じて**即時に結果**を表示（単位・小数桁数の指定つき）
 - **計算過程の可視化** — 「出力」ボタン1つでテキストまたは画像としてコピー、またはNextcloud内のフォルダへMarkdown・計算可能なODS表計算・ODTレポートから選んで保存可能
 - 式ごとの**サーバー保存の履歴**（記録／復元／削除／全消去、ユーザー単位）
+- **バージョン履歴** — 編集の直前の内容を式のそばに保存（番号付き・復元可能）。上記の計算履歴とは別の仕組みです。保存数と、毎回自動で残すか指示したときだけ残すかは設定で変更可能
 - **内部共有** — コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - UI・テンプレートとも多言語対応 — 日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など
 

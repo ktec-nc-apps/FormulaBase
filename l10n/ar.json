@@ -13346,7 +13346,24 @@
         "Copy as image": "نسخ كصورة",
         "Drag to resize": "اسحب لتغيير الحجم",
         "Calculation steps panel width": "عرض لوحة خطوات الحساب",
-        "How wide the calculation-steps panel opens next to a formula.": "مدى اتساع لوحة خطوات الحساب التي تُفتح بجانب الصيغة."
+        "How wide the calculation-steps panel opens next to a formula.": "مدى اتساع لوحة خطوات الحساب التي تُفتح بجانب الصيغة.",
+        "A version is kept": "يتم حفظ نسخة",
+        "Could not read the versions.": "لا يمكن قراءة الإصدارات.",
+        "Could not restore.": "لا يمكن الاسترجاع.",
+        "Done": "تم",
+        "Formula versions": "إصدارات الصيغة",
+        "Keep up to": "الاحتفاظ بحد أقصى",
+        "None yet. One is kept each time the formula is edited, if versions are switched on in the settings.": "لا يوجد شيء بعد. يتم حفظ نسخة في كل مرة تُعدَّل فيها الصيغة، إذا كانت الإصدارات مفعّلة في الإعدادات.",
+        "Put this one back": "استرجاع هذه النسخة",
+        "Put version #{n} back? What is in the formula now is kept as a version of its own.": "هل تريد استرجاع الإصدار #{n}؟ سيتم حفظ المحتوى الحالي للصيغة كإصدار خاص به.",
+        "Putting a version back keeps what is there now as a version of its own, so it can be undone the same way.": "عند استرجاع إصدار، يُحفظ المحتوى الحالي أولًا كإصدار خاص به، لذا يمكن أيضًا التراجع عن ذلك بالطريقة نفسها.",
+        "The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.": "تُحفظ نسخة الصيغة كما كانت قبل كل تعديل، وتُرقَّم ابتداءً من #01 (الأحدث) صعودًا؛ وتُحذف الأقدم عند تجاوز الحد أدناه. الصفر يعني عدم الاحتفاظ بأي نسخة.",
+        "Version #{n} restored": "تمت استعادة الإصدار #{n}",
+        "Versions": "الإصدارات",
+        "Versions of “{name}”": "إصدارات \"{name}\"",
+        "every time a formula is edited": "في كل مرة تُعدَّل فيها الصيغة",
+        "only when you ask for one": "فقط عند الطلب",
+        "versions per formula": "إصدارات لكل صيغة"
     },
     "pluralForm": "nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 ? 4 : 5);"
 }

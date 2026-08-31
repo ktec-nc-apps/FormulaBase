@@ -16,6 +16,7 @@ use OCA\FormulaBase\Db\ShareMapper;
 use OCA\FormulaBase\Service\FilesService;
 use OCA\FormulaBase\Service\ForbiddenException;
 use OCA\FormulaBase\Service\FormulaCompiler;
+use OCA\FormulaBase\Service\FormulaVersionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Controller;
@@ -54,6 +55,7 @@ class ApiController extends Controller {
 		private IFactory $l10nFactory,
 		private FilesService $files,
 		private FormulaCompiler $compiler,
+		private FormulaVersionService $versions,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -93,6 +95,10 @@ class ApiController extends Controller {
 			// Width of the calculation-steps side panel, as a percentage of the content area
 			// (20-50); set from Settings or by dragging the panel's boundary directly.
 			'steps_width_pct' => (int)$this->config->getUserValue($uid, Application::APP_ID, 'steps_width_pct', '30'),
+			// How many versions of a formula are kept beside it, and when one is
+			// taken: every edit, or only the ones the writer asks for.
+			'version_keep' => $this->versions->keep($uid),
+			'version_when' => $this->versions->when($uid),
 		];
 	}
 
@@ -124,6 +130,15 @@ class ApiController extends Controller {
 		if (array_key_exists('steps_width_pct', $params) && is_numeric($params['steps_width_pct'])) {
 			$pct = (int)max(20, min(50, (float)$params['steps_width_pct']));
 			$this->config->setUserValue($uid, Application::APP_ID, 'steps_width_pct', (string)$pct);
+		}
+		if (array_key_exists('version_keep', $params)) {
+			$this->versions->setKeep($uid, (int)$params['version_keep']);
+		}
+		if (array_key_exists('version_when', $params)) {
+			$when = (string)$params['version_when'];
+			if (in_array($when, ['manual', 'auto'], true)) {
+				$this->versions->setWhen($uid, $when);
+			}
 		}
 		return new JSONResponse($this->settingsPayload($uid));
 	}
@@ -360,6 +375,7 @@ class ApiController extends Controller {
 		}
 		$this->shares->deleteForCollection($id);
 		$this->historyMapper->deleteForCollection($id);
+		$this->versions->dropMany(array_map(fn ($f) => (int)$f->getId(), $this->formulas->findForCollection($id)));
 		$this->formulas->deleteForCollection($id);
 		$this->collections->delete($c);
 		return new JSONResponse(['ok' => true]);
@@ -1200,6 +1216,19 @@ class ApiController extends Controller {
 		return new JSONResponse($this->formulas->insert($f)->jsonSerialize());
 	}
 
+	/** The formula's own editable fields, as kept in a version snapshot. */
+	private function formulaSnapshot(FormulaEntity $f): array {
+		return [
+			'name' => $f->getName(),
+			'expression' => $f->getExpression(),
+			'description' => $f->getDescription(),
+			'variables' => json_decode($f->getVariables() ?: '[]', true) ?: [],
+			'result_unit' => $f->getResultUnit(),
+			'decimals' => $f->getDecimals(),
+			'notes' => $f->getNotes(),
+		];
+	}
+
 	#[NoAdminRequired]
 	public function updateFormula(int $id): JSONResponse {
 		try {
@@ -1210,7 +1239,83 @@ class ApiController extends Controller {
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
+		$uid = $this->uid();
+		$manualVersion = in_array($this->request->getParam('_manualVersion'), ['1', 'true', true], true);
+		$keep = $this->versions->keep($uid);
+		if ($keep > 0 && ($manualVersion || $this->versions->when($uid) === 'auto')) {
+			try {
+				$this->versions->take($id, $this->formulaSnapshot($f), $keep);
+			} catch (\Throwable $e) {
+				// A version that cannot be taken must not cost the writer their save.
+			}
+		}
 		$this->applyFormulaParams($f);
+		$f->setUpdatedAt($this->now());
+		return new JSONResponse($this->formulas->update($f)->jsonSerialize());
+	}
+
+	// ---- per-formula version history ----
+
+	#[NoAdminRequired]
+	public function formulaVersions(int $id): JSONResponse {
+		try {
+			$f = $this->formulas->find($id);
+			$this->require($f->getCollectionId(), self::PERM_VIEW);
+		} catch (ForbiddenException $e) {
+			return $this->forbidden();
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		return new JSONResponse(['versions' => $this->versions->list($id)]);
+	}
+
+	#[NoAdminRequired]
+	public function readFormulaVersion(int $id, int $number): JSONResponse {
+		try {
+			$f = $this->formulas->find($id);
+			$this->require($f->getCollectionId(), self::PERM_VIEW);
+			return new JSONResponse(['data' => $this->versions->read($id, $number)]);
+		} catch (ForbiddenException $e) {
+			return $this->forbidden();
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+	}
+
+	#[NoAdminRequired]
+	public function restoreFormulaVersion(int $id): JSONResponse {
+		try {
+			$f = $this->formulas->find($id);
+			$this->require($f->getCollectionId(), self::PERM_EDIT);
+		} catch (ForbiddenException $e) {
+			return $this->forbidden();
+		} catch (DoesNotExistException $e) {
+			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+		}
+		$number = (int)($this->request->getParam('number') ?? 0);
+		$uid = $this->uid();
+		// Read the picked version FIRST — take() below renumbers the existing
+		// versions (shifting them all up by one), so reading by number afterward
+		// would land on the wrong, shifted row.
+		try {
+			$snap = $this->versions->read($id, $number);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+		}
+		// What is there now becomes #1 first (unconditionally, so a restore can
+		// itself be undone), then the picked version's fields are written back.
+		try {
+			$this->versions->take($id, $this->formulaSnapshot($f), max(1, $this->versions->keep($uid)));
+		} catch (\Throwable $e) {
+			// A version that cannot be taken must not cost the writer their restore.
+		}
+		$f->setName((string)($snap['name'] ?? ''));
+		$f->setExpression((string)($snap['expression'] ?? ''));
+		$f->setDescription((string)($snap['description'] ?? ''));
+		$f->setVariables(json_encode(array_values((array)($snap['variables'] ?? []))));
+		$f->setResultUnit((string)($snap['result_unit'] ?? ''));
+		$f->setDecimals((int)($snap['decimals'] ?? 2));
+		$f->setNotes((string)($snap['notes'] ?? ''));
 		$f->setUpdatedAt($this->now());
 		return new JSONResponse($this->formulas->update($f)->jsonSerialize());
 	}
@@ -1226,6 +1331,7 @@ class ApiController extends Controller {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
 		$this->historyMapper->clearForFormula($this->uid(), $f->getId());
+		$this->versions->drop($f->getId());
 		$this->formulas->delete($f);
 		return new JSONResponse(['ok' => true]);
 	}
@@ -1573,6 +1679,7 @@ class ApiController extends Controller {
 			foreach ($this->collections->findAllForUser($uid) as $c) {
 				$cid = (int)$c->getId();
 				$this->historyMapper->deleteForCollection($cid);
+				$this->versions->dropMany(array_map(fn ($f) => (int)$f->getId(), $this->formulas->findForCollection($cid)));
 				$this->formulas->deleteForCollection($cid);
 				$this->collections->delete($c);
 			}
