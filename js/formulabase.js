@@ -632,7 +632,7 @@
       </div>
     </main>
 
-    <div class="modal-mask" v-if="modal==='collection'" @click.self="modal=null">
+    <div class="modal-mask" v-if="modal==='collection'">
       <div class="modal">
         <div class="modal-head"><h3>{{ collForm.id ? t('⚙️ Collection settings') : t('＋ New collection') }}</h3><button class="icon-btn" @click="modal=null">✕</button></div>
         <div class="modal-body settings-body">
@@ -725,7 +725,7 @@
       </div>
     </div>
 
-    <div class="modal-mask" v-if="modal==='formula'" @click.self="modal=null">
+    <div class="modal-mask" v-if="modal==='formula'">
       <div class="modal wide">
         <div class="modal-head"><h3>{{ fForm.id ? t('Edit formula') : t('New formula') }}</h3><button class="icon-btn" @click="modal=null">✕</button></div>
         <div class="modal-body">
@@ -848,7 +848,7 @@
       </div>
     </div>
 
-    <div class="modal-mask" v-if="modal==='settings'" @click.self="modal=null">
+    <div class="modal-mask" v-if="modal==='settings'">
       <div class="modal">
         <div class="modal-head"><h3>{{ t('⚙️ Settings') }}</h3><button class="icon-btn" @click="cancelSettings">✕</button></div>
         <div class="modal-body settings-body">
@@ -917,7 +917,7 @@
       </div>
     </div>
 
-    <div class="modal-mask" v-if="modal && modal.type==='backup'" @click.self="!backupForm.busy && (modal=null)">
+    <div class="modal-mask" v-if="modal && modal.type==='backup'">
       <div class="modal">
         <div class="modal-head"><h3>{{ t('💾 Download all data') }}</h3><button class="icon-btn" :disabled="backupForm.busy" @click="modal=null">✕</button></div>
         <form class="modal-body" @submit.prevent="doBackup">
@@ -933,7 +933,7 @@
       </div>
     </div>
 
-    <div class="modal-mask" v-if="modal && modal.type==='restore'" @click.self="!restoreForm.busy && (modal=null)">
+    <div class="modal-mask" v-if="modal && modal.type==='restore'">
       <div class="modal">
         <div class="modal-head"><h3>{{ t('♻ Restore from backup') }}</h3><button class="icon-btn" :disabled="restoreForm.busy" @click="modal=null">✕</button></div>
         <div class="modal-body">

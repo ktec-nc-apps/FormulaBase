@@ -2,6 +2,24 @@
 
 All notable changes to FormulaBase.
 
+## 0.6.1 — 2026-09-08
+
+### Fixed
+
+- **Fixed a bug where clicking outside a dialog while entering data made the dialog
+  disappear and discarded what you had typed.** It affected the data-entry dialogs —
+  the collection editor, the formula editor, Settings, and the "Download all data"
+  (backup) and "Restore from backup" dialogs: clicking the surrounding area no longer
+  closes them, so nothing you were entering is lost; close them with ✕, Cancel or Save.
+  The view-only and picker dialogs (the template browser, a formula's version history,
+  the export options and the file picker) keep closing on an outside click, since they
+  hold nothing you can lose.
+  （データ入力中にダイアログの外側をクリックすると、ダイアログが消えて入力が失われてしまうバグを
+  修正した。対象＝コレクション編集・数式編集・設定・「全データのダウンロード」（バックアップ）・
+  「バックアップから復元」の各ダイアログ。外側クリックでは閉じなくなり、✕・キャンセル・保存で閉じる。
+  閲覧/選択系のダイアログ（テンプレート一覧・数式の版履歴・書き出し設定・ファイル選択）は失う入力が
+  ないため従来どおり外側クリックで閉じる。）
+
 ## 0.6.0 — 2026-09-01
 
 ### New: per-formula version history
