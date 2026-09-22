@@ -2,6 +2,88 @@
 
 All notable changes to FormulaBase.
 
+## 0.7.0 — unreleased（未公開）
+
+No problems were reported against the template library up to 0.6.2, so this release adds
+new functions and formulas.
+（0.6.2 までテンプレートについて問題の報告が無かったため、この版では新しい関数と公式を追加した。）
+
+### New: 2,400 more templates (5,522 in all)
+
+- **2,400 new formula templates** in five areas:
+  number theory (500); finance, accounting, insurance and pensions (500); AI and machine
+  learning (400); physics, chemistry and engineering (600); medicine, statistics and biology
+  (400). Each one was checked against an independent calculation, and against a published value
+  where one exists. The whole library was checked for duplicates, and any found were removed.
+  （**2,400 件のテンプレートを追加した**。数論 500・金融／会計／保険／年金 500・
+  AI と機械学習 400・物理／化学／工学 600・医療／統計／生物 400。すべて別の方法で計算した
+  値と照合し、公表値があるものはそれとも照合した。ライブラリ全体で重複を調べ、見つかったものは取り除いた。）
+- The new templates are in English and Japanese. Other languages show them in English.
+  （新しいテンプレートは英語と日本語。ほかの言語では英語で表示される。）
+
+### New: templates grouped into 13 fields
+
+- The template list is now arranged in two levels: 13 fields (Mathematics, Statistics
+  and probability, AI and computing, Physics, …) and subcategories under each. Each field
+  has its own heading, and related fields sit next to each other. This replaces the
+  63 flat categories, whose names overlapped (for example "Money", "Finance" and
+  "Accounting").
+  （テンプレート一覧を 2 段にした。13 の大分類（数学・統計・確率・AI・コンピュータ・
+  物理 など）の下に小分類がある。大分類ごとに見出しで区切り、近い分野を隣に並べた。
+  名前が紛らわしかった従来の 63 分類（「お金」「金融」「会計」など）に代わる。）
+
+### New: Template settings — hide templates you do not need
+
+- **Settings → Template settings** shows every field, subcategory and template with a
+  checkbox. Untick a whole field, a subcategory or a single template to hide it; "Show
+  all" brings everything back. The choice is saved per user on the server.
+  （**設定 → テンプレート設定**で、大分類・小分類・テンプレートをチェックの木で表示する。
+  チェックを外すと大分類ごと・小分類ごと・1 件ずつ非表示にできる。「すべて表示」で元に戻る。
+  利用者ごとにサーバーへ保存される。）
+- Hidden templates never appear in the list, in search results (by name, description,
+  formula, variable or category) or in the counts.
+  （非表示のテンプレートは、一覧・検索結果（名前・説明・式・変数・分類のどれで探しても）・
+  件数のどこにも出ない。）
+
+### New: a much more capable formula engine
+
+- **Lists, matrices and complex numbers** as variable types.
+- **Conditions**: comparisons (`<`, `>=`, `==` …), `if()` and `piecewise()`.
+- **Calculus**: Σ `sum()`, Π `prod()`, definite integrals, derivatives and `solve()`.
+- **More than 200 functions** in all, including statistics, cash flows (npv, irr),
+  vectors and matrices, number theory, special functions, probability distributions,
+  and physical constants. A function list with short descriptions is available in the
+  formula editor.
+  （**数式エンジンを大幅に強化した**。リスト・行列・複素数の変数、比較と `if()`・`piecewise()`、
+  Σ・Π・定積分・微分・`solve()`、統計・キャッシュフロー・ベクトルと行列・数論・特殊関数・
+  確率分布・物理定数など **200 を超える関数**。数式編集画面から関数の一覧と説明を開ける。）
+- All 3,122 existing templates give the same results as before.
+  （既存の 3,122 件のテンプレートの計算結果は以前と変わらない。）
+
+### Fixed: spreadsheet export
+
+- 8 templates were exported with a wrong spreadsheet formula (a missing pair of
+  parentheses around hypot, cbrt and root); this is fixed.
+- Rounding (round, floor, ceil) of negative numbers now gives the same result in the
+  exported spreadsheet as in the app.
+- The normal distribution is written as `LEGACY.NORMSDIST` / `LEGACY.NORMSINV`, which
+  LibreOffice accepts (it rejected `NORMSDIST` with Err:525).
+- Parts a spreadsheet cannot compute (for example Σ or complex numbers) are written as
+  their value. Every template was re-computed in LibreOffice after export and matched
+  the app.
+  （**表計算への書き出しを修正した**。8 件で式の括弧が欠けていた（hypot・cbrt・root）のを
+  直した。負の数の丸め（round・floor・ceil）がアプリと一致するようにした。正規分布は
+  LibreOffice が受け付ける `LEGACY.NORMSDIST`／`LEGACY.NORMSINV` で書く（`NORMSDIST` は
+  Err:525 になっていた）。表計算で計算できない部分（Σ や複素数など）は値で書く。全テンプレートを
+  書き出して LibreOffice で計算し直し、アプリと一致することを確かめた。）
+
+### Changed
+
+- "Modular Exponentiation (Small Values)" now computes exactly for large inputs. Its
+  inputs and its default answer are unchanged.
+  （「モジュラー指数演算（小規模値）」が大きな入力でも正確に計算するようにした。入力と初期値での答えは
+  変わらない。）
+
 ## 0.6.2 — 2026-09-17
 
 ### Changed
