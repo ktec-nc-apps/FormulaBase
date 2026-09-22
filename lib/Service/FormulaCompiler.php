@@ -631,10 +631,10 @@ class FormulaCompiler {
 			return 'ATAN2(' . $v[1] . ';' . $v[0] . ')';
 		}
 		if ($name === 'normcdf' && count($args) === 1) {
-			return 'NORMSDIST(' . $a()[0] . ')';
+			return 'LEGACY.NORMSDIST(' . $a()[0] . ')';
 		}
 		if ($name === 'norminv' && count($args) === 1) {
-			return 'NORMSINV(' . $a()[0] . ')';
+			return 'LEGACY.NORMSINV(' . $a()[0] . ')';
 		}
 		$simple = [
 			'sqrt' => 'SQRT', 'abs' => 'ABS', 'sign' => 'SIGN', 'exp' => 'EXP', 'ln' => 'LN', 'log' => 'LOG10',

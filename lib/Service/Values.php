@@ -13,7 +13,7 @@ class Values {
 	public const AGGREGATES = [
 		'sum', 'prod', 'count', 'len', 'mean', 'median', 'mode', 'var', 'stdev', 'varp', 'stdevp', 'gmean', 'hmean', 'wmean',
 		'percentile', 'quantile', 'skew', 'kurt', 'cov', 'corr', 'slope', 'intercept', 'rsq', 'npv', 'irr', 'mirr', 'list', 'seq', 'at',
-		'sort', 'cumsum', 'diff', 'dot', 'cross', 'norm', 'trans', 'mmul', 'det', 'inv', 'trace', 'eye', 'linsolve', 're', 'im', 'conj',
+		'sort', 'cumsum', 'cummax', 'cummin', 'diff', 'dot', 'cross', 'norm', 'trans', 'mmul', 'det', 'inv', 'trace', 'eye', 'linsolve', 're', 'im', 'conj',
 		'arg', 'polar', 'min', 'max', 'csqrt', 'cln', 'cpow',
 	];
 
@@ -264,6 +264,12 @@ class Values {
 				if (!is_array($a[0] ?? null)) { return NAN; }
 				$s = 0.0;
 				return array_map(function ($x) use (&$s) { $s += $x; return $s; }, $a[0]);
+			case 'cummax':
+			case 'cummin':
+				// running maximum / minimum (peak so far, for drawdowns)
+				if (!is_array($a[0] ?? null)) { return NAN; }
+				$m = $name === 'cummax' ? -INF : INF;
+				return array_map(function ($x) use (&$m, $name) { $m = $name === 'cummax' ? max($m, (float)$x) : min($m, (float)$x); return $m; }, $a[0]);
 			case 'diff':
 				$v = $a[0] ?? null;
 				if (!is_array($v) || count($v) < 2) { return NAN; }
