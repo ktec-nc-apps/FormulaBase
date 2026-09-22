@@ -47,11 +47,9 @@ Requires Nextcloud 30–35.
 
 ### Help us test the template library
 
-Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is useful.
+Thank you for the downloads and the kind comments on apps.nextcloud.com. No problems were reported up to 0.6.2, so 0.7.0 adds 2,400 formulas (5,522 in all) and many new functions, without changing how you use the app.
 
-No problems have been reported against the template library up to 0.6.2, so 0.7.0 adds much more content while the way you use the app stays the same: 2,400 more formula templates (5,522 in 13 fields in all), Template settings to hide the ones you do not need, and a formula engine with more than 200 functions.
-
-Each new formula was checked against an independent calculation, but I have not tested every one of them myself in real use. With 5,522 formulas there are far too many for me to debug alone, so reports from you — the people who actually use them — matter a great deal to me. If you find a wrong formula, a bad default, a mistranslation or a missing unit, please tell me in the FormulaBase 0.7.0 thread on help.nextcloud.com, or [open a GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even a one-line report helps.
+I have not tried every formula myself, so your reports matter a great deal to me. If you find a mistake, please tell me in the FormulaBase 0.7.0 thread on help.nextcloud.com or [open a GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even one line helps.
 
 I hope the apps I make bring a little happiness to as many people as possible.
 
@@ -91,11 +89,9 @@ Nextcloud 30〜35 対応。
 
 ### テンプレートの動作確認にご協力ください
 
-多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。
+多くのダウンロードと、apps.nextcloud.com での温かいコメントをありがとうございます。0.6.2 まで問題の報告が無かったため、0.7.0 では使い方は変えずに、公式を2,400件（合計5,522件）と多くの関数を追加しました。
 
-0.6.2 までテンプレートについて問題の報告が無かったため、0.7.0 ではこれまでの使い方は変えずに、情報量を大きく増やしました。公式テンプレートを2,400件追加して合計13分野・5,522件になり、使わないものを非表示にできるテンプレート設定と、200を超える関数を持つ数式エンジンを備えています。
-
-追加した公式はすべて別の方法の計算と照らし合わせていますが、私自身がすべての式を実際に使って試したわけではありません。5,522件ともなると一人ではとてもデバッグしきれないので、実際に使ってくださる皆さんからの報告が、私にとってはとても大切です。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドか、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)で教えていただけると助かります（一行程度の簡単な報告で構いません）。
+私自身がすべての式を試したわけではないので、実際に使ってくださる皆さんの報告がとても大切です。誤りを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドか、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)で教えてください（一行でも構いません）。
 
 私の作ったアプリで、少しでも多くの人が幸せになることを祈っています。
 
