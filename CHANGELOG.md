@@ -12,9 +12,11 @@ much more content — new formulas and new functions — while the way you use t
 公式と関数を大きく追加した。）
 
 With 5,522 formulas there are now far too many for us to debug on our own — if you find a wrong
-formula, a bad default, a mistranslation or a missing unit, please open an issue on GitHub.
+formula, a bad default, a mistranslation or a missing unit, please tell us in the community thread
+on help.nextcloud.com: https://help.nextcloud.com/t/three-apps-i-built-for-my-own-nextcloud-instance-regibase-formulabase-talk-bot-feedback-welcome/247817 (a GitHub issue is fine too).
 （公式が 5,522 件になり、私たちだけではデバッグしきれない。誤った公式・不適切な初期値・誤訳・
-単位の誤りなどを見つけたら、ぜひ GitHub の Issue で知らせてほしい。）
+単位の誤りなどを見つけたら、help.nextcloud.com のコミュニティのスレッドで知らせてもらえると助かる
+（GitHub の Issue でもよい）。）
 
 ### New: 2,400 more templates (5,522 in all)
 

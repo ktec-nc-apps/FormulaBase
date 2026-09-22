@@ -47,7 +47,7 @@ Requires Nextcloud 30–35.
 
 ### Help us test the template library
 
-Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is useful. No problems have been reported against the template library up to 0.6.2, so 0.7.0 adds much more to it — 2,400 more formulas (5,522 in 13 fields in all) and many new functions — while the way you use the app stays the same. Each of the new formulas was checked against an independent calculation — but with 5,522 formulas there are now far too many for us to debug on our own, so we would really welcome your help. If you spot a wrong formula, a bad default, a mistranslation, or a missing unit, please [open an issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even a one-line report helps.
+Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is useful. No problems have been reported against the template library up to 0.6.2, so 0.7.0 adds much more to it — 2,400 more formulas (5,522 in 13 fields in all) and many new functions — while the way you use the app stays the same. Each of the new formulas was checked against an independent calculation — but with 5,522 formulas there are now far too many for us to debug on our own, so we would really welcome your help. If you spot a wrong formula, a bad default, a mistranslation, or a missing unit, please tell us in the [community thread on help.nextcloud.com](https://help.nextcloud.com/t/three-apps-i-built-for-my-own-nextcloud-instance-regibase-formulabase-talk-bot-feedback-welcome/247817) — even a one-line report helps. (A [GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) is fine too.)
 
 ---
 
@@ -85,7 +85,7 @@ Nextcloud 30〜35 対応。
 
 ### テンプレートの動作確認にご協力ください
 
-多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。0.6.2 までのテンプレートについて問題の報告は寄せられていないため、0.7.0 ではこれまでの使い方は変えずに、公式を2,400件（合計13分野・5,522件）と多くの関数を追加しました。追加した公式は、すべて別の方法で計算した値と照合していますが、5,522件ともなると私たちだけではとてもデバッグしきれません。ぜひご協力ください。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた方は、[Issueを作成](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)して教えていただけると助かります（一行程度の簡単な報告で構いません）。
+多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。0.6.2 までのテンプレートについて問題の報告は寄せられていないため、0.7.0 ではこれまでの使い方は変えずに、公式を2,400件（合計13分野・5,522件）と多くの関数を追加しました。追加した公式は、すべて別の方法で計算した値と照合していますが、5,522件ともなると私たちだけではとてもデバッグしきれません。ぜひご協力ください。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた方は、[help.nextcloud.com のコミュニティのスレッド](https://help.nextcloud.com/t/three-apps-i-built-for-my-own-nextcloud-instance-regibase-formulabase-talk-bot-feedback-welcome/247817)で教えていただけると助かります（一行程度の簡単な報告で構いません。[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) でも受け付けます）。
 
 ---
 
