@@ -11,6 +11,11 @@ much more content — new formulas and new functions — while the way you use t
 0.6.2 までテンプレートについて問題の報告が無かったため、この版ではこれまでの使い方は変えずに、
 公式と関数を大きく追加した。）
 
+With 5,522 formulas there are now far too many for us to debug on our own — if you find a wrong
+formula, a bad default, a mistranslation or a missing unit, please open an issue on GitHub.
+（公式が 5,522 件になり、私たちだけではデバッグしきれない。誤った公式・不適切な初期値・誤訳・
+単位の誤りなどを見つけたら、ぜひ GitHub の Issue で知らせてほしい。）
+
 ### New: 2,400 more templates (5,522 in all)
 
 - **2,400 new formula templates** in five areas:
