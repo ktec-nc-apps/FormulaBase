@@ -878,3 +878,14 @@
 #formulabase-root .iconpick-cur, #formulabase-root .iconpick-btn {
   font-family: 'AppEmoji', 'AppEmojiSystem', -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", Roboto, sans-serif;
 }
+
+/* function reference in the formula editor */
+#formulabase-root .fb-funcs { margin-top: 8px; }
+#formulabase-root .fb-funcs-panel { margin-top: 6px; max-height: 320px; overflow-y: auto; border: 1px solid var(--color-border, #ccc); border-radius: 8px; padding: 8px; }
+#formulabase-root .fb-funcs-panel > .control { width: 100%; margin-bottom: 6px; }
+#formulabase-root .fb-funcs-title { font-weight: 600; font-size: 12px; opacity: .75; margin: 8px 0 2px; }
+#formulabase-root .fb-funcs-item { display: flex; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 3px 4px; border-radius: 4px; cursor: pointer; font-size: 12.5px; align-items: baseline; }
+#formulabase-root .fb-funcs-item:hover { background: var(--color-background-hover, rgba(0,0,0,.05)); }
+#formulabase-root .fb-funcs-item code { flex: 0 0 auto; white-space: nowrap; font-size: 12px; }
+#formulabase-root .fb-funcs-item span { opacity: .8; }
+#formulabase-root .fb-vtext { min-width: 12em; }

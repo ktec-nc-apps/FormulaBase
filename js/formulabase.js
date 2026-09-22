@@ -63,16 +63,838 @@
   }
 
   /* ---------- Safe expression engine (parser → AST → evaluator, no eval) ---------- */
-  const FUN = {
-    sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs, round: Math.round,
-    floor: Math.floor, ceil: Math.ceil, trunc: Math.trunc, sign: Math.sign,
-    exp: Math.exp, ln: Math.log, log: (x) => Math.log10(x), log2: Math.log2,
-    sin: Math.sin, cos: Math.cos, tan: Math.tan, asin: Math.asin, acos: Math.acos, atan: Math.atan,
-    min: Math.min, max: Math.max, pow: Math.pow, mod: (a, b) => a % b, hypot: Math.hypot,
-    root: (x, n) => Math.sign(x) * Math.pow(Math.abs(x), 1 / n),
+  /* MATHLIB-BEGIN — number theory, combinatorics and special functions for the engine.
+   * Integer functions work on exact integers (BigInt) and return an ordinary number: exact up to
+   * 2^53, the nearest double beyond that (the same way a calculator shows a big factorial). A
+   * non-integer where an integer is required gives NaN, which the app shows as "no result".
+   * Kept in sync with lib/Service/FormulaCompiler.php (the PHP port used for exports).
+   * Source of truth: /root/regibase-build/fb-mathlib.js — copied between the markers by the build. */
+  const ML = (function () {
+    const BIG_LIMIT = 1e15; // arguments beyond this are refused where the work would explode
+    const isInt = (x) => typeof x === 'number' && Number.isFinite(x) && Number.isInteger(x);
+    const B = (x) => BigInt(x);
+    const N = (b) => Number(b);
+    const babs = (b) => (b < 0n ? -b : b);
+    function bgcd(a, b) { a = babs(a); b = babs(b); while (b) { const t = a % b; a = b; b = t; } return a; }
+    function bpowmod(base, exp, m) {
+      if (m === 1n) return 0n;
+      let r = 1n; base %= m; if (base < 0n) base += m;
+      while (exp > 0n) { if (exp & 1n) r = (r * base) % m; exp >>= 1n; base = (base * base) % m; }
+      return r;
+    }
+    // Deterministic Miller–Rabin for n < 3.3e24 (the first 12 prime bases).
+    const MR_BASES = [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n];
+    function bIsPrime(n) {
+      if (n < 2n) return false;
+      for (const p of MR_BASES) { if (n === p) return true; if (n % p === 0n) return false; }
+      let d = n - 1n; let s = 0;
+      while ((d & 1n) === 0n) { d >>= 1n; s++; }
+      outer: for (const a of MR_BASES) {
+        let x = bpowmod(a, d, n);
+        if (x === 1n || x === n - 1n) continue;
+        for (let i = 1; i < s; i++) { x = (x * x) % n; if (x === n - 1n) continue outer; }
+        return false;
+      }
+      return true;
+    }
+    function rho(n) {
+      if ((n & 1n) === 0n) return 2n;
+      for (let c = 1n; c < 200n; c++) {
+        let x = 2n, y = 2n, d = 1n;
+        const f = (v) => (v * v + c) % n;
+        while (d === 1n) { x = f(x); y = f(f(y)); d = bgcd(x > y ? x - y : y - x, n); }
+        if (d !== n) return d;
+      }
+      return n;
+    }
+    // Prime factorisation as a Map(prime BigInt -> exponent). n must be >= 1.
+    function factor(n) {
+      const out = new Map();
+      const add = (p, k) => out.set(p, (out.get(p) || 0) + k);
+      for (const p of [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n, 41n, 43n, 47n]) {
+        while (n % p === 0n) { add(p, 1); n /= p; }
+      }
+      const stack = n > 1n ? [n] : [];
+      while (stack.length) {
+        const m = stack.pop();
+        if (m === 1n) continue;
+        if (bIsPrime(m)) { add(m, 1); continue; }
+        // small trial first (cheap), then Pollard's rho
+        let found = 0n;
+        for (let p = 53n; p * p <= m && p < 20000n; p += 2n) { if (m % p === 0n) { found = p; break; } }
+        const d = found || rho(m);
+        stack.push(d, m / d);
+      }
+      return out;
+    }
+    const posInt = (x) => isInt(x) && x >= 1 && Math.abs(x) <= 9.2e18;
+    const nonNegInt = (x) => isInt(x) && x >= 0;
+
+    function gcd() { const a = Array.from(arguments); if (!a.length || !a.every(isInt)) return NaN; return N(a.map(B).reduce(bgcd)); }
+    function lcm() {
+      const a = Array.from(arguments); if (!a.length || !a.every(isInt)) return NaN;
+      return N(a.map(B).reduce((x, y) => (x === 0n || y === 0n ? 0n : babs(x * y) / bgcd(x, y))));
+    }
+    function bfact(n) { let r = 1n; for (let i = 2n; i <= n; i++) r *= i; return r; }
+    function fact(n) { if (!nonNegInt(n)) return NaN; if (n > 170) return Infinity; return N(bfact(B(n))); }
+    function bbinom(n, k) { if (k < 0n || k > n) return 0n; if (k > n - k) k = n - k; let r = 1n; for (let i = 1n; i <= k; i++) r = (r * (n - k + i)) / i; return r; }
+    function binom(n, k) { if (!nonNegInt(n) || !isInt(k) || n > 100000) return NaN; return N(bbinom(B(n), B(k))); }
+    function perm(n, k) { if (!nonNegInt(n) || !isInt(k) || n > 100000) return NaN; if (k < 0 || k > n) return 0; let r = 1n; for (let i = 0n; i < B(k); i++) r *= B(n) - i; return N(r); }
+    function isprime(n) { if (!isInt(n)) return NaN; return n >= 2 && bIsPrime(B(n)) ? 1 : 0; }
+    function nextprime(n) { if (!isInt(n) || n > BIG_LIMIT) return NaN; let m = n < 2 ? 2n : B(n) + 1n; while (!bIsPrime(m)) m++; return N(m); }
+    function prevprime(n) { if (!isInt(n) || n <= 2 || n > BIG_LIMIT) return NaN; let m = B(n) - 1n; while (m >= 2n && !bIsPrime(m)) m--; return m >= 2n ? N(m) : NaN; }
+    // π(x): Lucy_Hedgehog's O(x^(3/4)) sieve on two flat arrays, exact for x up to 1e11.
+    function primepi(x) {
+      if (typeof x !== 'number' || !Number.isFinite(x)) return NaN;
+      x = Math.floor(x); if (x < 2) return 0; if (x > 1e11) return NaN;
+      const r = Math.floor(Math.sqrt(x));
+      const small = new Float64Array(r + 2); const large = new Float64Array(r + 2);
+      for (let v = 1; v <= r; v++) { small[v] = v - 1; large[v] = Math.floor(x / v) - 1; }
+      for (let p = 2; p <= r; p++) {
+        if (small[p] === small[p - 1]) continue;
+        const sp = small[p - 1]; const p2 = p * p;
+        const lim = Math.min(r, Math.floor(x / p2));
+        for (let i = 1; i <= lim; i++) {
+          const d = i * p;
+          large[i] -= (d <= r ? large[d] : small[Math.floor(x / d)]) - sp;
+        }
+        for (let v = r; v >= p2; v--) small[v] -= small[Math.floor(v / p)] - sp;
+      }
+      return large[1];
+    }
+    function nthprime(n) {
+      if (!posInt(n) || n > 2e6) return NaN;
+      if (n < 6) return [2, 3, 5, 7, 11][n - 1];
+      const lim = Math.ceil(n * (Math.log(n) + Math.log(Math.log(n)))) + 10;
+      const sieve = new Uint8Array(lim + 1); let c = 0;
+      for (let i = 2; i <= lim; i++) {
+        if (!sieve[i]) { c++; if (c === n) return i; for (let j = i * i; j <= lim; j += i) sieve[j] = 1; }
+      }
+      return NaN;
+    }
+    function withFactors(n, fn) { if (!posInt(n)) return NaN; return fn(factor(B(n)), B(n)); }
+    const phi = (n) => withFactors(n, (f, m) => { let r = m; for (const p of f.keys()) r = (r / p) * (p - 1n); return N(r); });
+    function sigma(n, k) {
+      if (k === undefined) k = 1; if (!nonNegInt(k)) return NaN;
+      return withFactors(n, (f) => {
+        let r = 1n; const K = B(k);
+        for (const [p, e] of f) { if (K === 0n) { r *= B(e + 1); continue; } const pk = p ** K; r *= (pk ** B(e + 1) - 1n) / (pk - 1n); }
+        return N(r);
+      });
+    }
+    const tau = (n) => sigma(n, 0);
+    const mu = (n) => withFactors(n, (f) => { for (const e of f.values()) if (e > 1) return 0; return f.size % 2 ? -1 : 1; });
+    const omega = (n) => withFactors(n, (f) => f.size);
+    const bigomega = (n) => withFactors(n, (f) => { let s = 0; for (const e of f.values()) s += e; return s; });
+    const rad = (n) => withFactors(n, (f) => { let r = 1n; for (const p of f.keys()) r *= p; return N(r); });
+    const lpf = (n) => withFactors(n, (f) => (f.size ? N([...f.keys()].reduce((a, b) => (a < b ? a : b))) : NaN));
+    const gpf = (n) => withFactors(n, (f) => (f.size ? N([...f.keys()].reduce((a, b) => (a > b ? a : b))) : NaN));
+    // Carmichael's λ(n): the exponent of the multiplicative group mod n.
+    const carmichael = (n) => withFactors(n, (f) => {
+      let r = 1n;
+      for (const [p, e] of f) {
+        let l = (p - 1n) * p ** B(e - 1);
+        if (p === 2n && e >= 3) l /= 2n;
+        r = (r / bgcd(r, l)) * l;
+      }
+      return N(r);
+    });
+    function powmod(a, b, m) {
+      if (!isInt(a) || !isInt(b) || !posInt(m)) return NaN;
+      if (b < 0) { const inv = modinv(a, m); return isNaN(inv) ? NaN : powmod(inv, -b, m); }
+      return N(bpowmod(B(a), B(b), B(m)));
+    }
+    function egcd(a, b) { let [or, r] = [a, b]; let [os, s] = [1n, 0n]; while (r) { const q = or / r; [or, r] = [r, or - q * r]; [os, s] = [s, os - q * s]; } return [or, os]; }
+    function modinv(a, m) {
+      if (!isInt(a) || !posInt(m)) return NaN;
+      const M = B(m); let A = B(a) % M; if (A < 0n) A += M;
+      const [g, x] = egcd(A, M); if (g !== 1n) return NaN;
+      return N(((x % M) + M) % M);
+    }
+    // x ≡ a1 (mod m1), x ≡ a2 (mod m2): the least non-negative solution (moduli need not be coprime).
+    function crt(a1, m1, a2, m2) {
+      if (![a1, a2].every(isInt) || !posInt(m1) || !posInt(m2)) return NaN;
+      const A1 = B(a1), M1 = B(m1), A2 = B(a2), M2 = B(m2);
+      const g = bgcd(M1, M2); if ((A2 - A1) % g !== 0n) return NaN;
+      const l = (M1 / g) * M2;
+      const [, p] = egcd(M1 / g, M2 / g);
+      let x = A1 + (((A2 - A1) / g) * p % (M2 / g)) * M1;
+      x = ((x % l) + l) % l;
+      return N(x);
+    }
+    // Fast doubling: (F(n), F(n+1)).
+    function fibPair(n) { if (n === 0n) return [0n, 1n]; const [a, b] = fibPair(n >> 1n); const c = a * (2n * b - a); const d = a * a + b * b; return (n & 1n) ? [d, c + d] : [c, d]; }
+    function fib(n) { if (!isInt(n) || Math.abs(n) > 1e5) return NaN; const k = B(Math.abs(n)); const f = fibPair(k)[0]; return N(n < 0 && (Math.abs(n) % 2 === 0) ? -f : f); }
+    function lucas(n) { if (!nonNegInt(n) || n > 1e5) return NaN; const [a, b] = fibPair(B(n)); return N(2n * b - a); }
+    function catalan(n) { if (!nonNegInt(n) || n > 50000) return NaN; return N(bbinom(2n * B(n), B(n)) / (B(n) + 1n)); }
+    function bell(n) {
+      if (!nonNegInt(n) || n > 1000) return NaN;
+      let row = [1n];
+      for (let i = 0; i < n; i++) { const next = [row[row.length - 1]]; for (const v of row) next.push(next[next.length - 1] + v); row = next; }
+      return N(row[0]);
+    }
+    // p(n) by Euler's pentagonal-number recurrence.
+    function partitions(n) {
+      if (!nonNegInt(n) || n > 100000) return NaN;
+      const p = [1n];
+      for (let m = 1; m <= n; m++) {
+        let s = 0n;
+        for (let k = 1; ; k++) {
+          const g1 = (k * (3 * k - 1)) / 2; if (g1 > m) break;
+          const sign = k % 2 ? 1n : -1n;
+          s += sign * p[m - g1];
+          const g2 = (k * (3 * k + 1)) / 2; if (g2 <= m) s += sign * p[m - g2];
+        }
+        p.push(s);
+      }
+      return N(p[n]);
+    }
+    function stirling2(n, k) {
+      if (!nonNegInt(n) || !nonNegInt(k) || n > 2000) return NaN;
+      if (k > n) return 0; if (n === 0) return k === 0 ? 1 : 0;
+      let s = 0n;
+      for (let j = 0; j <= k; j++) { const t = bbinom(B(k), B(j)) * B(j) ** B(n); s += ((k - j) % 2 ? -t : t); }
+      return N(s / bfact(B(k)));
+    }
+    // Unsigned Stirling numbers of the first kind (permutations of n with k cycles).
+    function stirling1(n, k) {
+      if (!nonNegInt(n) || !nonNegInt(k) || n > 2000) return NaN;
+      let row = [1n];
+      for (let i = 0; i < n; i++) { const next = new Array(i + 2).fill(0n); for (let j = 0; j <= i; j++) { next[j + 1] += row[j]; next[j] += B(i) * row[j]; } row = next; }
+      return k <= n ? N(row[k]) : 0;
+    }
+    function derange(n) { if (!nonNegInt(n) || n > 5000) return NaN; let a = 1n, b = 0n; if (n === 0) return 1; for (let i = 2n; i <= B(n); i++) { const c = (i - 1n) * (a + b); a = b; b = c; } return N(b); }
+    function digitsum(n, base) {
+      if (base === undefined) base = 10; if (!isInt(n) || !isInt(base) || base < 2) return NaN;
+      let m = babs(B(n)); const b = B(base); let s = 0n; while (m) { s += m % b; m /= b; } return N(s);
+    }
+    function digitalroot(n) { if (!nonNegInt(n)) return NaN; return n === 0 ? 0 : 1 + ((n - 1) % 9); }
+    function numdigits(n, base) {
+      if (base === undefined) base = 10; if (!isInt(n) || !isInt(base) || base < 2) return NaN;
+      let m = babs(B(n)); if (m === 0n) return 1; let c = 0; const b = B(base); while (m) { m /= b; c++; } return c;
+    }
+    function reversenum(n) { if (!nonNegInt(n)) return NaN; return N(B(String(B(n)).split('').reverse().join(''))); }
+    function collatz(n) { if (!posInt(n)) return NaN; let m = B(n), c = 0; while (m !== 1n && c < 1e6) { m = (m & 1n) ? 3n * m + 1n : m >> 1n; c++; } return c; }
+    function jacobi(a, n) {
+      if (!isInt(a) || !posInt(n) || n % 2 === 0) return NaN;
+      let A = B(a), M = B(n); A %= M; if (A < 0n) A += M; let t = 1;
+      while (A !== 0n) {
+        while ((A & 1n) === 0n) { A >>= 1n; const r = M % 8n; if (r === 3n || r === 5n) t = -t; }
+        [A, M] = [M, A]; if (A % 4n === 3n && M % 4n === 3n) t = -t; A %= M;
+      }
+      return M === 1n ? t : 0;
+    }
+    function legendre(a, p) { if (!isInt(p) || p < 3 || !bIsPrime(B(p))) return NaN; return jacobi(a, p); }
+    // Multiplicative order of a mod n (NaN when gcd(a, n) > 1).
+    function ord(a, n) {
+      if (!isInt(a) || !posInt(n) || n < 2) return NaN;
+      const A = ((B(a) % B(n)) + B(n)) % B(n); const M = B(n);
+      if (bgcd(A, M) !== 1n) return NaN;
+      let r = B(carmichael(n));
+      for (const p of factor(r).keys()) { while (r % p === 0n && bpowmod(A, r / p, M) === 1n) r /= p; }
+      return N(r);
+    }
+    // The least primitive root mod n (n = 2, 4, p^k or 2p^k); NaN when there is none.
+    function primroot(n) {
+      if (!posInt(n) || n > 1e12) return NaN;
+      if (n <= 4) return n === 1 ? 0 : n - 1;
+      const lam = carmichael(n); if (lam !== phi(n)) return NaN;
+      const M = B(n), L = B(lam); const ps = [...factor(L).keys()];
+      for (let g = 2n; g < M; g++) {
+        if (bgcd(g, M) !== 1n) continue;
+        if (ps.every((p) => bpowmod(g, L / p, M) !== 1n)) return N(g);
+      }
+      return NaN;
+    }
+    function isqrt(n) { if (!nonNegInt(n)) return NaN; const m = B(n); if (m < 2n) return n; let x = B(Math.floor(Math.sqrt(n))); while (x * x > m) x--; while ((x + 1n) * (x + 1n) <= m) x++; return N(x); }
+    function issquare(n) { if (!isInt(n)) return NaN; if (n < 0) return 0; const r = B(isqrt(n)); return r * r === B(n) ? 1 : 0; }
+    function isperfect(n) { if (!posInt(n)) return NaN; return sigma(n, 1) === 2 * n ? 1 : 0; }
+
+    // ---- continuous special functions ----
+    const LG = 7; const LC = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    function gamma(x) {
+      if (typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (isInt(x) && x <= 0) return NaN;
+      if (isInt(x) && x <= 171) return fact(x - 1);
+      if (x < 0.5) return Math.PI / (Math.sin(Math.PI * x) * gamma(1 - x));
+      x -= 1; let a = LC[0]; const t = x + LG + 0.5;
+      for (let i = 1; i < LG + 2; i++) a += LC[i] / (x + i);
+      return Math.sqrt(2 * Math.PI) * Math.pow(t, x + 0.5) * Math.exp(-t) * a;
+    }
+    function lgamma(x) {
+      if (typeof x !== 'number' || Number.isNaN(x) || x <= 0) return NaN;
+      if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lgamma(1 - x);
+      x -= 1; let a = LC[0]; const t = x + LG + 0.5;
+      for (let i = 1; i < LG + 2; i++) a += LC[i] / (x + i);
+      return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+    }
+    function betafn(a, b) { return Math.exp(lgamma(a) + lgamma(b) - lgamma(a + b)); }
+    // erf/erfc to double precision: Taylor series near 0, Lentz continued fraction in the tail.
+    function erfc(x) {
+      if (typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (x < 0) return 2 - erfc(-x);
+      if (x < 2.5) return 1 - erf(x);
+      // continued fraction erfc(x) = exp(-x²)/√π · 1/(x + 1/2/(x + 1/(x + 3/2/(x + …))))
+      let f = 0; for (let n = 60; n >= 1; n--) f = (n / 2) / (x + f);
+      return Math.exp(-x * x) / Math.sqrt(Math.PI) / (x + f);
+    }
+    function erf(x) {
+      if (typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (Math.abs(x) >= 2.5) return x > 0 ? 1 - erfc(x) : erfc(-x) - 1;
+      let sum = x, term = x; const x2 = x * x;
+      for (let n = 1; n < 200; n++) { term *= -x2 / n; const add = term / (2 * n + 1); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; }
+      return (2 / Math.sqrt(Math.PI)) * sum;
+    }
+    function normcdf(x, m, s) { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; return 0.5 * erfc(-(x - m) / (s * Math.SQRT2)); }
+    function normpdf(x, m, s) { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; const z = (x - m) / s; return Math.exp(-0.5 * z * z) / (s * Math.sqrt(2 * Math.PI)); }
+    // Acklam's rational approximation, then one Halley step against erfc (≈1e-15).
+    function norminv(p, m, s) {
+      if (m === undefined) m = 0; if (s === undefined) s = 1;
+      if (!(p > 0 && p < 1) || !(s > 0)) return NaN;
+      const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239];
+      const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+      const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+      const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+      const pl = 0.02425; let q, r, x;
+      if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+      else if (p <= 1 - pl) { q = p - 0.5; r = q * q; x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); }
+      else { q = Math.sqrt(-2 * Math.log(1 - p)); x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
+      const e = 0.5 * erfc(-x / Math.SQRT2) - p; const u = e * Math.sqrt(2 * Math.PI) * Math.exp(x * x / 2);
+      x = x - u / (1 + x * u / 2);
+      return m + s * x;
+    }
+    // Riemann ζ(s) for real s > 0, s ≠ 1 (Borwein's algorithm on the alternating η series);
+    // for s < 0 by the functional equation.
+    function zeta(s) {
+      if (typeof s !== 'number' || Number.isNaN(s) || s === 1) return NaN;
+      if (s < 0) { if (isInt(s) && s % 2 === 0) return 0; return Math.pow(2, s) * Math.pow(Math.PI, s - 1) * Math.sin(Math.PI * s / 2) * gamma(1 - s) * zeta(1 - s); }
+      if (s === 0) return -0.5;
+      const n = 60; const dk = []; let sum = 0;
+      for (let i = 0; i <= n; i++) { sum += (n * gammaFactRatio(n, i) * Math.pow(4, i)); dk.push(sum); }
+      let t = 0; for (let k = 0; k < n; k++) t += (k % 2 ? -1 : 1) * (dk[k] - dk[n]) / Math.pow(k + 1, s);
+      const eta = -t / dk[n];
+      return eta / (1 - Math.pow(2, 1 - s));
+    }
+    // (n+i-1)! / ((n-i)! (2i)!) for Borwein's d_k
+    function gammaFactRatio(n, i) { return Math.exp(lgamma(n + i) - lgamma(n - i + 1) - lgamma(2 * i + 1)); }
+    // Logarithmic integral li(x), Ramanujan's fast-converging series (x > 0, x ≠ 1).
+    function li(x) {
+      if (!(x > 0) || x === 1) return NaN;
+      const lnx = Math.log(x); let sum = 0, fac = 1, inner = 0;
+      for (let n = 1; n < 200; n++) {
+        fac *= n; if (((n - 1) % 2) === 0) inner += 1 / ((n - 1) / 2 * 2 + 1);
+        const term = Math.pow(-1, n - 1) * Math.pow(lnx, n) / (fac * Math.pow(2, n - 1)) * inner;
+        sum += term; if (Math.abs(term) < 1e-17 * Math.abs(sum) && n > 10) break;
+      }
+      return 0.5772156649015329 + Math.log(Math.abs(lnx)) + Math.sqrt(x) * sum;
+    }
+    // Lambert W, principal branch (x ≥ −1/e), Halley's iteration.
+    function lambertw(x) {
+      if (typeof x !== 'number' || !(x >= -1 / Math.E)) return NaN;
+      if (x === 0) return 0;
+      let w = x < 1 ? (x > -0.3 ? x : -1 + Math.sqrt(2 * (1 + Math.E * x))) : Math.log(x) - Math.log(Math.log(x) + 1);
+      for (let i = 0; i < 60; i++) {
+        const e = Math.exp(w); const f = w * e - x; const d = e * (w + 1);
+        const nw = w - f / (d - (w + 2) * f / (2 * w + 2));
+        if (Math.abs(nw - w) < 1e-15 * (1 + Math.abs(nw))) { w = nw; break; }
+        w = nw;
+      }
+      return w;
+    }
+    // n! mod m, exact (Wilson's theorem and friends).
+    function factmod(n, m) { if (!nonNegInt(n) || !posInt(m) || n > 1e6) return NaN; const M = B(m); let r = 1n % M; for (let i = 2n; i <= B(n); i++) r = (r * i) % M; return N(r); }
+
+    // ---- more special functions ----
+    const EG = 0.5772156649015329;
+    function digamma(x) {
+      if (typeof x !== 'number' || Number.isNaN(x) || (isInt(x) && x <= 0)) return NaN;
+      if (x < 0) return digamma(1 - x) - Math.PI / Math.tan(Math.PI * x);
+      let r = 0; while (x < 6) { r -= 1 / x; x += 1; }
+      const f = 1 / (x * x);
+      return r + Math.log(x) - 0.5 / x - f * (1 / 12 - f * (1 / 120 - f * (1 / 252 - f * (1 / 240 - f / 132))));
+    }
+    // Regularised incomplete gamma P(a, x) and Q = 1 − P (Numerical Recipes: series / Lentz CF).
+    function gammainc(a, x) {
+      if (!(a > 0) || !(x >= 0)) return NaN; if (x === 0) return 0;
+      if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 1000; n++) { ap += 1; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-16) break; } return sum * Math.exp(-x + a * Math.log(x) - lgamma(a)); }
+      return 1 - gammaincc(a, x);
+    }
+    function gammaincc(a, x) {
+      if (!(a > 0) || !(x >= 0)) return NaN; if (x < a + 1) return 1 - gammainc(a, x);
+      let b = x + 1 - a, c = 1 / 1e-300, d = 1 / b, h = d;
+      for (let i = 1; i < 1000; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-16) break; }
+      return Math.exp(-x + a * Math.log(x) - lgamma(a)) * h;
+    }
+    // Regularised incomplete beta I_x(a, b).
+    function betacf(x, a, b) {
+      const qab = a + b, qap = a + 1, qam = a - 1; let c = 1, d = 1 - qab * x / qap; if (Math.abs(d) < 1e-300) d = 1e-300; d = 1 / d; let h = d;
+      for (let m = 1; m <= 1000; m++) {
+        const m2 = 2 * m; let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; h *= d * c;
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del;
+        if (Math.abs(del - 1) < 1e-16) break;
+      }
+      return h;
+    }
+    function betainc(x, a, b) {
+      if (!(a > 0) || !(b > 0) || !(x >= 0 && x <= 1)) return NaN; if (x === 0 || x === 1) return x;
+      const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+      return x < (a + 1) / (a + b + 2) ? bt * betacf(x, a, b) / a : 1 - bt * betacf(1 - x, b, a) / b;
+    }
+    // Monotone inverse by bracketing + bisection/Newton-free safeguarded secant (robust for CDFs).
+    function invert(cdf, p, lo, hi) {
+      if (!(p >= 0 && p <= 1)) return NaN; if (p === 0) return lo; if (p === 1) return hi;
+      let a = lo, b = hi;
+      if (!Number.isFinite(b)) { b = 1; while (cdf(b) < p && b < 1e300) b *= 2; }
+      if (!Number.isFinite(a)) { a = -1; while (cdf(a) > p && a > -1e300) a *= 2; }
+      let fa = cdf(a) - p, fb = cdf(b) - p;
+      for (let i = 0; i < 300; i++) {
+        let m = b - fb * (b - a) / (fb - fa); if (!(m > Math.min(a, b) && m < Math.max(a, b))) m = (a + b) / 2;
+        if (i % 3 === 2) m = (a + b) / 2;
+        const fm = cdf(m) - p;
+        if (fm === 0 || Math.abs(b - a) < 1e-15 * Math.max(1, Math.abs(m))) return m;
+        if ((fm < 0) === (fa < 0)) { a = m; fa = fm; } else { b = m; fb = fm; }
+      }
+      return (a + b) / 2;
+    }
+    const gammacdf = (x, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; return x <= 0 ? 0 : gammainc(k, x / th); };
+    const gammapdf = (x, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; if (x < 0) return 0; if (x === 0) return k === 1 ? 1 / th : (k < 1 ? Infinity : 0); return Math.exp((k - 1) * Math.log(x) - x / th - lgamma(k) - k * Math.log(th)); };
+    const gammainv = (p, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; return invert((x) => gammacdf(x, k, th), p, 0, Infinity); };
+    const betapdf = (x, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; if (x < 0 || x > 1) return 0; return Math.exp((a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x) - lgamma(a) - lgamma(b) + lgamma(a + b)); };
+    const betacdf = (x, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; return x <= 0 ? 0 : x >= 1 ? 1 : betainc(x, a, b); };
+    const betainv = (p, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; return invert((x) => betacdf(x, a, b), p, 0, 1); };
+    const chi2pdf = (x, k) => gammapdf(x, k / 2, 2);
+    const chi2cdf = (x, k) => gammacdf(x, k / 2, 2);
+    const chi2inv = (p, k) => gammainv(p, k / 2, 2);
+    const tpdf = (x, v) => { if (!(v > 0)) return NaN; return Math.exp(lgamma((v + 1) / 2) - lgamma(v / 2) - 0.5 * Math.log(v * Math.PI) - (v + 1) / 2 * Math.log(1 + x * x / v)); };
+    const tcdf = (x, v) => { if (!(v > 0)) return NaN; const ib = betainc(v / (v + x * x), v / 2, 0.5); return x >= 0 ? 1 - 0.5 * ib : 0.5 * ib; };
+    const tinv = (p, v) => { if (!(v > 0) || !(p > 0 && p < 1)) return NaN; return invert((x) => tcdf(x, v), p, -Infinity, Infinity); };
+    const fpdf = (x, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; if (x < 0) return 0; if (x === 0) return d1 === 2 ? 1 : (d1 < 2 ? Infinity : 0); return Math.exp(0.5 * (d1 * Math.log(d1 * x) + d2 * Math.log(d2) - (d1 + d2) * Math.log(d1 * x + d2)) - Math.log(x) - (lgamma(d1 / 2) + lgamma(d2 / 2) - lgamma((d1 + d2) / 2))); };
+    const fcdf = (x, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; return x <= 0 ? 0 : betainc(d1 * x / (d1 * x + d2), d1 / 2, d2 / 2); };
+    const finv = (p, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; return invert((x) => fcdf(x, d1, d2), p, 0, Infinity); };
+    const binompdf = (k, n, p) => { if (!nonNegInt(n) || !isInt(k) || !(p >= 0 && p <= 1)) return NaN; if (k < 0 || k > n) return 0; if (p === 0) return k === 0 ? 1 : 0; if (p === 1) return k === n ? 1 : 0; return Math.exp(lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + k * Math.log(p) + (n - k) * Math.log(1 - p)); };
+    const binomcdf = (k, n, p) => { if (!nonNegInt(n) || !(p >= 0 && p <= 1) || typeof k !== 'number') return NaN; k = Math.floor(k); if (k < 0) return 0; if (k >= n) return 1; return betainc(1 - p, n - k, k + 1); };
+    const poisspdf = (k, l) => { if (!isInt(k) || !(l >= 0)) return NaN; if (k < 0) return 0; if (l === 0) return k === 0 ? 1 : 0; return Math.exp(k * Math.log(l) - l - lgamma(k + 1)); };
+    const poisscdf = (k, l) => { if (typeof k !== 'number' || !(l >= 0)) return NaN; k = Math.floor(k); if (k < 0) return 0; if (l === 0) return 1; return gammaincc(k + 1, l); };
+    const exppdf = (x, l) => (l > 0 ? (x < 0 ? 0 : l * Math.exp(-l * x)) : NaN);
+    const expcdf = (x, l) => (l > 0 ? (x < 0 ? 0 : 1 - Math.exp(-l * x)) : NaN);
+    const expinv = (p, l) => (l > 0 && p >= 0 && p < 1 ? -Math.log(1 - p) / l : NaN);
+    const lognpdf = (x, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; if (x <= 0) return 0; const z = (Math.log(x) - m) / s; return Math.exp(-0.5 * z * z) / (x * s * Math.sqrt(2 * Math.PI)); };
+    const logncdf = (x, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; return x <= 0 ? 0 : normcdf(Math.log(x), m, s); };
+    const logninv = (p, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; const z = norminv(p, m, s); return Number.isNaN(z) ? NaN : Math.exp(z); };
+    const weibpdf = (x, k, l) => (k > 0 && l > 0 ? (x < 0 ? 0 : (k / l) * Math.pow(x / l, k - 1) * Math.exp(-Math.pow(x / l, k))) : NaN);
+    const weibcdf = (x, k, l) => (k > 0 && l > 0 ? (x < 0 ? 0 : 1 - Math.exp(-Math.pow(x / l, k))) : NaN);
+    const weibinv = (p, k, l) => (k > 0 && l > 0 && p >= 0 && p < 1 ? l * Math.pow(-Math.log(1 - p), 1 / k) : NaN);
+    const geompdf = (k, p) => (isInt(k) && p > 0 && p <= 1 ? (k < 1 ? 0 : Math.pow(1 - p, k - 1) * p) : NaN);
+    const geomcdf = (k, p) => (typeof k === 'number' && p > 0 && p <= 1 ? (k < 1 ? 0 : 1 - Math.pow(1 - p, Math.floor(k))) : NaN);
+    const hygepdf = (k, NN, K, n) => { if (![k, NN, K, n].every(nonNegInt) || K > NN || n > NN) return NaN; if (k > K || k > n || n - k > NN - K) return 0; const lb = (a, b) => lgamma(a + 1) - lgamma(b + 1) - lgamma(a - b + 1); return Math.exp(lb(K, k) + lb(NN - K, n - k) - lb(NN, n)); };
+    const nbinpdf = (k, r, p) => (nonNegInt(k) && r > 0 && p > 0 && p <= 1 ? Math.exp(lgamma(k + r) - lgamma(k + 1) - lgamma(r) + r * Math.log(p) + k * Math.log(1 - p)) : NaN);
+    const erfinv = (y) => (y > -1 && y < 1 ? norminv((y + 1) / 2) / Math.SQRT2 : (y === 1 ? Infinity : y === -1 ? -Infinity : NaN));
+    // Exponential integrals E1(x) and Ei(x).
+    function expint(x) {
+      if (!(x > 0)) return NaN;
+      if (x <= 1) { let sum = 0, term = 1; for (let k = 1; k < 200; k++) { term *= -x / k; const add = -term / k; sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; } return -EG - Math.log(x) + sum; }
+      let b = x + 1, c = 1 / 1e-300, d = 1 / b, h = d;
+      for (let i = 1; i < 1000; i++) { const an = -i * i; b += 2; d = 1 / (an * d + b); c = b + an / c; const del = c * d; h *= del; if (Math.abs(del - 1) < 1e-16) break; }
+      return h * Math.exp(-x);
+    }
+    function ei(x) {
+      if (x === 0 || Number.isNaN(x)) return NaN;
+      if (x < 0) return -expint(-x);
+      if (x < 40) { let sum = 0, term = 1; for (let k = 1; k < 500; k++) { term *= x / k; const add = term / k; sum += add; if (add < 1e-17 * sum) break; } return EG + Math.log(x) + sum; }
+      let sum = 1, term = 1; for (let k = 1; k < 40; k++) { const nt = term * k / x; if (nt > term) break; term = nt; sum += term; } return Math.exp(x) / x * sum;
+    }
+    // Sine and cosine integrals Si, Ci (series, then the asymptotic auxiliary functions).
+    function si(x) {
+      if (x < 0) return -si(-x); if (x === 0) return 0;
+      if (x <= 4) { let sum = 0, term = x; for (let k = 0; k < 100; k++) { const add = term / (2 * k + 1); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; term *= -x * x / ((2 * k + 2) * (2 * k + 3)); } return sum; }
+      return Math.PI / 2 + e1i(x)[1];
+    }
+    function ci(x) {
+      if (!(x > 0)) return NaN;
+      if (x <= 4) { let sum = 0, term = -x * x / 2; for (let k = 1; k < 100; k++) { const add = term / (2 * k); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; term *= -x * x / ((2 * k + 1) * (2 * k + 2)); } return EG + Math.log(x) + sum; }
+      return -e1i(x)[0];
+    }
+    // E1(ix) for x > 0 by the continued fraction (complex Lentz): E1(ix) = −Ci(x) + i(Si(x) − π/2).
+    function e1i(x) {
+      let bR = 1, bI = x, cR = 1e300, cI = 0; let dR, dI; { const den = bR * bR + bI * bI; dR = bR / den; dI = -bI / den; }
+      let hR = dR, hI = dI;
+      for (let i = 1; i < 500; i++) {
+        const an = -i * i; bR += 2;
+        let tR = an * dR + bR, tI = an * dI + bI; let den = tR * tR + tI * tI; dR = tR / den; dI = -tI / den;
+        den = cR * cR + cI * cI; tR = bR + an * cR / den; tI = bI - an * cI / den; cR = tR; cI = tI;
+        const delR = cR * dR - cI * dI, delI = cR * dI + cI * dR; tR = hR * delR - hI * delI; hI = hR * delI + hI * delR; hR = tR;
+        if (Math.abs(delR - 1) + Math.abs(delI) < 1e-16) break;
+      }
+      const eR = Math.cos(x), eI = -Math.sin(x);
+      return [hR * eR - hI * eI, hR * eI + hI * eR];
+    }
+    // Bessel functions of integer order, from their integral representations (trapezoid rule on a
+    // periodic integrand is spectrally accurate; the tails of Y and K decay double-exponentially).
+    function besselj(n, x) {
+      if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (n < 0) return (n % 2 ? -1 : 1) * besselj(-n, x);
+      const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
+      for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.cos(n * t - x * Math.sin(t)); }
+      return s / M;
+    }
+    function besseli(n, x) {
+      if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      n = Math.abs(n); const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
+      for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.exp(x * Math.cos(t)) * Math.cos(n * t); }
+      return s / M;
+    }
+    function besselk(n, x) {
+      if (!isInt(n) || !(x > 0)) return NaN; n = Math.abs(n);
+      const h = 0.02; let s = 0.5 * Math.exp(-x);
+      for (let k = 1; k < 100000; k++) { const t = k * h; const v = Math.exp(-x * Math.cosh(t)) * Math.cosh(n * t); s += v; if (v < 1e-18 * s && x * Math.cosh(t) > 40) break; }
+      return s * h;
+    }
+    function bessely(n, x) {
+      if (!isInt(n) || !(x > 0)) return NaN;
+      if (n < 0) return (n % 2 ? -1 : 1) * bessely(-n, x);
+      const a = integrate((t) => Math.sin(x * Math.sin(t) - n * t), 0, Math.PI) / Math.PI;
+      const tail = integrate((t) => (Math.exp(n * t) + (n % 2 ? -1 : 1) * Math.exp(-n * t)) * Math.exp(-x * Math.sinh(t)), 0, Math.asinh(Math.max(1, (800 + n * 20) / x))) / Math.PI;
+      return a - tail;
+    }
+    // Complete elliptic integrals K(k), E(k) (modulus k, |k| < 1) by the AGM; incomplete via Carlson.
+    function ellipk(k) { if (!(Math.abs(k) < 1)) return Math.abs(k) === 1 ? Infinity : NaN; let a = 1, b = Math.sqrt(1 - k * k); for (let i = 0; i < 60 && Math.abs(a - b) > 1e-16 * a; i++) { const t = (a + b) / 2; b = Math.sqrt(a * b); a = t; } return Math.PI / (2 * a); }
+    function ellipe(k) {
+      if (!(Math.abs(k) <= 1)) return NaN; if (Math.abs(k) === 1) return 1;
+      let a = 1, b = Math.sqrt(1 - k * k), sum = k * k / 2, p = 0.5;
+      for (let i = 0; i < 60; i++) { const c = (a - b) / 2; const t = (a + b) / 2; b = Math.sqrt(a * b); a = t; p *= 2; sum += p * c * c; if (Math.abs(c) < 1e-17) break; }
+      return Math.PI / (2 * a) * (1 - sum);
+    }
+    function carlsonRF(x, y, z) {
+      for (let i = 0; i < 100; i++) { const l = Math.sqrt(x * y) + Math.sqrt(y * z) + Math.sqrt(z * x); x = (x + l) / 4; y = (y + l) / 4; z = (z + l) / 4; const m = (x + y + z) / 3; if (Math.max(Math.abs(x - m), Math.abs(y - m), Math.abs(z - m)) < 1e-10 * m) break; }
+      const m = (x + y + z) / 3; const X = 1 - x / m, Y = 1 - y / m, Z = -X - Y; const E2 = X * Y - Z * Z, E3 = X * Y * Z;
+      return (1 - E2 / 10 + E3 / 14 + E2 * E2 / 24 - 3 * E2 * E3 / 44) / Math.sqrt(m);
+    }
+    function carlsonRD(x, y, z) {
+      let sum = 0, fac = 1;
+      for (let i = 0; i < 100; i++) { const l = Math.sqrt(x * y) + Math.sqrt(y * z) + Math.sqrt(z * x); sum += fac / (Math.sqrt(z) * (z + l)); fac /= 4; x = (x + l) / 4; y = (y + l) / 4; z = (z + l) / 4; const m = (x + y + 3 * z) / 5; if (Math.max(Math.abs(x - m), Math.abs(y - m), Math.abs(z - m)) < 1e-10 * m) break; }
+      const m = (x + y + 3 * z) / 5; const X = 1 - x / m, Y = 1 - y / m, Z = -(X + Y) / 3;
+      const ea = X * Y, eb = Z * Z, ec = ea - eb, ed = ea - 6 * eb, ee = ed + ec + ec;
+      return 3 * sum + fac * (1 + ed * (-3 / 14 + 9 / 88 * ed - 9 / 52 * Z * ee) + Z * (1 / 6 * ee + Z * (-9 / 22 * ec + Z * 3 / 26 * ea))) / (m * Math.sqrt(m));
+    }
+    function ellipf(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const s = Math.sin(phi), c = Math.cos(phi); const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const sr = Math.sin(r), cr = Math.cos(r); const base = sr * carlsonRF(cr * cr, 1 - k * k * sr * sr, 1); void s; void c; return 2 * n * ellipk(k) + base; }
+    function ellipeinc(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const s = Math.sin(r), c = Math.cos(r), q = 1 - k * k * s * s; return 2 * n * ellipe(k) + s * carlsonRF(c * c, q, 1) - k * k * s * s * s / 3 * carlsonRD(c * c, q, 1); }
+    // Polylogarithm Li_s(z) for real z in [−1, 1] (series; z = ±1 through ζ and η).
+    function polylog(s, z) {
+      if (typeof s !== 'number' || typeof z !== 'number' || !(z >= -1 && z <= 1)) return NaN;
+      if (z === 0) return 0; if (z === 1) return s > 1 ? zeta(s) : NaN; if (z === -1) return -(1 - Math.pow(2, 1 - s)) * zeta(s);
+      if (s === 1) return -Math.log(1 - z);
+      if (Math.abs(z) > 0.5 && s === 2) { const w = 1 - z; if (z > 0) return Math.PI * Math.PI / 6 - Math.log(z) * Math.log(w) - polylog(2, w); }
+      let sum = 0, zk = 1; for (let k = 1; k < 100000; k++) { zk *= z; const add = zk / Math.pow(k, s); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; }
+      return sum;
+    }
+    // Adaptive Gauss–Kronrod (7/15) integration, also used by integral(x, a, b, …).
+    const XGK = [0.991455371120812639206854697526329, 0.949107912342758524526189684047851, 0.864864423359769072789712788640926, 0.741531185599394439863864773280788, 0.586087235467691130294144845693013, 0.405845151377397166906606412076961, 0.207784955007898467600689403773245, 0];
+    const WGK = [0.022935322010529224963732008058970, 0.063092092629978553290700663189204, 0.104790010322250183839876322541518, 0.140653259715525918745189590510238, 0.169004726639267902826583426598550, 0.190350578064785409913256402421014, 0.204432940075298892414161999234649, 0.209482141084727828012999174891714];
+    const WG = [0.129484966168869693270611432679082, 0.279705391489276667901467771423780, 0.381830050505118944950369775488975, 0.417959183673469387755102040816327];
+    function gk(f, a, b) {
+      const c = (a + b) / 2, h = (b - a) / 2; let k = WGK[7] * f(c), g = WG[3] * f(c);
+      for (let j = 0; j < 7; j++) { const dx = h * XGK[j]; const f1 = f(c - dx), f2 = f(c + dx); k += WGK[j] * (f1 + f2); if (j % 2 === 1) g += WG[(j - 1) / 2] * (f1 + f2); }
+      return [k * h, Math.abs((k - g) * h)];
+    }
+    function integrate(f, a, b, tol) {
+      if (!Number.isFinite(a) || !Number.isFinite(b)) {
+        // map an infinite range onto a finite one: x = t / (1 − t²)
+        if (a === b) return 0;
+        const g = (t) => { const x = t / (1 - t * t); const w = (1 + t * t) / ((1 - t * t) * (1 - t * t)); const v = f(x) * w; return Number.isFinite(v) ? v : 0; };
+        const lo = Number.isFinite(a) ? (a === 0 ? 0 : (-1 + Math.sqrt(1 + 4 * a * a)) / (2 * a)) : -1;
+        const hi = Number.isFinite(b) ? (b === 0 ? 0 : (-1 + Math.sqrt(1 + 4 * b * b)) / (2 * b)) : 1;
+        return integrate(g, lo, hi, tol);
+      }
+      tol = tol || 1e-12; if (a === b) return 0;
+      const stack = [[a, b]]; let total = 0, n = 0;
+      const whole = gk(f, a, b); if (whole[1] <= tol * Math.max(1, Math.abs(whole[0]))) return whole[0];
+      while (stack.length && n < 20000) {
+        const [x0, x1] = stack.pop(); const [v, e] = gk(f, x0, x1); n++;
+        if (e <= Math.max(tol * Math.abs(v), 1e-15 * Math.abs(x1 - x0)) || Math.abs(x1 - x0) < 1e-12 * Math.max(1, Math.abs(x0))) total += v;
+        else { const m = (x0 + x1) / 2; stack.push([m, x1], [x0, m]); }
+      }
+      return total;
+    }
+    // Numerical derivative of order 1–4 by Richardson-extrapolated central differences.
+    function derivative(f, x, order) {
+      order = order || 1; if (![1, 2, 3, 4].includes(order)) return NaN;
+      const D = (h) => {
+        if (order === 1) return (f(x + h) - f(x - h)) / (2 * h);
+        if (order === 2) return (f(x + h) - 2 * f(x) + f(x - h)) / (h * h);
+        if (order === 3) return (f(x + 2 * h) - 2 * f(x + h) + 2 * f(x - h) - f(x - 2 * h)) / (2 * h * h * h);
+        return (f(x + 2 * h) - 4 * f(x + h) + 6 * f(x) - 4 * f(x - h) + f(x - 2 * h)) / (h * h * h * h);
+      };
+      const h0 = (order === 1 ? 1e-2 : order === 2 ? 5e-2 : 1e-1) * Math.max(1, Math.abs(x));
+      const T = []; let h = h0;
+      for (let i = 0; i < 6; i++) { T[i] = [D(h)]; for (let j = 1; j <= i; j++) T[i][j] = T[i][j - 1] + (T[i][j - 1] - T[i - 1][j - 1]) / (Math.pow(4, j) - 1); h /= 2; }
+      return T[5][5];
+    }
+    // Root of f near x0 (secant, then bracket + bisection), or in [a, b] (Brent-style).
+    function findRoot(f, a, b) {
+      if (b === undefined) {
+        const x0 = a; const tries = [x0, x0 * 1.1 + 0.1, x0 - 1, x0 + 1, 0.1, 1, -1, 10];
+        for (const s0 of tries) {
+          let x1 = s0, x2 = s0 + (Math.abs(s0) > 1e-6 ? s0 * 1e-3 : 1e-3), f1 = f(x1);
+          if (!Number.isFinite(f1)) continue;
+          for (let i = 0; i < 100; i++) {
+            const f2 = f(x2); if (!Number.isFinite(f2)) { x2 = (x1 + x2) / 2; continue; }
+            if (f2 === 0 || Math.abs(x2 - x1) < 1e-15 * Math.max(1, Math.abs(x2))) { if (Math.abs(f2) < 1e-9 * Math.max(1, Math.abs(f1))) return x2; break; }
+            const d = f2 - f1; if (d === 0) break;
+            const x3 = x2 - f2 * (x2 - x1) / d; x1 = x2; f1 = f2; x2 = x3; if (!Number.isFinite(x2)) break;
+          }
+        }
+        return NaN;
+      }
+      let fa = f(a), fb = f(b); if (!Number.isFinite(fa) || !Number.isFinite(fb)) return NaN;
+      if (fa === 0) return a; if (fb === 0) return b; if ((fa > 0) === (fb > 0)) return NaN;
+      for (let i = 0; i < 300; i++) {
+        let m = b - fb * (b - a) / (fb - fa); if (!(m > Math.min(a, b) && m < Math.max(a, b)) || i % 4 === 3) m = (a + b) / 2;
+        const fm = f(m); if (fm === 0 || Math.abs(b - a) < 1e-15 * Math.max(1, Math.abs(m))) return m;
+        if ((fm > 0) === (fa > 0)) { a = m; fa = fm; } else { b = m; fb = fm; }
+      }
+      return (a + b) / 2;
+    }
+
+    return {
+      factmod, digamma, gammainc, gammaincc, betainc, gammapdf, gammacdf, gammainv, betapdf, betacdf, betainv,
+      chi2pdf, chi2cdf, chi2inv, tpdf, tcdf, tinv, fpdf, fcdf, finv, binompdf, binomcdf, poisspdf, poisscdf,
+      exppdf, expcdf, expinv, lognpdf, logncdf, logninv, weibpdf, weibcdf, weibinv, geompdf, geomcdf, hygepdf, nbinpdf,
+      erfinv, expint, ei, si, ci, besselj, bessely, besseli, besselk, ellipk, ellipe, ellipf, ellipeinc, polylog,
+      _integrate: integrate, _derivative: derivative, _findRoot: findRoot,
+      gcd, lcm, fact, binom, perm, isprime, nextprime, prevprime, primepi, nthprime, phi, sigma, tau, mu,
+      omega, bigomega, rad, lpf, gpf, carmichael, powmod, modinv, crt, fib, lucas, catalan, bell, partitions,
+      stirling1, stirling2, derange, digitsum, digitalroot, numdigits, reversenum, collatz, legendre, jacobi,
+      ord, primroot, isqrt, issquare, isperfect,
+      gamma, lgamma, beta: betafn, erf, erfc, normcdf, normpdf, norminv, zeta, li, lambertw,
+      sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh, asinh: Math.asinh, acosh: Math.acosh, atanh: Math.atanh,
+      atan2: Math.atan2,
+    };
+  })();
+
+  /* ---- values beyond plain numbers: complex numbers, lists (vectors) and matrices ----
+   * A list is a JS array of values, a matrix an array of equal-length arrays. Complex numbers
+   * are Cx objects; a complex result whose imaginary part is exactly 0 becomes a plain number. */
+  const VAL = (function () {
+    class Cx { constructor(re, im) { this.re = re; this.im = im; } }
+    const isC = (v) => v instanceof Cx;
+    const isA = Array.isArray;
+    const isM = (v) => isA(v) && v.length > 0 && v.every(isA);
+    const C = (v) => (isC(v) ? v : new Cx(Number(v), 0));
+    const simp = (c) => (c.im === 0 ? c.re : c);
+    const cadd = (a, b) => simp(new Cx(a.re + b.re, a.im + b.im));
+    const csub = (a, b) => simp(new Cx(a.re - b.re, a.im - b.im));
+    const cmul = (a, b) => simp(new Cx(a.re * b.re - a.im * b.im, a.re * b.im + a.im * b.re));
+    const cdiv = (a, b) => { const d = b.re * b.re + b.im * b.im; return simp(new Cx((a.re * b.re + a.im * b.im) / d, (a.im * b.re - a.re * b.im) / d)); };
+    const cabs = (a) => Math.hypot(a.re, a.im);
+    const carg = (a) => Math.atan2(a.im, a.re);
+    const cexp = (a) => { const r = Math.exp(a.re); return simp(new Cx(r * Math.cos(a.im), r * Math.sin(a.im))); };
+    const cln = (a) => simp(new Cx(Math.log(cabs(a)), carg(a)));
+    const cpow = (a, b) => {
+      if (a.re === 0 && a.im === 0) return (b.re > 0 || (b.re === 0 && b.im === 0 && false)) ? 0 : (b.re === 0 && b.im === 0 ? 1 : NaN);
+      if (b.im === 0 && Number.isInteger(b.re) && Math.abs(b.re) <= 64) { let r = new Cx(1, 0); let base = a; let n = Math.abs(b.re); while (n) { if (n & 1) r = C(cmul(r, base)); base = C(cmul(base, base)); n >>= 1; } return b.re < 0 ? cdiv(new Cx(1, 0), r) : simp(r); }
+      return cexp(C(cmul(b, C(cln(a)))));
+    };
+    const csqrt = (a) => { const r = cabs(a); const re = Math.sqrt((r + a.re) / 2); const im = Math.sign(a.im || 1) * Math.sqrt((r - a.re) / 2); return simp(new Cx(re, a.im === 0 && a.re >= 0 ? 0 : im)); };
+    const csin = (a) => simp(new Cx(Math.sin(a.re) * Math.cosh(a.im), Math.cos(a.re) * Math.sinh(a.im)));
+    const ccos = (a) => simp(new Cx(Math.cos(a.re) * Math.cosh(a.im), -Math.sin(a.re) * Math.sinh(a.im)));
+    const ctan = (a) => cdiv(C(csin(a)), C(ccos(a)));
+    const csinh = (a) => simp(new Cx(Math.sinh(a.re) * Math.cos(a.im), Math.cosh(a.re) * Math.sin(a.im)));
+    const ccosh = (a) => simp(new Cx(Math.cosh(a.re) * Math.cos(a.im), Math.sinh(a.re) * Math.sin(a.im)));
+    const ctanh = (a) => cdiv(C(csinh(a)), C(ccosh(a)));
+    // Scalar binary operation on numbers or complex values.
+    function scalarBin(op, a, b) {
+      if (!isC(a) && !isC(b)) {
+        return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? a % b : op === '^' ? Math.pow(a, b)
+          : op === '<' ? +(a < b) : op === '<=' ? +(a <= b) : op === '>' ? +(a > b) : op === '>=' ? +(a >= b) : op === '==' ? +(a === b) : op === '!=' ? +(a !== b) : NaN;
+      }
+      const A = C(a), B = C(b);
+      if (op === '+') return cadd(A, B); if (op === '-') return csub(A, B); if (op === '*') return cmul(A, B); if (op === '/') return cdiv(A, B);
+      if (op === '^') {
+        // a real negative base with a real exponent stays real in plain arithmetic; complex only when asked
+        return cpow(A, B);
+      }
+      if (op === '==') return +(A.re === B.re && A.im === B.im); if (op === '!=') return +(A.re !== B.re || A.im !== B.im);
+      return NaN;
+    }
+    // Element-wise with broadcasting: scalar ⊕ list, list ⊕ list (same length), matrix likewise.
+    function bin(op, a, b) {
+      if (isA(a) || isA(b)) {
+        if (isA(a) && isA(b)) { if (a.length !== b.length) return NaN; return a.map((x, i) => bin(op, x, b[i])); }
+        return isA(a) ? a.map((x) => bin(op, x, b)) : b.map((y) => bin(op, a, y));
+      }
+      return scalarBin(op, a, b);
+    }
+    function neg(a) { if (isA(a)) return a.map(neg); if (isC(a)) return simp(new Cx(-a.re, -a.im)); return -a; }
+    // Lift a numeric function over lists/matrices; complex arguments use cfn when given.
+    function lift(fn, cfn) {
+      const f = function () {
+        const args = Array.from(arguments);
+        const ai = args.findIndex(isA);
+        if (ai >= 0) return args[ai].map((x) => { const a2 = args.slice(); a2[ai] = x; return f.apply(null, a2); });
+        if (args.some(isC)) return cfn ? cfn.apply(null, args.map(C)) : NaN;
+        return fn.apply(null, args);
+      };
+      return f;
+    }
+    const flat = (args) => { const out = []; const walk = (v) => { if (isA(v)) v.forEach(walk); else out.push(v); }; args.forEach(walk); return out; };
+    const nums = (args) => { const f = flat(args); return f.every((x) => typeof x === 'number') ? f : null; };
+    function sumv() { const f = flat(Array.from(arguments)); let acc = 0; for (const x of f) acc = scalarBin('+', acc, x); return acc; }
+    function prodv() { const f = flat(Array.from(arguments)); let acc = 1; for (const x of f) acc = scalarBin('*', acc, x); return acc; }
+    const count = function () { return flat(Array.from(arguments)).length; };
+    function mean() { const f = nums(Array.from(arguments)); if (!f || !f.length) return NaN; return f.reduce((a, b) => a + b, 0) / f.length; }
+    function sorted(args) { const f = nums(args); return f ? f.slice().sort((a, b) => a - b) : null; }
+    function median() { const f = sorted(Array.from(arguments)); if (!f || !f.length) return NaN; const m = f.length >> 1; return f.length % 2 ? f[m] : (f[m - 1] + f[m]) / 2; }
+    function mode() { const f = sorted(Array.from(arguments)); if (!f || !f.length) return NaN; let best = f[0], bc = 0, cur = f[0], c = 0; for (const x of f) { if (x === cur) c++; else { cur = x; c = 1; } if (c > bc) { bc = c; best = cur; } } return best; }
+    function ss(f) { const m = f.reduce((a, b) => a + b, 0) / f.length; return f.reduce((a, x) => a + (x - m) * (x - m), 0); }
+    function variance() { const f = nums(Array.from(arguments)); return f && f.length > 1 ? ss(f) / (f.length - 1) : NaN; }
+    function varp() { const f = nums(Array.from(arguments)); return f && f.length ? ss(f) / f.length : NaN; }
+    const stdev = function () { return Math.sqrt(variance.apply(null, arguments)); };
+    const stdevp = function () { return Math.sqrt(varp.apply(null, arguments)); };
+    function gmean() { const f = nums(Array.from(arguments)); if (!f || !f.length || f.some((x) => x <= 0)) return NaN; return Math.exp(f.reduce((a, x) => a + Math.log(x), 0) / f.length); }
+    function hmean() { const f = nums(Array.from(arguments)); if (!f || !f.length || f.some((x) => x <= 0)) return NaN; return f.length / f.reduce((a, x) => a + 1 / x, 0); }
+    function wmean(x, w) { if (!isA(x) || !isA(w) || x.length !== w.length || !x.length) return NaN; let sw = 0, s = 0; for (let i = 0; i < x.length; i++) { s += x[i] * w[i]; sw += w[i]; } return s / sw; }
+    // Percentile with linear interpolation between order statistics (p from 0 to 1, like PERCENTILE.INC).
+    function percentile(x, p) { const f = sorted([x]); if (!f || !f.length || !(p >= 0 && p <= 1)) return NaN; const h = (f.length - 1) * p; const lo = Math.floor(h); return lo + 1 < f.length ? f[lo] + (h - lo) * (f[lo + 1] - f[lo]) : f[lo]; }
+    function skew(x) { const f = nums([x]); if (!f || f.length < 3) return NaN; const n = f.length, m = f.reduce((a, b) => a + b, 0) / n; const s = Math.sqrt(ss(f) / (n - 1)); return n / ((n - 1) * (n - 2)) * f.reduce((a, v) => a + Math.pow((v - m) / s, 3), 0); }
+    function kurt(x) { const f = nums([x]); if (!f || f.length < 4) return NaN; const n = f.length, m = f.reduce((a, b) => a + b, 0) / n; const s2 = ss(f) / (n - 1); const k4 = f.reduce((a, v) => a + Math.pow(v - m, 4), 0) / (s2 * s2); return n * (n + 1) / ((n - 1) * (n - 2) * (n - 3)) * k4 - 3 * (n - 1) * (n - 1) / ((n - 2) * (n - 3)); }
+    function pairs(x, y) { if (!isA(x) || !isA(y) || x.length !== y.length || x.length < 2) return null; return [x, y]; }
+    function cov(x, y) { const p = pairs(x, y); if (!p) return NaN; const n = x.length, mx = mean(x), my = mean(y); let s = 0; for (let i = 0; i < n; i++) s += (x[i] - mx) * (y[i] - my); return s / (n - 1); }
+    function corr(x, y) { const c = cov(x, y); return c / (stdev(x) * stdev(y)); }
+    function slope(x, y) { return cov(x, y) / variance(x); }
+    function intercept(x, y) { return mean(y) - slope(x, y) * mean(x); }
+    function rsq(x, y) { const r = corr(x, y); return r * r; }
+    // Cash flows: npv(r, cf) with cf[0] at time 0; irr(cf); mirr(cf, finance rate, reinvestment rate).
+    function npv(r, cf) { if (!isA(cf)) return NaN; let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t); return s; }
+    function irr(cf, guess) {
+      if (!isA(cf) || cf.length < 2) return NaN; const f = (r) => npv(r, cf);
+      const r0 = ML._findRoot(f, guess === undefined ? 0.1 : guess); if (Number.isFinite(r0) && r0 > -1) return r0;
+      return ML._findRoot(f, -0.9999, 10);
+    }
+    function mirr(cf, fr, rr) { if (!isA(cf) || cf.length < 2) return NaN; const n = cf.length - 1; let pvNeg = 0, fvPos = 0; for (let t = 0; t <= n; t++) { if (cf[t] < 0) pvNeg += cf[t] / Math.pow(1 + fr, t); else fvPos += cf[t] * Math.pow(1 + rr, n - t); } return Math.pow(-fvPos / pvNeg, 1 / n) - 1; }
+    // Lists
+    const list = function () { return Array.from(arguments); };
+    function seq(a, b, st) { if (st === undefined) st = 1; if (!(st !== 0) || !Number.isFinite(a) || !Number.isFinite(b) || Math.abs((b - a) / st) > 1e6) return NaN; const out = []; for (let x = a; st > 0 ? x <= b + 1e-12 : x >= b - 1e-12; x += st) out.push(x); return out; }
+    function at(v, i, j) { if (!isA(v) || !Number.isInteger(i) || i < 1 || i > v.length) return NaN; const r = v[i - 1]; return j === undefined ? r : at(r, j); }
+    function sortv(v) { const f = sorted([v]); return f || NaN; }
+    function cumsum(v) { if (!isA(v)) return NaN; let s = 0; return v.map((x) => (s += x)); }
+    function diffv(v) { if (!isA(v) || v.length < 2) return NaN; return v.slice(1).map((x, i) => x - v[i]); }
+    // Vectors and matrices
+    function dot(u, v) { if (!isA(u) || !isA(v) || u.length !== v.length) return NaN; let s = 0; for (let i = 0; i < u.length; i++) s = scalarBin('+', s, scalarBin('*', u[i], isC(v[i]) ? new Cx(v[i].re, -v[i].im) : v[i])); return s; }
+    function cross(u, v) { if (!isA(u) || !isA(v) || u.length !== 3 || v.length !== 3) return NaN; return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; }
+    function norm(v) { if (!isA(v)) return isC(v) ? cabs(v) : Math.abs(v); const f = flat([v]); return Math.sqrt(f.reduce((a, x) => a + (isC(x) ? x.re * x.re + x.im * x.im : x * x), 0)); }
+    const shape = (M) => (isM(M) && M.every((r) => r.length === M[0].length) ? [M.length, M[0].length] : null);
+    function trans(M) { const sh = shape(M); if (!sh) return isA(M) ? M.map((x) => [x]) : NaN; return M[0].map((_, j) => M.map((r) => r[j])); }
+    function mmul(A, Bm) {
+      const a = shape(A); const b = isM(Bm) ? shape(Bm) : (isA(Bm) ? [Bm.length, 1] : null); if (!a || !b || a[1] !== b[0]) return NaN;
+      const Bmat = isM(Bm) ? Bm : Bm.map((x) => [x]);
+      const out = A.map((r) => Bmat[0].map((_, j) => r.reduce((s, x, k) => s + x * Bmat[k][j], 0)));
+      return isM(Bm) ? out : out.map((r) => r[0]);
+    }
+    function lu(M) {
+      const sh = shape(M); if (!sh || sh[0] !== sh[1]) return null; const n = sh[0]; const A = M.map((r) => r.slice()); const perm = A.map((_, i) => i); let sign = 1;
+      for (let k = 0; k < n; k++) {
+        let p = k; for (let i = k + 1; i < n; i++) if (Math.abs(A[i][k]) > Math.abs(A[p][k])) p = i;
+        if (A[p][k] === 0) return { A, perm, sign: 0, n };
+        if (p !== k) { [A[p], A[k]] = [A[k], A[p]]; [perm[p], perm[k]] = [perm[k], perm[p]]; sign = -sign; }
+        for (let i = k + 1; i < n; i++) { A[i][k] /= A[k][k]; for (let j = k + 1; j < n; j++) A[i][j] -= A[i][k] * A[k][j]; }
+      }
+      return { A, perm, sign, n };
+    }
+    function det(M) { const L = lu(M); if (!L) return NaN; if (L.sign === 0) return 0; let d = L.sign; for (let i = 0; i < L.n; i++) d *= L.A[i][i]; return d; }
+    function luSolve(L, b) { const n = L.n; const y = new Array(n); for (let i = 0; i < n; i++) { let s = b[L.perm[i]]; for (let j = 0; j < i; j++) s -= L.A[i][j] * y[j]; y[i] = s; } const x = new Array(n); for (let i = n - 1; i >= 0; i--) { let s = y[i]; for (let j = i + 1; j < n; j++) s -= L.A[i][j] * x[j]; x[i] = s / L.A[i][i]; } return x; }
+    function linsolve(M, b) { const L = lu(M); if (!L || L.sign === 0 || !isA(b) || b.length !== L.n) return NaN; return luSolve(L, b); }
+    function inv(M) { const L = lu(M); if (!L || L.sign === 0) return NaN; const cols = []; for (let j = 0; j < L.n; j++) { const e = new Array(L.n).fill(0); e[j] = 1; cols.push(luSolve(L, e)); } return trans(cols); }
+    function trace(M) { const sh = shape(M); if (!sh || sh[0] !== sh[1]) return NaN; let s = 0; for (let i = 0; i < sh[0]; i++) s += M[i][i]; return s; }
+    function eye(n) { if (!Number.isInteger(n) || n < 1 || n > 100) return NaN; return Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))); }
+    // Complex helpers exposed as functions
+    const re = (a) => (isC(a) ? a.re : a); const im = (a) => (isC(a) ? a.im : 0);
+    const conj = (a) => (isC(a) ? simp(new Cx(a.re, -a.im)) : a);
+    const arg = (a) => (isC(a) ? carg(a) : Math.atan2(0, a));
+    const polar = (r, t) => simp(new Cx(r * Math.cos(t), r * Math.sin(t)));
+    return {
+      Cx, isC, isA, isM, C, simp, bin, neg, lift, flat,
+      complexFns: { sqrt: csqrt, exp: cexp, ln: cln, abs: cabs, sin: csin, cos: ccos, tan: ctan, sinh: csinh, cosh: ccosh, tanh: ctanh, pow: (a, b) => cpow(a, b), log: (a) => cdiv(C(cln(a)), new Cx(Math.LN10, 0)) },
+      aggregates: { sum: sumv, prod: prodv, count, len: count, mean, median, mode, var: variance, stdev, varp, stdevp, gmean, hmean, wmean, percentile, quantile: percentile, skew, kurt, cov, corr, slope, intercept, rsq, npv, irr, mirr, list, seq, at, sort: sortv, cumsum, diff: diffv, dot, cross, norm, trans, mmul, det, inv, trace, eye, linsolve, re, im, conj, arg, polar },
+    };
+  })();
+  /* MATHLIB-END */
+  // Scalar maths lifted over lists; the complex-aware ones also take complex numbers.
+  const CF = VAL.complexFns;
+  const MATHBASE = {
+    sqrt: [Math.sqrt, CF.sqrt], cbrt: [Math.cbrt], abs: [Math.abs, CF.abs], round: [Math.round],
+    floor: [Math.floor], ceil: [Math.ceil], trunc: [Math.trunc], sign: [Math.sign],
+    exp: [Math.exp, CF.exp], ln: [Math.log, CF.ln], log: [(x) => Math.log10(x), CF.log], log2: [Math.log2],
+    sin: [Math.sin, CF.sin], cos: [Math.cos, CF.cos], tan: [Math.tan, CF.tan], asin: [Math.asin], acos: [Math.acos], atan: [Math.atan],
+    pow: [Math.pow, CF.pow], mod: [(a, b) => a % b], hypot: [Math.hypot],
+    root: [(x, n) => Math.sign(x) * Math.pow(Math.abs(x), 1 / n)],
+    logb: [(x, b) => Math.log(x) / Math.log(b)], roundto: [(x, d) => { const f = Math.pow(10, d); return Math.round(x * f) / f; }],
+    frac: [(x) => x - Math.trunc(x)], clamp: [(x, lo, hi) => Math.min(Math.max(x, lo), hi)],
+    deg: [(r) => r * 180 / Math.PI], rad: [(d) => d * Math.PI / 180],
+    sec: [(x) => 1 / Math.cos(x)], csc: [(x) => 1 / Math.sin(x)], cot: [(x) => 1 / Math.tan(x)],
+    sinh: [Math.sinh, CF.sinh], cosh: [Math.cosh, CF.cosh], tanh: [Math.tanh, CF.tanh],
+    and: [(a, b) => +(!!a && !!b)], or: [(a, b) => +(!!a || !!b)], xor: [(a, b) => +(!!a !== !!b)], not: [(a) => +!a],
   };
-  const CONST = { pi: Math.PI, e: Math.E, tau: Math.PI * 2 };
-  const PREC = { '+': 1, '-': 1, '*': 2, '/': 2, '%': 2, '^': 3 };
+  const FUN = {};
+  Object.keys(ML).forEach((k) => { if (k[0] !== '_') FUN[k] = VAL.lift(ML[k], CF[k]); });
+  Object.keys(MATHBASE).forEach((k) => { FUN[k] = VAL.lift(MATHBASE[k][0], MATHBASE[k][1]); });
+  Object.assign(FUN, VAL.aggregates);
+  // min/max take numbers or lists
+  FUN.min = function () { return Math.min.apply(null, VAL.flat(Array.from(arguments))); };
+  FUN.max = function () { return Math.max.apply(null, VAL.flat(Array.from(arguments))); };
+  // Forms that bind a variable or pick a branch; evalAST handles them. The table entries only
+  // let the parser accept the names (and give the non-binding meaning where there is one).
+  FUN.integral = FUN.deriv = FUN.solve = FUN.if = FUN.piecewise = () => NaN;
+  // complex results on purpose: csqrt(-4) = 2i, cln(-1) = iπ, cpow(-8, 1/3) = 1 + 1.732i
+  FUN.csqrt = (x) => CF.sqrt(VAL.C(x)); FUN.cln = (x) => CF.ln(VAL.C(x)); FUN.cpow = (a, b) => CF.pow(VAL.C(a), VAL.C(b));
+  // sum(k, a, b, expr) Σ · prod(k, a, b, expr) Π · integral(x, a, b, expr) ∫ · deriv(x, at, expr[, order])
+  // · solve(x, guess, expr) or solve(x, lo, hi, expr): the x that makes expr = 0.
+  const BINDER_ARITY = { sum: [4], prod: [4], integral: [4], deriv: [3, 4], solve: [3, 4] };
+  const LOOP_MAX = 1000000;
+  function isBinder(n) {
+    if (n.type !== 'call') return false;
+    const ar = BINDER_ARITY[n.name.toLowerCase()];
+    return !!ar && ar.includes(n.args.length) && n.args[0].type === 'var';
+  }
+  // Which argument is the body (the part the counter lives in).
+  function binderBody(n) { const k = n.name.toLowerCase(); return k === 'deriv' ? n.args[2] : n.args[n.args.length - 1]; }
+  function evalBinder(n, scope) {
+    const k = n.args[0].name; const kind = n.name.toLowerCase();
+    const body = binderBody(n);
+    const inner = Object.assign({}, scope);
+    const f = (x) => { inner[k] = x; const v = evalAST(body, inner); return typeof v === 'number' ? v : NaN; };
+    if (kind === 'sum' || kind === 'prod') {
+      const a = evalAST(n.args[1], scope); const b = evalAST(n.args[2], scope);
+      if (!Number.isFinite(a) || !Number.isFinite(b) || b - a > LOOP_MAX) return NaN;
+      let acc = kind === 'sum' ? 0 : 1;
+      for (let i = Math.ceil(a); i <= b; i++) { inner[k] = i; const v = evalAST(body, inner); acc = VAL.bin(kind === 'sum' ? '+' : '*', acc, v); }
+      return acc;
+    }
+    if (kind === 'integral') { const a = evalAST(n.args[1], scope), b = evalAST(n.args[2], scope); if (typeof a !== 'number' || typeof b !== 'number') return NaN; return a > b ? -ML._integrate(f, b, a) : ML._integrate(f, a, b); }
+    if (kind === 'deriv') { const x0 = evalAST(n.args[1], scope); const ord = n.args.length === 4 ? evalAST(n.args[3], scope) : 1; return ML._derivative(f, x0, ord); }
+    if (kind === 'solve') {
+      if (n.args.length === 3) return ML._findRoot(f, evalAST(n.args[1], scope));
+      return ML._findRoot(f, evalAST(n.args[1], scope), evalAST(n.args[2], scope));
+    }
+    return NaN;
+  }
+  const truthy = (v) => (VAL.isC(v) ? v.re !== 0 || v.im !== 0 : !!v && !Number.isNaN(v));
+  const CONST = { pi: Math.PI, e: Math.E, tau: Math.PI * 2, infinity: Infinity };
+  // Named constants (CODATA 2018 / IAU / SI exact values). Lower-case lookup, like pi and e.
+  const PCONST = {
+    c_light: 299792458, h_planck: 6.62607015e-34, h_bar: 1.054571817e-34, g_newton: 6.67430e-11,
+    k_boltz: 1.380649e-23, n_avo: 6.02214076e23, r_gas: 8.314462618, q_e: 1.602176634e-19,
+    m_e: 9.1093837015e-31, m_p: 1.67262192369e-27, m_n: 1.67492749804e-27, u_amu: 1.66053906660e-27,
+    eps_0: 8.8541878128e-12, mu_0: 1.25663706212e-6, k_coulomb: 8.9875517923e9, sigma_sb: 5.670374419e-8,
+    alpha_fs: 7.2973525693e-3, a_bohr: 5.29177210903e-11, r_inf: 10973731.568160, f_faraday: 96485.33212,
+    g_std: 9.80665, atm_pa: 101325, au_m: 149597870700, ly_m: 9460730472580800, pc_m: 3.0856775814913673e16,
+    m_sun: 1.98847e30, m_earth: 5.9722e24, r_earth: 6371000, ev_j: 1.602176634e-19, cal_j: 4.184,
+    euler_gamma: 0.5772156649015329, golden_ratio: 1.618033988749895, catalan_c: 0.915965594177219, apery_c: 1.2020569031595942,
+  };
+  Object.assign(CONST, PCONST);
+  const PREC = { '<': 0, '<=': 0, '>': 0, '>=': 0, '==': 0, '!=': 0, '+': 1, '-': 1, '*': 2, '/': 2, '%': 2, '^': 3 };
+  const CMP = ['<', '<=', '>', '>=', '==', '!='];
 
   function tokenize(s) {
     const toks = []; let i = 0; const n = s.length;
@@ -82,9 +904,11 @@
       if ((c >= '0' && c <= '9') || c === '.') {
         let j = i + 1;
         while (j < n && /[0-9.]/.test(s[j])) j++;
-        if (j < n && (s[j] === 'e' || s[j] === 'E')) { j++; if (j < n && (s[j] === '+' || s[j] === '-')) j++; while (j < n && /[0-9]/.test(s[j])) j++; }
+        if (j < n && (s[j] === 'e' || s[j] === 'E') && /[0-9+-]/.test(s[j + 1] || '')) { j++; if (j < n && (s[j] === '+' || s[j] === '-')) j++; while (j < n && /[0-9]/.test(s[j])) j++; }
         const v = parseFloat(s.slice(i, j));
         if (isNaN(v)) throw new Error('bad number');
+        // an imaginary literal: a number followed directly by i (3i, 2.5i) — not by a longer name
+        if (s[j] === 'i' && !/[\p{L}\p{N}_]/u.test(s[j + 1] || '')) { toks.push({ t: 'num', v, imag: true }); i = j + 1; continue; }
         toks.push({ t: 'num', v }); i = j; continue;
       }
       if (/[\p{L}_]/u.test(c)) {
@@ -92,7 +916,9 @@
         while (j < n && /[\p{L}\p{N}_]/u.test(s[j])) j++;
         toks.push({ t: 'id', v: s.slice(i, j) }); i = j; continue;
       }
-      if ('+-*/%^(),'.indexOf(c) >= 0) { toks.push({ t: 'op', v: c }); i++; continue; }
+      const two = s.slice(i, i + 2);
+      if (two === '<=' || two === '>=' || two === '==' || two === '!=') { toks.push({ t: 'op', v: two }); i += 2; continue; }
+      if ('+-*/%^(),<>'.indexOf(c) >= 0) { toks.push({ t: 'op', v: c }); i++; continue; }
       throw new Error('unexpected "' + c + '"');
     }
     return toks;
@@ -104,7 +930,9 @@
     const peek = () => toks[p];
     const next = () => toks[p++];
     const expect = (v) => { const t = next(); if (!t || t.v !== v) throw new Error('expected "' + v + '"'); };
-    function pExpr() { return pAdd(); }
+    function pExpr() { return pCmp(); }
+    // comparisons bind loosest and give 1 or 0: x > 5, a == b
+    function pCmp() { let l = pAdd(); while (peek() && peek().t === 'op' && CMP.includes(peek().v)) { const op = next().v; l = { type: 'bin', op, l, r: pAdd() }; } return l; }
     function pAdd() { let l = pMul(); while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) { const op = next().v; l = { type: 'bin', op, l, r: pMul() }; } return l; }
     function pMul() { let l = pUnary(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = next().v; l = { type: 'bin', op, l, r: pUnary() }; } return l; }
     // Standard math precedence: '^' binds tighter than unary minus, so -x^2 = -(x^2), and
@@ -114,7 +942,7 @@
     function pPrimary() {
       const t = next();
       if (!t) throw new Error('unexpected end');
-      if (t.t === 'num') return { type: 'num', v: t.v };
+      if (t.t === 'num') return t.imag ? { type: 'num', v: t.v, imag: true } : { type: 'num', v: t.v };
       if (t.t === 'op' && t.v === '(') { const e = pExpr(); expect(')'); return e; }
       if (t.t === 'id') {
         if (peek() && peek().t === 'op' && peek().v === '(') {
@@ -134,18 +962,75 @@
     return ast;
   }
 
-  function applyBin(op, a, b) { return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? a % b : Math.pow(a, b); }
+  function applyBin(op, a, b) {
+    if (typeof a === 'number' && typeof b === 'number') {
+      return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? a % b : op === '^' ? Math.pow(a, b)
+        : op === '<' ? +(a < b) : op === '<=' ? +(a <= b) : op === '>' ? +(a > b) : op === '>=' ? +(a >= b) : op === '==' ? +(a === b) : +(a !== b);
+    }
+    return VAL.bin(op, a, b);
+  }
+  // A value typed into an input box: a number, a list (1, 2, 3), a matrix (1, 2; 3, 4) or a complex number (3+4i).
+  // In a typed value a bare i is the imaginary unit ("1+i"); in formulas i stays an ordinary variable.
+  function parseValue(raw) {
+    if (typeof raw === 'number' || Array.isArray(raw) || VAL.isC(raw)) return raw;
+    const s = String(raw == null ? '' : raw).trim(); if (s === '') return NaN;
+    if (/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(s)) return Number(s);
+    const one = (x) => { const t = x.trim(); if (t === '') return NaN; try { return evalAST(parseAST(t), { i: new VAL.Cx(0, 1) }); } catch (e) { return NaN; } };
+    if (s.indexOf(';') >= 0) return s.split(';').map((row) => row.split(/[,\s]+/).filter((x) => x !== '').map(one));
+    if (/[,]/.test(s) || /\d\s+[-+]?\d/.test(s)) return s.split(/[,\s]+/).filter((x) => x !== '').map(one);
+    return one(s);
+  }
+  function isNumericValue(v) { return typeof v === 'number'; }
+  // What a variable holds: 'number' (the usual), 'list', 'matrix' or 'complex' — from its type, or
+  // guessed from its default value ("1, 2, 3" is a list, "1, 2; 3, 4" a matrix, "3+4i" complex).
+  function vkind(v) {
+    if (v && (v.type === 'list' || v.type === 'matrix' || v.type === 'complex')) return v.type;
+    const d = v && v.default != null ? String(v.default) : '';
+    if (d.indexOf(';') >= 0) return 'matrix';
+    if (d.indexOf(',') >= 0) return 'list';
+    if (/(^|[\d+-])i$/.test(d.replace(/\s+/g, ''))) return 'complex';
+    return 'number';
+  }
+  // The value of one input: a number for number variables, a parsed list/matrix/complex otherwise.
+  // null when it cannot be read (so the result shows "—").
+  function inputValue(v, raw) {
+    if (raw === '' || raw == null) raw = v.default;
+    if (raw === '' || raw == null) return null;
+    if (vkind(v) === 'number') { const num = Number(raw); return isNaN(num) ? null : num; }
+    const val = parseValue(raw);
+    const bad = (x) => (Array.isArray(x) ? x.length === 0 || x.some(bad) : (typeof x === 'number' ? Number.isNaN(x) : !VAL.isC(x)));
+    return bad(val) ? null : val;
+  }
+  // A result of any kind, as text: 12.5 · 3 + 4i · [1, 2, 3] · [1, 2; 3, 4]
+  function fmtAny(v, dec, fmt) {
+    if (Array.isArray(v)) return '[' + v.map((x) => (Array.isArray(x) ? x.map((y) => fmtAny(y, dec, fmt)).join(', ') : fmtAny(x, dec, fmt))).join(VAL.isM(v) ? '; ' : ', ') + ']';
+    if (VAL.isC(v)) { const im = v.im; return fmt(v.re, dec) + (im < 0 ? ' − ' : ' + ') + fmt(Math.abs(im), dec) + 'i'; }
+    return fmt(v, dec);
+  }
+  function valueOk(v) {
+    if (Array.isArray(v)) return v.length > 0 && v.every(valueOk);
+    if (VAL.isC(v)) return Number.isFinite(v.re) && Number.isFinite(v.im);
+    return typeof v === 'number' && Number.isFinite(v);
+  }
+  function hasImag(n) { return !!n && (n.imag || (n.l && hasImag(n.l)) || (n.r && hasImag(n.r)) || (n.arg && hasImag(n.arg)) || (n.args && n.args.some(hasImag))); }
 
   function evalAST(n, scope) {
     switch (n.type) {
-      case 'num': return n.v;
+      case 'num': return n.imag ? VAL.simp(new VAL.Cx(0, n.v)) : n.v;
       case 'const': return CONST[n.name.toLowerCase()];
       case 'var':
-        if (scope && Object.prototype.hasOwnProperty.call(scope, n.name)) return Number(scope[n.name]);
+        if (scope && Object.prototype.hasOwnProperty.call(scope, n.name)) { const v = scope[n.name]; return typeof v === 'number' ? v : (Array.isArray(v) || VAL.isC(v) ? v : Number(v)); }
         throw new Error('unknown variable "' + n.name + '"');
-      case 'unary': { const a = evalAST(n.arg, scope); return n.op === '-' ? -a : a; }
+      case 'unary': { const a = evalAST(n.arg, scope); return n.op === '-' ? (typeof a === 'number' ? -a : VAL.neg(a)) : a; }
       case 'bin': return applyBin(n.op, evalAST(n.l, scope), evalAST(n.r, scope));
-      case 'call': return FUN[n.name.toLowerCase()].apply(null, n.args.map((a) => evalAST(a, scope)));
+      case 'call': {
+        const k = n.name.toLowerCase();
+        if (isBinder(n)) return evalBinder(n, scope);
+        // if(condition, then, else) and piecewise(c1, v1, c2, v2, …, otherwise) only evaluate the branch taken
+        if (k === 'if') { if (n.args.length !== 3) return NaN; const c = evalAST(n.args[0], scope); if (Array.isArray(c)) return VAL.bin('+', VAL.bin('*', c, evalAST(n.args[1], scope)), VAL.bin('*', VAL.bin('-', 1, c), evalAST(n.args[2], scope))); return truthy(c) ? evalAST(n.args[1], scope) : evalAST(n.args[2], scope); }
+        if (k === 'piecewise') { for (let i = 0; i + 1 < n.args.length; i += 2) { if (truthy(evalAST(n.args[i], scope))) return evalAST(n.args[i + 1], scope); } return n.args.length % 2 ? evalAST(n.args[n.args.length - 1], scope) : NaN; }
+        return FUN[k].apply(null, n.args.map((a) => evalAST(a, scope)));
+      }
     }
     throw new Error('bad node');
   }
@@ -154,7 +1039,16 @@
     if (n.type === 'var') { if (!seen[n.name]) { seen[n.name] = 1; out.push(n.name); } }
     else if (n.type === 'unary') collectVars(n.arg, out, seen);
     else if (n.type === 'bin') { collectVars(n.l, out, seen); collectVars(n.r, out, seen); }
-    else if (n.type === 'call') n.args.forEach((a) => collectVars(a, out, seen));
+    else if (n.type === 'call') {
+      if (isBinder(n)) {
+        // the bound variable is not an input: collect the other arguments, then the body with it hidden
+        const body = binderBody(n); const k = n.args[0].name;
+        n.args.slice(1).forEach((a) => { if (a !== body) collectVars(a, out, seen); });
+        const was = seen[k]; seen[k] = 1;
+        collectVars(body, out, seen);
+        if (!was) delete seen[k];
+      } else n.args.forEach((a) => collectVars(a, out, seen));
+    }
     return out;
   }
   function extractVars(expr) { try { return collectVars(parseAST(expr), [], {}); } catch (e) { return []; } }
@@ -200,7 +1094,7 @@
   function side(n, p, eq) { const np = nodePrec(n); const need = eq ? np <= p : np < p; return need ? '(' + pr(n) + ')' : pr(n); }
   function pr(n) {
     switch (n.type) {
-      case 'num': return fmtV(n.v);
+      case 'num': return fmtV(n.v) + (n.imag ? 'i' : '');
       case 'var': return n.name;
       case 'const': return n.name;
       case 'unary': return n.op + side(n.arg, 4, false);
@@ -234,7 +1128,7 @@
   }
   function ml(n) {
     switch (n.type) {
-      case 'num': return '<mn>' + mlEscape(fmtV(n.v)) + '</mn>';
+      case 'num': return '<mn>' + mlEscape(fmtV(n.v)) + '</mn>' + (n.imag ? '<mi>i</mi>' : '');
       case 'var': return mlIdent(n.name);
       case 'const': { const k = n.name.toLowerCase(); return '<mi>' + mlEscape(ML_GREEK[k] || n.name) + '</mi>'; }
       case 'unary': return '<mo>' + (n.op === '-' ? '−' : '+') + '</mo>' + mlSide(n.arg, 4, false);
@@ -244,7 +1138,7 @@
         const p = PREC[n.op];
         const l = mlSide(n.l, p, false);
         const r = mlSide(n.r, p, (n.op === '-' || n.op === '%'));
-        const op = n.op === '%' ? '<mo lspace="0.28em" rspace="0.28em">mod</mo>' : '<mo>' + (n.op === '+' ? '+' : n.op === '-' ? '−' : '×') + '</mo>';
+        const op = n.op === '%' ? '<mo lspace="0.28em" rspace="0.28em">mod</mo>' : '<mo>' + (OP_GLYPH[n.op] || '×') + '</mo>';
         return l + op + r;
       }
       case 'call': {
@@ -253,12 +1147,29 @@
         if (k === 'cbrt' && n.args.length === 1) return '<mroot><mrow>' + ml(n.args[0]) + '</mrow><mn>3</mn></mroot>';
         if (k === 'root' && n.args.length === 2) return '<mroot><mrow>' + ml(n.args[0]) + '</mrow><mrow>' + ml(n.args[1]) + '</mrow></mroot>';
         if (k === 'abs' && n.args.length === 1) return '<mrow><mo>|</mo>' + ml(n.args[0]) + '<mo>|</mo></mrow>';
+        if (k === 'fact' && n.args.length === 1) return '<mrow>' + mlSide(n.args[0], 5, true) + '<mo>!</mo></mrow>';
+        if (k === 'binom' && n.args.length === 2) return '<mrow><mo>(</mo><mfrac linethickness="0"><mrow>' + ml(n.args[0]) + '</mrow><mrow>' + ml(n.args[1]) + '</mrow></mfrac><mo>)</mo></mrow>';
+        if (k === 'floor' && n.args.length === 1) return '<mrow><mo>⌊</mo>' + ml(n.args[0]) + '<mo>⌋</mo></mrow>';
+        if (k === 'ceil' && n.args.length === 1) return '<mrow><mo>⌈</mo>' + ml(n.args[0]) + '<mo>⌉</mo></mrow>';
+        if (isBinder(n) && k === 'integral') {
+          return '<mrow><msubsup><mo>∫</mo><mrow>' + ml(n.args[1]) + '</mrow><mrow>' + ml(n.args[2]) + '</mrow></msubsup>' + ml(n.args[3]) + '<mspace width="0.2em"/><mi mathvariant="normal">d</mi>' + mlIdent(n.args[0].name) + '</mrow>';
+        }
+        if (isBinder(n) && k === 'deriv') {
+          const ord = n.args.length === 4 ? ml(n.args[3]) : null;
+          const d = ord ? '<msup><mi mathvariant="normal">d</mi>' + ord + '</msup>' : '<mi mathvariant="normal">d</mi>';
+          const dx = ord ? '<msup>' + mlIdent(n.args[0].name) + ord + '</msup>' : mlIdent(n.args[0].name);
+          return '<mrow><mfrac><mrow>' + d + '</mrow><mrow><mi mathvariant="normal">d</mi>' + dx + '</mrow></mfrac>' + mlParen(ml(n.args[2])) + '<msub><mo>|</mo><mrow>' + mlIdent(n.args[0].name) + '<mo>=</mo>' + ml(n.args[1]) + '</mrow></msub></mrow>';
+        }
+        if (isBinder(n) && (k === 'sum' || k === 'prod')) {
+          return '<mrow><munderover><mo>' + (k === 'sum' ? '∑' : '∏') + '</mo><mrow>' + mlIdent(n.args[0].name) + '<mo>=</mo>' + ml(n.args[1]) + '</mrow><mrow>' + ml(n.args[2]) + '</mrow></munderover>' + mlParen(ml(n.args[3])) + '</mrow>';
+        }
         const args = n.args.map(function (a) { return ml(a); }).join('<mo>,</mo>');
         return '<mi mathvariant="normal">' + mlEscape(n.name) + '</mi><mo>(</mo>' + args + '<mo>)</mo>';
       }
     }
     return '';
   }
+  const OP_GLYPH = { '+': '+', '-': '−', '*': '×', '<': '<', '<=': '≤', '>': '>', '>=': '≥', '==': '=', '!=': '≠' };
   function mathmlOf(ast) { return '<math xmlns="http://www.w3.org/1998/Math/MathML">' + ml(ast) + '</math>'; }
 
   /* ---------- AST -> Canvas 2D typesetting (mirrors ml()/mlSide() above) ----------
@@ -314,7 +1225,7 @@
     }
     function build(nd, sz) {
       switch (nd.type) {
-        case 'num': return textBox(fmtV(nd.v), REG, sz);
+        case 'num': return textBox(fmtV(nd.v) + (nd.imag ? 'i' : ''), REG, sz);
         case 'var': return textBox(nd.name, nd.name.length === 1 ? ITAL : REG, sz);
         case 'const': { const k = nd.name.toLowerCase(); return textBox(ML_GREEK[k] || nd.name, REG, sz); }
         case 'unary': return hbox([textBox(nd.op === '-' ? '−' : '+', REG, sz), side(nd.arg, 4, false, sz)]);
@@ -342,7 +1253,7 @@
           const p = PREC[nd.op];
           const l = side(nd.l, p, false, sz);
           const r = side(nd.r, p, (nd.op === '-' || nd.op === '%'), sz);
-          const opStr = nd.op === '%' ? ' mod ' : (' ' + (nd.op === '+' ? '+' : nd.op === '-' ? '−' : '×') + ' ');
+          const opStr = nd.op === '%' ? ' mod ' : (' ' + (OP_GLYPH[nd.op] || '×') + ' ');
           return hbox([l, textBox(opStr, REG, sz), r]);
         }
         case 'call': {
@@ -369,8 +1280,23 @@
       case 'var': return { type: 'num', v: Number(scope[n.name]) };
       case 'unary': return { type: 'unary', op: n.op, arg: subst(n.arg, scope) };
       case 'bin': return { type: 'bin', op: n.op, l: subst(n.l, scope), r: subst(n.r, scope) };
-      case 'call': return { type: 'call', name: n.name, args: n.args.map((a) => subst(a, scope)) };
+      case 'call':
+        if (isBinder(n)) {
+          const inner = Object.assign({}, scope); delete inner[n.args[0].name]; const body = binderBody(n);
+          return { type: 'call', name: n.name, args: n.args.map((a, i) => (i === 0 ? a : a === body ? substKeep(a, inner, n.args[0].name) : subst(a, scope))) };
+        }
+        return { type: 'call', name: n.name, args: n.args.map((a) => subst(a, scope)) };
     }
+    return n;
+  }
+  // subst() for the body of a Σ/Π: the counter stays a variable.
+  function substKeep(n, scope, keep) {
+    if (n.type === 'var' && n.name === keep) return n;
+    if (n.type === 'var') return { type: 'num', v: Number(scope[n.name]) };
+    if (n.type === 'unary') return { type: 'unary', op: n.op, arg: substKeep(n.arg, scope, keep) };
+    if (n.type === 'bin') return { type: 'bin', op: n.op, l: substKeep(n.l, scope, keep), r: substKeep(n.r, scope, keep) };
+    if (n.type === 'call') return { type: 'call', name: n.name, args: n.args.map((a) => substKeep(a, scope, keep)) };
+    if (n.type === 'const') return { type: 'num', v: CONST[n.name.toLowerCase()] };
     return n;
   }
 
@@ -386,6 +1312,12 @@
       if (n.r.type !== 'num') { const [r, ch] = reduceStep(n.r); if (ch) return [{ type: 'bin', op: n.op, l: n.l, r }, true]; }
       if (n.l.type === 'num' && n.r.type === 'num') return [{ type: 'num', v: applyBin(n.op, n.l.v, n.r.v) }, true];
       return [n, false];
+    }
+    if (n.type === 'call' && (isBinder(n) || ['if', 'piecewise'].includes(n.name.toLowerCase()))) {
+      // a whole Σ/Π/∫/if is one step: reduce its other arguments, then evaluate it at once
+      const body = isBinder(n) ? binderBody(n) : null;
+      for (let k = isBinder(n) ? 1 : 0; k < n.args.length; k++) { if (n.args[k] === body || n.args[k].type === 'num') continue; if (!isBinder(n)) break; const [a, ch] = reduceStep(n.args[k]); if (ch) { const args = n.args.slice(); args[k] = a; return [{ type: 'call', name: n.name, args }, true]; } }
+      return [{ type: 'num', v: evalAST(n, {}) }, true];
     }
     if (n.type === 'call') {
       for (let k = 0; k < n.args.length; k++) {
@@ -405,13 +1337,16 @@
     { key: 'Calculation', tab: '🧮', e: '🧮 📐 📏 🔢 ➕ ➖ ✖️ ➗ 🟰 📊 📈 📉 💹 💲 💱 🔟'.split(' ') },
   ];
 
+  /* FUNCHELP-BEGIN — generated from regibase-build/fb-data/funchelp.py */
+  const FUNC_HELP = [{"g": "Basic", "s": "sqrt(x)", "t": "sqrt()", "d": "Square root"}, {"g": "Basic", "s": "cbrt(x)", "t": "cbrt()", "d": "Cube root"}, {"g": "Basic", "s": "root(x, n)", "t": "root()", "d": "n-th root"}, {"g": "Basic", "s": "abs(x)", "t": "abs()", "d": "Absolute value (magnitude of a complex number)"}, {"g": "Basic", "s": "exp(x)", "t": "exp()", "d": "e to the power x"}, {"g": "Basic", "s": "ln(x)", "t": "ln()", "d": "Natural logarithm"}, {"g": "Basic", "s": "log(x)", "t": "log()", "d": "Common logarithm (base 10)"}, {"g": "Basic", "s": "log2(x)", "t": "log2()", "d": "Binary logarithm (base 2)"}, {"g": "Basic", "s": "logb(x, b)", "t": "logb()", "d": "Logarithm of x to base b"}, {"g": "Basic", "s": "pow(a, b)", "t": "pow()", "d": "a to the power b (same as a^b)"}, {"g": "Basic", "s": "mod(a, b)", "t": "mod()", "d": "Remainder of a divided by b"}, {"g": "Basic", "s": "hypot(a, b, …)", "t": "hypot()", "d": "Square root of the sum of squares"}, {"g": "Basic", "s": "round(x)", "t": "round()", "d": "Round to the nearest integer"}, {"g": "Basic", "s": "roundto(x, d)", "t": "roundto()", "d": "Round to d decimal places"}, {"g": "Basic", "s": "floor(x)", "t": "floor()", "d": "Round down"}, {"g": "Basic", "s": "ceil(x)", "t": "ceil()", "d": "Round up"}, {"g": "Basic", "s": "trunc(x)", "t": "trunc()", "d": "Drop the fractional part"}, {"g": "Basic", "s": "frac(x)", "t": "frac()", "d": "Fractional part"}, {"g": "Basic", "s": "sign(x)", "t": "sign()", "d": "Sign: −1, 0 or 1"}, {"g": "Basic", "s": "min(a, b, …)", "t": "min()", "d": "Smallest value (numbers or lists)"}, {"g": "Basic", "s": "max(a, b, …)", "t": "max()", "d": "Largest value (numbers or lists)"}, {"g": "Basic", "s": "clamp(x, lo, hi)", "t": "clamp()", "d": "Limit x to the range lo…hi"}, {"g": "Trigonometry", "s": "sin(x)  cos(x)  tan(x)", "t": "sin()", "d": "Sine, cosine, tangent (x in radians)"}, {"g": "Trigonometry", "s": "sec(x)  csc(x)  cot(x)", "t": "sec()", "d": "Secant, cosecant, cotangent"}, {"g": "Trigonometry", "s": "asin(x)  acos(x)  atan(x)", "t": "asin()", "d": "Inverse sine, cosine, tangent (result in radians)"}, {"g": "Trigonometry", "s": "atan2(y, x)", "t": "atan2()", "d": "Angle of the point (x, y), from −π to π"}, {"g": "Trigonometry", "s": "sinh(x)  cosh(x)  tanh(x)", "t": "sinh()", "d": "Hyperbolic sine, cosine, tangent"}, {"g": "Trigonometry", "s": "asinh(x)  acosh(x)  atanh(x)", "t": "asinh()", "d": "Inverse hyperbolic functions"}, {"g": "Trigonometry", "s": "deg(r)", "t": "deg()", "d": "Radians to degrees"}, {"g": "Trigonometry", "s": "rad(d)", "t": "rad()", "d": "Degrees to radians"}, {"g": "Conditions", "s": "if(c, a, b)", "t": "if()", "d": "a when the condition c holds, otherwise b"}, {"g": "Conditions", "s": "piecewise(c1, v1, c2, v2, …, other)", "t": "piecewise()", "d": "The value of the first condition that holds (a piecewise function)"}, {"g": "Conditions", "s": "a < b   a <= b   a > b   a >= b   a == b   a != b", "t": " < ", "d": "Comparisons: 1 when true, 0 when false"}, {"g": "Conditions", "s": "and(a, b)  or(a, b)  xor(a, b)  not(a)", "t": "and()", "d": "Logical operations on conditions"}, {"g": "Calculus", "s": "sum(k, a, b, expr)", "t": "sum(k, 1, n, )", "d": "Σ: the sum of expr for k = a, a+1, …, b"}, {"g": "Calculus", "s": "prod(k, a, b, expr)", "t": "prod(k, 1, n, )", "d": "Π: the product of expr for k = a…b"}, {"g": "Calculus", "s": "integral(x, a, b, expr)", "t": "integral(x, 0, 1, )", "d": "∫: the definite integral of expr from a to b (limits may be ±infinity)"}, {"g": "Calculus", "s": "deriv(x, at, expr, n)", "t": "deriv(x, 0, )", "d": "The n-th derivative of expr at x = at (n = 1 to 4, default 1)"}, {"g": "Calculus", "s": "solve(x, guess, expr)", "t": "solve(x, 1, )", "d": "The x near guess that makes expr equal to 0"}, {"g": "Calculus", "s": "solve(x, lo, hi, expr)", "t": "solve(x, 0, 1, )", "d": "The x between lo and hi that makes expr equal to 0"}, {"g": "Lists", "s": "1, 2, 3", "t": "", "d": "Type a list into a list variable, separated by commas"}, {"g": "Lists", "s": "list(a, b, …)", "t": "list()", "d": "Make a list"}, {"g": "Lists", "s": "seq(a, b, step)", "t": "seq()", "d": "The list a, a+step, …, b"}, {"g": "Lists", "s": "count(v)", "t": "count()", "d": "Number of items"}, {"g": "Lists", "s": "at(v, i)", "t": "at()", "d": "The i-th item (from 1)"}, {"g": "Lists", "s": "sort(v)", "t": "sort()", "d": "Sorted list"}, {"g": "Lists", "s": "cumsum(v)", "t": "cumsum()", "d": "Running totals"}, {"g": "Lists", "s": "diff(v)", "t": "diff()", "d": "Differences between neighbours"}, {"g": "Statistics", "s": "sum(v)  prod(v)", "t": "sum()", "d": "Total and product of a list"}, {"g": "Statistics", "s": "mean(v)", "t": "mean()", "d": "Arithmetic mean"}, {"g": "Statistics", "s": "median(v)", "t": "median()", "d": "Median"}, {"g": "Statistics", "s": "mode(v)", "t": "mode()", "d": "Most frequent value"}, {"g": "Statistics", "s": "var(v)  stdev(v)", "t": "stdev()", "d": "Sample variance and standard deviation (n − 1)"}, {"g": "Statistics", "s": "varp(v)  stdevp(v)", "t": "stdevp()", "d": "Population variance and standard deviation (n)"}, {"g": "Statistics", "s": "gmean(v)  hmean(v)", "t": "gmean()", "d": "Geometric and harmonic mean"}, {"g": "Statistics", "s": "wmean(x, w)", "t": "wmean()", "d": "Weighted mean of x with weights w"}, {"g": "Statistics", "s": "percentile(v, p)", "t": "percentile()", "d": "Percentile, p from 0 to 1 (interpolated)"}, {"g": "Statistics", "s": "skew(v)  kurt(v)", "t": "skew()", "d": "Sample skewness and excess kurtosis"}, {"g": "Statistics", "s": "cov(x, y)  corr(x, y)", "t": "corr()", "d": "Sample covariance and correlation"}, {"g": "Statistics", "s": "slope(x, y)  intercept(x, y)  rsq(x, y)", "t": "slope()", "d": "Least-squares line and its R²"}, {"g": "Cash flows", "s": "npv(r, cf)", "t": "npv()", "d": "Net present value; cf[1] is at time 0"}, {"g": "Cash flows", "s": "irr(cf)", "t": "irr()", "d": "Internal rate of return"}, {"g": "Cash flows", "s": "mirr(cf, fr, rr)", "t": "mirr()", "d": "Modified IRR (finance rate fr, reinvestment rate rr)"}, {"g": "Vectors and matrices", "s": "1, 2; 3, 4", "t": "", "d": "Type a matrix into a matrix variable: rows separated by semicolons"}, {"g": "Vectors and matrices", "s": "dot(u, v)  cross(u, v)", "t": "dot()", "d": "Dot and cross product"}, {"g": "Vectors and matrices", "s": "norm(v)", "t": "norm()", "d": "Length of a vector (Euclidean norm)"}, {"g": "Vectors and matrices", "s": "det(M)  trace(M)", "t": "det()", "d": "Determinant and trace"}, {"g": "Vectors and matrices", "s": "inv(M)  trans(M)", "t": "inv()", "d": "Inverse and transpose"}, {"g": "Vectors and matrices", "s": "mmul(A, B)", "t": "mmul()", "d": "Matrix product"}, {"g": "Vectors and matrices", "s": "linsolve(A, b)", "t": "linsolve()", "d": "Solve the linear system A·x = b"}, {"g": "Vectors and matrices", "s": "eye(n)", "t": "eye()", "d": "n × n identity matrix"}, {"g": "Complex numbers", "s": "3 + 4i", "t": "", "d": "A complex number: a number followed by i"}, {"g": "Complex numbers", "s": "re(z)  im(z)", "t": "re()", "d": "Real and imaginary part"}, {"g": "Complex numbers", "s": "abs(z)  arg(z)", "t": "arg()", "d": "Modulus and argument (angle)"}, {"g": "Complex numbers", "s": "conj(z)", "t": "conj()", "d": "Complex conjugate"}, {"g": "Complex numbers", "s": "polar(r, θ)", "t": "polar()", "d": "The complex number with modulus r and angle θ"}, {"g": "Complex numbers", "s": "csqrt(x)  cln(x)  cpow(a, b)", "t": "csqrt()", "d": "Square root, logarithm and power with complex results (csqrt(−4) = 2i)"}, {"g": "Number theory", "s": "gcd(a, b, …)  lcm(a, b, …)", "t": "gcd()", "d": "Greatest common divisor and least common multiple"}, {"g": "Number theory", "s": "fact(n)", "t": "fact()", "d": "Factorial n!"}, {"g": "Number theory", "s": "binom(n, k)  perm(n, k)", "t": "binom()", "d": "Combinations and permutations"}, {"g": "Number theory", "s": "isprime(n)", "t": "isprime()", "d": "1 if n is prime, otherwise 0"}, {"g": "Number theory", "s": "nextprime(n)  prevprime(n)", "t": "nextprime()", "d": "Next and previous prime"}, {"g": "Number theory", "s": "primepi(x)", "t": "primepi()", "d": "Number of primes up to x (exact up to 10¹¹)"}, {"g": "Number theory", "s": "nthprime(n)", "t": "nthprime()", "d": "The n-th prime"}, {"g": "Number theory", "s": "phi(n)", "t": "phi()", "d": "Euler's totient"}, {"g": "Number theory", "s": "sigma(n, k)", "t": "sigma()", "d": "Sum of the k-th powers of the divisors (k = 1 by default)"}, {"g": "Number theory", "s": "tau(n)", "t": "tau()", "d": "Number of divisors"}, {"g": "Number theory", "s": "mu(n)", "t": "mu()", "d": "Möbius function"}, {"g": "Number theory", "s": "omega(n)  bigomega(n)", "t": "omega()", "d": "Number of distinct prime factors, and with multiplicity"}, {"g": "Number theory", "s": "rad(n)  lpf(n)  gpf(n)", "t": "gpf()", "d": "Product of the distinct primes; smallest and largest prime factor"}, {"g": "Number theory", "s": "carmichael(n)", "t": "carmichael()", "d": "Carmichael function λ(n)"}, {"g": "Number theory", "s": "powmod(a, b, m)", "t": "powmod()", "d": "a^b mod m, exact"}, {"g": "Number theory", "s": "modinv(a, m)", "t": "modinv()", "d": "Inverse of a modulo m"}, {"g": "Number theory", "s": "crt(a1, m1, a2, m2)", "t": "crt()", "d": "Chinese remainder theorem: x ≡ a1 (mod m1), x ≡ a2 (mod m2)"}, {"g": "Number theory", "s": "factmod(n, m)", "t": "factmod()", "d": "n! mod m, exact"}, {"g": "Number theory", "s": "fib(n)  lucas(n)", "t": "fib()", "d": "Fibonacci and Lucas numbers"}, {"g": "Number theory", "s": "catalan(n)  bell(n)  partitions(n)", "t": "catalan()", "d": "Catalan numbers, Bell numbers, partition numbers p(n)"}, {"g": "Number theory", "s": "stirling1(n, k)  stirling2(n, k)", "t": "stirling2()", "d": "Stirling numbers of the first (unsigned) and second kind"}, {"g": "Number theory", "s": "derange(n)", "t": "derange()", "d": "Derangements (subfactorial !n)"}, {"g": "Number theory", "s": "digitsum(n, b)  digitalroot(n)", "t": "digitsum()", "d": "Sum of digits (in base b) and digital root"}, {"g": "Number theory", "s": "numdigits(n, b)  reversenum(n)", "t": "numdigits()", "d": "Number of digits; digits reversed"}, {"g": "Number theory", "s": "collatz(n)", "t": "collatz()", "d": "Steps for the Collatz sequence to reach 1"}, {"g": "Number theory", "s": "legendre(a, p)  jacobi(a, n)", "t": "legendre()", "d": "Legendre and Jacobi symbols"}, {"g": "Number theory", "s": "ord(a, n)  primroot(n)", "t": "ord()", "d": "Multiplicative order; smallest primitive root"}, {"g": "Number theory", "s": "isqrt(n)  issquare(n)  isperfect(n)", "t": "isqrt()", "d": "Integer square root; perfect-square and perfect-number tests"}, {"g": "Special functions", "s": "gamma(x)  lgamma(x)", "t": "gamma()", "d": "Gamma function and its logarithm"}, {"g": "Special functions", "s": "beta(a, b)  digamma(x)", "t": "beta()", "d": "Beta function; digamma ψ(x)"}, {"g": "Special functions", "s": "erf(x)  erfc(x)  erfinv(y)", "t": "erf()", "d": "Error function, complementary, inverse"}, {"g": "Special functions", "s": "gammainc(a, x)  gammaincc(a, x)", "t": "gammainc()", "d": "Regularised incomplete gamma P and Q"}, {"g": "Special functions", "s": "betainc(x, a, b)", "t": "betainc()", "d": "Regularised incomplete beta"}, {"g": "Special functions", "s": "zeta(s)", "t": "zeta()", "d": "Riemann zeta function"}, {"g": "Special functions", "s": "li(x)  ei(x)  expint(x)", "t": "li()", "d": "Logarithmic integral, exponential integrals Ei and E₁"}, {"g": "Special functions", "s": "si(x)  ci(x)", "t": "si()", "d": "Sine and cosine integrals"}, {"g": "Special functions", "s": "lambertw(x)", "t": "lambertw()", "d": "Lambert W (principal branch)"}, {"g": "Special functions", "s": "besselj(n, x)  bessely(n, x)", "t": "besselj()", "d": "Bessel functions J and Y of integer order"}, {"g": "Special functions", "s": "besseli(n, x)  besselk(n, x)", "t": "besseli()", "d": "Modified Bessel functions I and K"}, {"g": "Special functions", "s": "ellipk(k)  ellipe(k)", "t": "ellipk()", "d": "Complete elliptic integrals K and E (modulus k)"}, {"g": "Special functions", "s": "ellipf(φ, k)  ellipeinc(φ, k)", "t": "ellipf()", "d": "Incomplete elliptic integrals F and E"}, {"g": "Special functions", "s": "polylog(s, z)", "t": "polylog()", "d": "Polylogarithm Li_s(z), −1 ≤ z ≤ 1"}, {"g": "Distributions", "s": "normpdf(x, μ, σ)  normcdf(x, μ, σ)  norminv(p, μ, σ)", "t": "normcdf()", "d": "Normal distribution (μ = 0, σ = 1 by default)"}, {"g": "Distributions", "s": "tpdf(x, ν)  tcdf(x, ν)  tinv(p, ν)", "t": "tcdf()", "d": "Student's t distribution"}, {"g": "Distributions", "s": "chi2pdf(x, k)  chi2cdf(x, k)  chi2inv(p, k)", "t": "chi2cdf()", "d": "Chi-squared distribution"}, {"g": "Distributions", "s": "fpdf(x, d1, d2)  fcdf  finv", "t": "fcdf()", "d": "F distribution"}, {"g": "Distributions", "s": "binompdf(k, n, p)  binomcdf(k, n, p)", "t": "binompdf()", "d": "Binomial distribution"}, {"g": "Distributions", "s": "poisspdf(k, λ)  poisscdf(k, λ)", "t": "poisspdf()", "d": "Poisson distribution"}, {"g": "Distributions", "s": "exppdf(x, λ)  expcdf  expinv", "t": "expcdf()", "d": "Exponential distribution (rate λ)"}, {"g": "Distributions", "s": "gammapdf(x, k, θ)  gammacdf  gammainv", "t": "gammacdf()", "d": "Gamma distribution (shape k, scale θ)"}, {"g": "Distributions", "s": "betapdf(x, a, b)  betacdf  betainv", "t": "betacdf()", "d": "Beta distribution"}, {"g": "Distributions", "s": "lognpdf(x, μ, σ)  logncdf  logninv", "t": "logncdf()", "d": "Log-normal distribution"}, {"g": "Distributions", "s": "weibpdf(x, k, λ)  weibcdf  weibinv", "t": "weibcdf()", "d": "Weibull distribution"}, {"g": "Distributions", "s": "geompdf(k, p)  geomcdf(k, p)", "t": "geompdf()", "d": "Geometric distribution (trials until the first success)"}, {"g": "Distributions", "s": "hygepdf(k, N, K, n)", "t": "hygepdf()", "d": "Hypergeometric distribution"}, {"g": "Distributions", "s": "nbinpdf(k, r, p)", "t": "nbinpdf()", "d": "Negative binomial distribution (failures before the r-th success)"}, {"g": "Constants", "s": "pi  e  tau  infinity", "t": "pi", "d": "π, e, 2π and infinity"}, {"g": "Constants", "s": "c_light", "t": "c_light", "d": "Speed of light in vacuum, m/s"}, {"g": "Constants", "s": "h_planck  h_bar", "t": "h_planck", "d": "Planck constant and reduced Planck constant, J·s"}, {"g": "Constants", "s": "g_newton", "t": "g_newton", "d": "Gravitational constant, m³/(kg·s²)"}, {"g": "Constants", "s": "k_boltz", "t": "k_boltz", "d": "Boltzmann constant, J/K"}, {"g": "Constants", "s": "n_avo", "t": "n_avo", "d": "Avogadro constant, 1/mol"}, {"g": "Constants", "s": "r_gas", "t": "r_gas", "d": "Molar gas constant, J/(mol·K)"}, {"g": "Constants", "s": "q_e", "t": "q_e", "d": "Elementary charge, C"}, {"g": "Constants", "s": "m_e  m_p  m_n  u_amu", "t": "m_e", "d": "Masses of the electron, proton, neutron; atomic mass unit, kg"}, {"g": "Constants", "s": "eps_0  mu_0  k_coulomb", "t": "eps_0", "d": "Vacuum permittivity, permeability; Coulomb constant"}, {"g": "Constants", "s": "sigma_sb", "t": "sigma_sb", "d": "Stefan–Boltzmann constant, W/(m²·K⁴)"}, {"g": "Constants", "s": "alpha_fs  a_bohr  r_inf", "t": "alpha_fs", "d": "Fine-structure constant, Bohr radius (m), Rydberg constant (1/m)"}, {"g": "Constants", "s": "f_faraday", "t": "f_faraday", "d": "Faraday constant, C/mol"}, {"g": "Constants", "s": "g_std  atm_pa", "t": "g_std", "d": "Standard gravity (m/s²) and standard atmosphere (Pa)"}, {"g": "Constants", "s": "au_m  ly_m  pc_m", "t": "au_m", "d": "Astronomical unit, light-year, parsec, in metres"}, {"g": "Constants", "s": "m_sun  m_earth  r_earth", "t": "m_sun", "d": "Masses of the Sun and the Earth (kg); mean radius of the Earth (m)"}, {"g": "Constants", "s": "ev_j  cal_j", "t": "ev_j", "d": "One electronvolt and one calorie in joules"}, {"g": "Constants", "s": "euler_gamma  golden_ratio  catalan_c  apery_c", "t": "golden_ratio", "d": "Euler–Mascheroni γ, golden ratio φ, Catalan G, Apéry ζ(3)"}];
+  /* FUNCHELP-END */
   /* Input-assist palette for the formula editor. Each button inserts its `t` at the caret;
    * a trailing "()" places the caret between the parentheses so the user just types the argument.
    * Labels are the real-math glyphs; the inserted text is engine syntax (× → *, ÷ → /). */
   const PAD = [
     { g: 'ops', items: [{ l: '+', t: '+' }, { l: '−', t: '-' }, { l: '×', t: '*' }, { l: '÷', t: '/' }, { l: 'xⁿ', t: '^' }, { l: '( )', t: '()' }, { l: '%', t: '%' }] },
     { g: 'const', items: [{ l: 'π', t: 'pi' }, { l: 'e', t: 'e' }, { l: '√', t: 'sqrt()' }] },
-    { g: 'fn', items: [{ l: 'sin', t: 'sin()' }, { l: 'cos', t: 'cos()' }, { l: 'tan', t: 'tan()' }, { l: 'ln', t: 'ln()' }, { l: 'log', t: 'log()' }, { l: 'abs', t: 'abs()' }, { l: 'min', t: 'min()' }, { l: 'max', t: 'max()' }, { l: 'round', t: 'round()' }] },
+    { g: 'fn', items: [{ l: 'sin', t: 'sin()' }, { l: 'cos', t: 'cos()' }, { l: 'tan', t: 'tan()' }, { l: 'ln', t: 'ln()' }, { l: 'log', t: 'log()' }, { l: 'abs', t: 'abs()' }, { l: 'min', t: 'min()' }, { l: 'max', t: 'max()' }, { l: 'round', t: 'round()' }, { l: 'n!', t: 'fact()' }, { l: 'nCk', t: 'binom()' }, { l: 'gcd', t: 'gcd()' }, { l: 'Σ', t: 'sum()' }] },
   ];
 
   // ---- tiny, dependency-free, XSS-safe Markdown renderer (for formula descriptions) ----
@@ -459,12 +1394,13 @@
   // Functions/operators whose output is flat, periodic-step, or many-to-one — numeric
   // root-finding on them has no reliable unique inverse, so such formulas are excluded
   // from "reverse calculation" (solve for a variable from the result).
-  const NON_REVERSIBLE_RE = /\b(round|floor|ceil|trunc|sign|mod|min|max|abs)\b/;
+  const NON_REVERSIBLE_RE = /\b(round|floor|ceil|trunc|sign|mod|min|max|abs|if|piecewise|isprime|nextprime|prevprime|primepi|nthprime|gcd|lcm|fact|binom|perm|phi|sigma|tau|mu|omega|bigomega|rad|lpf|gpf|carmichael|powmod|modinv|crt|factmod|fib|lucas|catalan|bell|partitions|stirling1|stirling2|derange|digitsum|digitalroot|numdigits|reversenum|collatz|legendre|jacobi|ord|primroot|isqrt|issquare|isperfect|mode|median|percentile|quantile|count|len|sort|at|and|or|xor|not)\s*\(|[<>]|==|!=/;
   function isReversible(tp) {
     if (!tp || !tp.variables || !tp.variables.length) return false;
     const e = tp.expression || '';
     if (NON_REVERSIBLE_RE.test(e)) return false;
     if (e.indexOf('%') >= 0) return false;
+    if (tp.variables.some((v) => vkind(v) !== 'number')) return false;
     return true;
   }
   const CAT_ICONS = {
@@ -569,7 +1505,8 @@
                     <button v-if="isReversible(f)" type="button" class="fb-solve-btn" :class="{ active: isSolving(f, v.key) }" @click.stop="toggleSolve(f, v.key)" :title="t('Solve this variable from the result')">🎯</button>
                   </span>
                   <span class="fb-vinput">
-                    <input type="number" step="any" inputmode="decimal" :value="inputs[f.id][v.key]" @input="setVar(f, v.key, $event.target.value)" :disabled="isSolving(f, v.key)" :placeholder="ph(v)">
+                    <input v-if="vkind(v) === 'number'" type="number" step="any" inputmode="decimal" :value="inputs[f.id][v.key]" @input="setVar(f, v.key, $event.target.value)" :disabled="isSolving(f, v.key)" :placeholder="ph(v)">
+                    <input v-else type="text" class="fb-vtext" :value="inputs[f.id][v.key]" @input="setVar(f, v.key, $event.target.value)" :placeholder="ph(v)" :title="kindHint(v)">
                     <span class="fb-vunit" v-if="v.unit">{{ v.unit }}</span>
                   </span>
                 </label>
@@ -754,6 +1691,18 @@
             </div>
           </div>
           <div class="fb-expr-preview" v-if="fForm.expression.trim() && !fForm.exprError" v-html="mathml(fForm.expression)"></div>
+          <div class="fb-funcs">
+            <button type="button" class="btn xs" @click="showFuncs = !showFuncs">📖 {{ showFuncs ? t('Hide the function list') : t('Functions you can use') }}</button>
+            <div class="fb-funcs-panel" v-if="showFuncs">
+              <input class="control" v-model="funcQuery" :placeholder="t('Search functions')">
+              <div class="fb-funcs-group" v-for="grp in funcGroups" :key="grp.g">
+                <div class="fb-funcs-title">{{ t(grp.g) }}</div>
+                <button type="button" class="fb-funcs-item" v-for="it in grp.items" :key="it.s" @click="it.t && insertToken({ t: it.t })" :title="it.t ? t('Insert into the expression') : ''">
+                  <code>{{ it.s }}</code><span>{{ t(it.d) }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="field" v-if="fForm.exprError"><span class="err-msg">⚠ {{ te(fForm.exprError) }}</span></div>
         <div class="field">
@@ -762,10 +1711,16 @@
             <input class="control mono" v-model="v.key" :placeholder="t('key')" style="width:110px">
             <input class="control" v-model="v.label" :placeholder="t('label')">
             <input class="control" v-model="v.unit" :placeholder="t('unit')" style="width:80px">
-            <input class="control" type="number" step="any" v-model="v.default" :placeholder="t('default')" style="width:90px">
+            <select class="control" v-model="v.type" style="width:96px" :title="t('What this variable holds')">
+              <option value="">{{ t('Number') }}</option>
+              <option value="list">{{ t('List') }}</option>
+              <option value="matrix">{{ t('Matrix') }}</option>
+              <option value="complex">{{ t('Complex') }}</option>
+            </select>
+            <input class="control" :type="v.type ? 'text' : 'number'" step="any" v-model="v.default" :placeholder="t('default')" style="width:110px">
             <button class="btn xs danger" @click="fForm.variables.splice(idx,1)">✕</button>
           </div>
-          <button class="btn xs" @click="fForm.variables.push({key:'',label:'',unit:'',default:''})">＋ {{ t('Add variable') }}</button>
+          <button class="btn xs" @click="fForm.variables.push({key:'',label:'',unit:'',default:'',type:''})">＋ {{ t('Add variable') }}</button>
         </div>
         <div class="field frow">
           <span><label>{{ t('Result unit') }}</label><input class="control" v-model="fForm.result_unit" style="width:120px"></span>
@@ -1080,6 +2035,8 @@
         vers: { open: false, id: null, title: '', list: [] },
         settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT, versionKeep: 10, versionWhen: 'manual' },
         pad: PAD,
+        showFuncs: false,
+        funcQuery: '',
         // internal sharing (owner-side panel inside collection settings)
         sharePanel: { shares: [], q: '', results: [], searching: false, recipient: null, recipientName: '', perm: 'view', err: '', busy: false },
         permOpen: false,
@@ -1090,6 +2047,16 @@
       };
     },
     computed: {
+      funcGroups() {
+        const q = (this.funcQuery || '').trim().toLowerCase();
+        const groups = [];
+        for (const it of FUNC_HELP) {
+          if (q && (it.s + ' ' + it.d + ' ' + this.t(it.d)).toLowerCase().indexOf(q) < 0) continue;
+          let g = groups.find((x) => x.g === it.g); if (!g) { g = { g: it.g, items: [] }; groups.push(g); }
+          g.items.push(it);
+        }
+        return groups;
+      },
       current() { return this.collections.find((c) => c.id === this.currentId) || null; },
       // The curated calculation set stays the first tab, followed by the nine Unicode
       // groups in the official emoji-ordering sequence.
@@ -1193,6 +2160,8 @@
         if (!f) return null;
         const scope = this.scopeFor(f); if (!scope) return null;
         let ast; try { ast = parseAST(f.expression); } catch (e) { return null; }
+        // the step-by-step trace is for plain numbers; lists, matrices and complex values show the result only
+        if (Object.values(scope).some((v) => typeof v !== 'number') || hasImag(ast)) return null;
         const nodes = [ast];
         let cur = subst(ast, scope);
         nodes.push(cur);
@@ -1268,7 +2237,10 @@
         const ins = this.inputs[f.id] || {};
         const values = {};
         (f.variables || []).forEach((v) => {
-          if (ins[v.key] !== undefined && ins[v.key] !== '' && isFinite(Number(ins[v.key]))) values[v.key] = Number(ins[v.key]);
+          if (ins[v.key] === undefined || ins[v.key] === '') return;
+          // lists, matrices and complex numbers go as the typed text; the server reads them the same way
+          if (vkind(v) !== 'number') values[v.key] = String(ins[v.key]);
+          else if (isFinite(Number(ins[v.key]))) values[v.key] = Number(ins[v.key]);
         });
         return values;
       },
@@ -1615,23 +2587,26 @@
       scopeFor(f) {
         const scope = {}; const src = this.inputs[f.id] || {};
         for (const v of f.variables) {
-          let raw = src[v.key];
-          if (raw === '' || raw == null) {
-            if (v.default !== '' && v.default != null && !isNaN(Number(v.default))) { scope[v.key] = Number(v.default); continue; }
-            return null;
-          }
-          const num = Number(raw); if (isNaN(num)) return null;
-          scope[v.key] = num;
+          const val = inputValue(v, src[v.key]);
+          if (val == null) return null;
+          scope[v.key] = val;
         }
         return scope;
+      },
+      vkind(v) { return vkind(v); },
+      kindHint(v) {
+        const k = vkind(v);
+        return k === 'list' ? T('A list of numbers separated by commas, e.g. 1, 2, 3')
+          : k === 'matrix' ? T('Rows separated by semicolons, e.g. 1, 2; 3, 4')
+            : T('A complex number, e.g. 3+4i');
       },
       result(f) {
         const scope = this.scopeFor(f);
         if (!scope) return { ok: false, err: false, text: '—' };
         try {
           const val = evalAST(parseAST(f.expression), scope);
-          if (val == null || isNaN(val) || !isFinite(val)) return { ok: false, err: true, text: (val === Infinity || val === -Infinity) ? '∞' : '—' };
-          return { ok: true, err: false, text: fmtNum(val, f.decimals), value: val };
+          if (!valueOk(val)) return { ok: false, err: true, text: (val === Infinity || val === -Infinity) ? '∞' : '—' };
+          return { ok: true, err: false, text: fmtAny(val, f.decimals, fmtNum), value: val };
         } catch (e) { return { ok: false, err: true, text: '⚠ ' + (e.message || 'error') }; }
       },
       /* reverse calculation: pick a variable, enter the target result, solve for it numerically */
@@ -1663,13 +2638,9 @@
         const scope = {};
         for (const v of f.variables) {
           if (v.key === key) continue;
-          const rv = inputs[v.key];
-          if (rv === '' || rv == null) {
-            if (v.default !== '' && v.default != null && !isNaN(Number(v.default))) { scope[v.key] = Number(v.default); continue; }
-            inputs[key] = ''; return;
-          }
-          const num = Number(rv); if (isNaN(num)) { inputs[key] = ''; return; }
-          scope[v.key] = num;
+          const val = inputValue(v, inputs[v.key]);
+          if (val == null) { inputs[key] = ''; return; }
+          scope[v.key] = val;
         }
         let x = null;
         try { x = solveVar(f.expression, scope, key, target); } catch (e) { x = null; }
@@ -1893,7 +2864,7 @@
         this.fForm = f
           ? {
             id: f.id, name: this.t(f.name), expression: f.expression, description: f.description ? this.t(f.description) : '',
-            variables: JSON.parse(JSON.stringify(f.variables || [])).map((v) => Object.assign(v, { label: v.label ? this.t(v.label) : v.label })),
+            variables: JSON.parse(JSON.stringify(f.variables || [])).map((v) => Object.assign(v, { label: v.label ? this.t(v.label) : v.label, type: v.type || (vkind(v) === 'number' ? '' : vkind(v)) })),
             result_unit: f.result_unit, decimals: f.decimals, notes: f.notes ? this.t(f.notes) : '', exprError: '',
           }
           : { id: null, name: '', expression: '', description: '', variables: [], result_unit: '', decimals: 2, notes: '', exprError: '' };
@@ -1904,20 +2875,20 @@
         const expr = (this.fForm.expression || '').trim();
         if (!expr) { this.fForm.exprError = ''; return; }
         const scope = {};
-        for (const v of this.fForm.variables) if (v.key) scope[v.key] = 1;
+        for (const v of this.fForm.variables) if (v.key) { const val = v.type ? inputValue(v, v.default) : 1; scope[v.key] = val == null ? (v.type === 'list' ? [1, 2] : v.type === 'matrix' ? [[1, 0], [0, 1]] : 1) : val; }
         for (const k of extractVars(expr)) if (!(k in scope)) scope[k] = 1;
         try { evalAST(parseAST(expr), scope); this.fForm.exprError = ''; } catch (e) { this.fForm.exprError = e.message || 'invalid'; }
       },
       detectVars() {
         const have = {}; for (const v of this.fForm.variables) if (v.key) have[v.key] = 1;
-        for (const k of extractVars(this.fForm.expression)) if (!have[k]) { this.fForm.variables.push({ key: k, label: '', unit: '', default: '' }); have[k] = 1; }
+        for (const k of extractVars(this.fForm.expression)) if (!have[k]) { this.fForm.variables.push({ key: k, label: '', unit: '', default: '', type: '' }); have[k] = 1; }
         this.onExpr();
       },
       async saveFormula() {
         const name = (this.fForm.name || '').trim();
         if (!name) { this.fForm.exprError = T('Name is required'); return; }
         this.onExpr(); if (this.fForm.exprError) return;
-        const vars = this.fForm.variables.filter((v) => (v.key || '').trim()).map((v) => ({ key: v.key.trim(), label: v.label || '', unit: v.unit || '', default: v.default === '' ? '' : v.default }));
+        const vars = this.fForm.variables.filter((v) => (v.key || '').trim()).map((v) => Object.assign({ key: v.key.trim(), label: v.label || '', unit: v.unit || '', default: v.default === '' ? '' : v.default }, v.type ? { type: v.type } : {}));
         const body = JSON.stringify({ name, expression: this.fForm.expression || '', description: this.fForm.description || '', variables: vars, result_unit: this.fForm.result_unit || '', decimals: this.fForm.decimals == null ? 2 : this.fForm.decimals, notes: this.fForm.notes || '' });
         try {
           if (this.fForm.id) await api('formulas/' + this.fForm.id, { method: 'PUT', body });

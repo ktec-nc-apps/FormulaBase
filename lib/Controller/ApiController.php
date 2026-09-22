@@ -546,7 +546,7 @@ class ApiController extends Controller {
 
 	/** One ODS cell holding a number. */
 	private function odsNumberCell(float $value): string {
-		$v = rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+		$v = $this->odsNumFmt($value);
 		return '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($v) . '">'
 			. '<text:p>' . $this->mlEsc($v) . '</text:p></table:table-cell>';
 	}
@@ -684,7 +684,7 @@ class ApiController extends Controller {
 	 * Resolve a formula's variables/cell-map/scope/compiled-formula/cached-value, shared by
 	 * both the fresh-document and append-into-existing-document ODS builders.
 	 * @param array<string,mixed> $values variable key => current numeric value (from the app)
-	 * @return array{vars:array,cellMap:array<string,string>,scope:array<string,float>,formulaOdf:string,cachedValue:float}
+	 * @return array{vars:array,cellMap:array<string,string>,scope:array<string,mixed>,formulaOdf:string,cachedValue:mixed}
 	 * @throws \RuntimeException on a malformed expression
 	 */
 	/**
@@ -706,6 +706,22 @@ class ApiController extends Controller {
 		return $hasImage ? $this->odsImageSpacerRows($imgW, $imgH) + 3 : 4;
 	}
 
+	/**
+	 * One variable's value for an export: the value sent from the app, else its default. Number
+	 * variables stay plain numbers (0 when unreadable, as before); list, matrix and complex ones are
+	 * read from their text the same way the app reads them.
+	 */
+	private function inputValue(array $v, mixed $raw): mixed {
+		if (FormulaCompiler::variableKind($v) === 'number') {
+			if (is_numeric($raw)) {
+				return (float)$raw;
+			}
+			return is_numeric($v['default'] ?? null) ? (float)$v['default'] : 0.0;
+		}
+		$text = is_string($raw) && trim($raw) !== '' ? $raw : (string)($v['default'] ?? '');
+		return $this->compiler->parseValue($text);
+	}
+
 	private function odsCalcData(FormulaEntity $f, array $values, int $firstRow): array {
 		$vars = json_decode((string)$f->getVariables(), true);
 		$vars = is_array($vars) ? array_values(array_filter($vars, 'is_array')) : [];
@@ -718,19 +734,20 @@ class ApiController extends Controller {
 				continue;
 			}
 			$cellMap[$key] = 'B' . ($firstRow + $i);
-			$defaults[$key] = is_numeric($v['default'] ?? null) ? (float)$v['default'] : 0.0;
+			$defaults[$key] = $v;
 		}
 
 		$ast = $this->compiler->parse($f->getExpression());
-		$formulaOdf = $this->compiler->toOdf($ast, $cellMap);
 		$scope = [];
 		foreach ($cellMap as $key => $addr) {
-			$scope[$key] = is_numeric($values[$key] ?? null) ? (float)$values[$key] : $defaults[$key];
+			$scope[$key] = $this->inputValue($defaults[$key], $values[$key] ?? null);
 		}
+		// the scope lets calls with no spreadsheet function (isprime, Σ, …) be written as their value
+		$formulaOdf = $this->compiler->toOdf($ast, $cellMap, $scope);
 		$cachedValue = 0.0;
 		try {
 			$cachedValue = $this->compiler->evaluate($ast, $scope);
-			if (!is_finite($cachedValue)) {
+			if (is_float($cachedValue) && !is_finite($cachedValue)) {
 				$cachedValue = 0.0;
 			}
 		} catch (\Throwable $e) {
@@ -823,20 +840,28 @@ class ApiController extends Controller {
 			$val = $scope[$key] ?? 0.0;
 			$rows .= '<table:table-row>'
 				. $this->odsTextCell([$label])
-				. $this->odsNumberCell($val)
+				. (is_float($val) ? $this->odsNumberCell($val) : $this->odsTextCell([$this->compiler->formatValue($val)]))
 				. $this->odsTextCell([$unit])
 				. '</table:table-row>';
 		}
 
-		// Result row: a real, recalculating spreadsheet formula.
-		$vStr = $this->odsNumFmt($cachedValue);
-		$rows .= '<table:table-row>'
-			. $this->odsTextCell([$this->l->t('Result')])
-			. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($vStr) . '"'
-			. ' table:formula="=' . $this->mlEsc($formulaOdf) . '">'
-			. '<text:p>' . $this->mlEsc($vStr) . '</text:p></table:table-cell>'
-			. $this->odsTextCell([(string)$f->getResultUnit()])
-			. '</table:table-row>';
+		// Result row: a real, recalculating spreadsheet formula (a list or complex result is shown as text).
+		if (!is_float($cachedValue)) {
+			$rows .= '<table:table-row>'
+				. $this->odsTextCell([$this->l->t('Result')])
+				. $this->odsTextCell([$this->compiler->formatValue($cachedValue)])
+				. $this->odsTextCell([(string)$f->getResultUnit()])
+				. '</table:table-row>';
+		} else {
+			$vStr = $this->odsNumFmt($cachedValue);
+			$rows .= '<table:table-row>'
+				. $this->odsTextCell([$this->l->t('Result')])
+				. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($vStr) . '"'
+				. ' table:formula="=' . $this->mlEsc($formulaOdf) . '">'
+				. '<text:p>' . $this->mlEsc($vStr) . '</text:p></table:table-cell>'
+				. $this->odsTextCell([(string)$f->getResultUnit()])
+				. '</table:table-row>';
+		}
 
 		// Optional: the substitution/reduction trace, as reference text (the Result cell above
 		// is already the live, recalculating version of the same computation).
@@ -946,6 +971,10 @@ class ApiController extends Controller {
 
 	/** Format a float the same way odsNumberCell does, without wrapping it in a cell. */
 	private function odsNumFmt(float $value): string {
+		// very small or very large numbers (Planck's constant, Avogadro's number) keep their digits
+		if ($value != 0 && is_finite($value) && (abs($value) < 1e-6 || abs($value) >= 1e15)) {
+			return FormulaCompiler::exactNumber($value);
+		}
 		return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
 	}
 
@@ -964,17 +993,17 @@ class ApiController extends Controller {
 		foreach ($vars as $v) {
 			$key = trim((string)($v['key'] ?? ''));
 			if ($key !== '') {
-				$defaults[$key] = is_numeric($v['default'] ?? null) ? (float)$v['default'] : 0.0;
+				$defaults[$key] = $v;
 			}
 		}
 		$scope = [];
 		foreach ($defaults as $key => $def) {
-			$scope[$key] = is_numeric($values[$key] ?? null) ? (float)$values[$key] : $def;
+			$scope[$key] = $this->inputValue($def, $values[$key] ?? null);
 		}
 		$cachedValue = null;
 		try {
 			$cachedValue = $this->compiler->evaluate($this->compiler->parse($f->getExpression()), $scope);
-			if (!is_finite($cachedValue)) {
+			if (is_float($cachedValue) && !is_finite($cachedValue)) {
 				$cachedValue = null;
 			}
 		} catch (\Throwable $e) {
@@ -1006,10 +1035,13 @@ class ApiController extends Controller {
 				}
 				$label = trim((string)($v['label'] ?? '')) ?: $key;
 				$unit = (string)($v['unit'] ?? '');
-				$val = $this->odsNumFmt((float)($scope[$key] ?? 0.0));
+				$sv = $scope[$key] ?? 0.0;
+				$val = is_float($sv) ? $this->odsNumFmt($sv) : $this->compiler->formatValue($sv);
 				$out .= '<table:table-row>'
 					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($label) . '</text:p></table:table-cell>'
-					. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($val) . '"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>'
+					. (is_float($sv)
+						? '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($val) . '"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>'
+						: '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>')
 					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($unit) . '</text:p></table:table-cell>'
 					. '</table:table-row>';
 			}
@@ -1018,7 +1050,7 @@ class ApiController extends Controller {
 
 		if ($cachedValue !== null) {
 			$out .= '<text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Result')) . ':</text:span> '
-				. $this->mlEsc($this->odsNumFmt($cachedValue)) . ($f->getResultUnit() ? ' ' . $this->mlEsc((string)$f->getResultUnit()) : '') . '</text:p>';
+				. $this->mlEsc(is_float($cachedValue) ? $this->odsNumFmt($cachedValue) : $this->compiler->formatValue($cachedValue)) . ($f->getResultUnit() ? ' ' . $this->mlEsc((string)$f->getResultUnit()) : '') . '</text:p>';
 		}
 
 		if ($steps) {
