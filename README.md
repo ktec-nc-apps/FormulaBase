@@ -47,7 +47,7 @@ Requires Nextcloud 30–35.
 
 ### Help us test the template library
 
-No problems have been reported against the template library up to 0.6.2, so 0.7.0 builds on it: a much stronger formula engine and 2,400 more formulas, 5,522 in 13 fields in all. Each of the new formulas was checked against an independent calculation. If you spot a wrong formula, a bad default, a mistranslation, or a missing unit, please [open an issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even a one-line report helps.
+Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is useful. No problems have been reported against the template library up to 0.6.2, so 0.7.0 adds much more to it — 2,400 more formulas (5,522 in 13 fields in all) and many new functions — while the way you use the app stays the same. Each of the new formulas was checked against an independent calculation. If you spot a wrong formula, a bad default, a mistranslation, or a missing unit, please [open an issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even a one-line report helps.
 
 ---
 
@@ -85,7 +85,7 @@ Nextcloud 30〜35 対応。
 
 ### テンプレートの動作確認にご協力ください
 
-0.6.2 までのテンプレートについて問題の報告は寄せられていないため、0.7.0 では数式エンジンを大きく強化し、公式を2,400件追加して、13分野・5,522件になりました。追加した公式は、すべて別の方法で計算した値と照合しています。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた方は、[Issueを作成](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)して教えていただけると助かります（一行程度の簡単な報告で構いません）。
+多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。0.6.2 までのテンプレートについて問題の報告は寄せられていないため、0.7.0 ではこれまでの使い方は変えずに、公式を2,400件（合計13分野・5,522件）と多くの関数を追加しました。追加した公式は、すべて別の方法で計算した値と照合しています。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた方は、[Issueを作成](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)して教えていただけると助かります（一行程度の簡単な報告で構いません）。
 
 ---
 

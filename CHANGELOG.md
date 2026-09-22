@@ -4,9 +4,12 @@ All notable changes to FormulaBase.
 
 ## 0.7.0 — unreleased（未公開）
 
-No problems were reported against the template library up to 0.6.2, so this release adds
-new functions and formulas.
-（0.6.2 までテンプレートについて問題の報告が無かったため、この版では新しい関数と公式を追加した。）
+Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is
+useful. No problems were reported against the template library up to 0.6.2, so this release adds
+much more content — new formulas and new functions — while the way you use the app stays the same.
+（多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。
+0.6.2 までテンプレートについて問題の報告が無かったため、この版ではこれまでの使い方は変えずに、
+公式と関数を大きく追加した。）
 
 ### New: 2,400 more templates (5,522 in all)
 
