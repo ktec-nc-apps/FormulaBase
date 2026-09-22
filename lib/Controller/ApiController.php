@@ -99,7 +99,21 @@ class ApiController extends Controller {
 			// taken: every edit, or only the ones the writer asks for.
 			'version_keep' => $this->versions->keep($uid),
 			'version_when' => $this->versions->when($uid),
+			// Templates this user chose not to see (Settings → Template settings).
+			'tpl_hidden' => $this->tplHidden($uid),
 		];
+	}
+
+	/** @return array{groups: list<string>, subs: list<string>, names: list<string>} */
+	private function tplHidden(string $uid): array {
+		$v = json_decode($this->config->getUserValue($uid, Application::APP_ID, 'tpl_hidden', ''), true);
+		$out = ['groups' => [], 'subs' => [], 'names' => []];
+		foreach ($out as $k => $_) {
+			if (is_array($v) && isset($v[$k]) && is_array($v[$k])) {
+				$out[$k] = array_values(array_filter($v[$k], 'is_string'));
+			}
+		}
+		return $out;
 	}
 
 	#[NoAdminRequired]
@@ -130,6 +144,26 @@ class ApiController extends Controller {
 		if (array_key_exists('steps_width_pct', $params) && is_numeric($params['steps_width_pct'])) {
 			$pct = (int)max(20, min(50, (float)$params['steps_width_pct']));
 			$this->config->setUserValue($uid, Application::APP_ID, 'steps_width_pct', (string)$pct);
+		}
+		if (array_key_exists('tpl_hidden', $params)) {
+			$v = $params['tpl_hidden'];
+			if (is_string($v)) {
+				$v = json_decode($v, true);
+			}
+			$clean = ['groups' => [], 'subs' => [], 'names' => []];
+			foreach ($clean as $k => $_) {
+				foreach ((is_array($v) && isset($v[$k]) && is_array($v[$k])) ? $v[$k] : [] as $x) {
+					if (is_string($x) && $x !== '' && mb_strlen($x) <= 300) {
+						$clean[$k][] = $x;
+					}
+				}
+				$clean[$k] = array_values(array_unique($clean[$k]));
+			}
+			$json = json_encode($clean, JSON_UNESCAPED_UNICODE);
+			if (strlen($json) > 60000) {
+				return new JSONResponse(['error' => 'too many hidden templates'], Http::STATUS_BAD_REQUEST);
+			}
+			$this->config->setUserValue($uid, Application::APP_ID, 'tpl_hidden', $json);
 		}
 		if (array_key_exists('version_keep', $params)) {
 			$this->versions->setKeep($uid, (int)$params['version_keep']);

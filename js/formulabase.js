@@ -1415,6 +1415,9 @@
     if (tp.variables.some((v) => vkind(v) !== 'number')) return false;
     return true;
   }
+  /* TAXONOMY-BEGIN — generated from regibase-build/fb-data/taxonomy/sync_taxonomy.py */
+  const TAXONOMY = [{"g": "Mathematics", "i": "➗", "subs": [{"s": "Arithmetic and algebra", "i": "🔢"}, {"s": "Geometry and trigonometry", "i": "📐"}, {"s": "Calculus and series", "i": "∫"}, {"s": "Primes and divisors", "i": "🔑"}, {"s": "Modular arithmetic and cryptography", "i": "🔐"}, {"s": "Counting and combinatorics", "i": "🎲"}, {"s": "Integer sequences and figurate numbers", "i": "🔁"}, {"s": "Integer equations and elliptic curves", "i": "🧩"}, {"s": "Analytic number theory and special functions", "i": "ζ"}, {"s": "Number puzzles, binary and check digits", "i": "🧮"}]}, {"g": "Statistics and probability", "i": "📊", "subs": [{"s": "Descriptive statistics", "i": "📋"}, {"s": "Probability and distributions", "i": "🎯"}, {"s": "Estimation and hypothesis tests", "i": "🔬"}]}, {"g": "AI and computing", "i": "🤖", "subs": [{"s": "Machine learning", "i": "🤖"}, {"s": "Deep learning and large language models", "i": "🧠"}, {"s": "Information theory and coding", "i": "📡"}, {"s": "Computers, storage and networks", "i": "💻"}, {"s": "Graphics, images and displays", "i": "🖼️"}]}, {"g": "Physics", "i": "⚛️", "subs": [{"s": "Mechanics and motion", "i": "🏀"}, {"s": "Waves, sound and light", "i": "🔊"}, {"s": "Heat and thermodynamics", "i": "🌡️"}, {"s": "Electricity and magnetism", "i": "⚡"}, {"s": "Fluids", "i": "🌊"}, {"s": "Quantum, nuclear and relativity", "i": "🌀"}]}, {"g": "Space and Earth", "i": "🌍", "subs": [{"s": "Astronomy and cosmology", "i": "🔭"}, {"s": "Orbits and spaceflight", "i": "🛰️"}, {"s": "Earth, earthquakes and geology", "i": "🌋"}, {"s": "Weather and climate", "i": "⛅"}, {"s": "Oceans, rivers and groundwater", "i": "🏞️"}, {"s": "Environment and ecology", "i": "🌿"}]}, {"g": "Chemistry and materials", "i": "🧪", "subs": [{"s": "General chemistry", "i": "🧪"}, {"s": "Physical chemistry and electrochemistry", "i": "🔋"}, {"s": "Materials", "i": "🧱"}]}, {"g": "Engineering", "i": "🔧", "subs": [{"s": "Civil and structural engineering", "i": "🏗️"}, {"s": "Mechanical engineering", "i": "⚙️"}, {"s": "Electronics and circuits", "i": "🔌"}, {"s": "Energy and power", "i": "☀️"}, {"s": "Robotics and control", "i": "🦾"}, {"s": "Cars, aircraft, ships and navigation", "i": "✈️"}]}, {"g": "Personal money", "i": "👛", "subs": [{"s": "Interest, saving and compound growth", "i": "💰"}, {"s": "Loans, mortgages and credit cards", "i": "🏦"}, {"s": "Retirement and pensions", "i": "🌅"}, {"s": "Shopping, prices and tax", "i": "🛒"}, {"s": "Property and rent", "i": "🏘️"}]}, {"g": "Investing and markets", "i": "📈", "subs": [{"s": "Stocks and valuation", "i": "📈"}, {"s": "Bonds and interest rates", "i": "📜"}, {"s": "Options, futures and currencies", "i": "⚖️"}, {"s": "Portfolio, returns and risk", "i": "🛡️"}, {"s": "Trading, betting odds and crypto", "i": "🎰"}, {"s": "Funds and venture capital", "i": "🚀"}]}, {"g": "Business and accounting", "i": "🏢", "subs": [{"s": "Financial statement ratios", "i": "📑"}, {"s": "Capital budgeting and cost of capital", "i": "🏗️"}, {"s": "Cost accounting, depreciation and break-even", "i": "🧾"}, {"s": "Operations, inventory and quality", "i": "🏭"}, {"s": "Sales, marketing and SaaS metrics", "i": "📣"}, {"s": "Banking and credit risk", "i": "🏛️"}, {"s": "Insurance and actuarial", "i": "☂️"}]}, {"g": "Economics", "i": "🏛️", "subs": [{"s": "Markets, prices and behaviour", "i": "🏪"}, {"s": "Macroeconomics and policy", "i": "🌐"}, {"s": "Inequality, poverty and population", "i": "⚖️"}]}, {"g": "Health and life sciences", "i": "🩺", "subs": [{"s": "Body measures and fitness", "i": "🏃"}, {"s": "Clinical calculations", "i": "🩺"}, {"s": "Drugs and dosing", "i": "💊"}, {"s": "Epidemiology and public health", "i": "🦠"}, {"s": "Biology and genetics", "i": "🧬"}]}, {"g": "Everyday life", "i": "🏠", "subs": [{"s": "Unit conversion", "i": "🔄"}, {"s": "Home, building and DIY", "i": "🔨"}, {"s": "Cooking and food", "i": "🍳"}, {"s": "Calendar and time", "i": "📅"}, {"s": "Travel and driving", "i": "🚗"}, {"s": "Photography, music and hobbies", "i": "📷"}, {"s": "Farming and gardening", "i": "🌱"}, {"s": "Psychology and learning", "i": "🧠"}]}];
+  /* TAXONOMY-END */
   const CAT_ICONS = {
     'Geometry': '📐', 'Math': '➗', 'Physics': '⚛️', 'Electricity': '⚡', 'Money': '💰',
     'Health': '🩺', 'Conversion': '🔄', 'Everyday': '🏠', 'Statistics': '📊',
@@ -1784,9 +1787,11 @@
           <span class="tpl-search-count">{{ templateMatchCount }}</span>
         </div>
         <p v-if="!tplIndexLoaded" class="empty-hint sm">{{ t('Loading templates…') }}</p>
-        <p v-else-if="!templatesByCat.length" class="empty-hint sm">{{ t('No templates match your search.') }}</p>
+        <p v-else-if="!templateTree.length" class="empty-hint sm">{{ t('No templates match your search.') }}</p>
         <div class="tpl-groups">
-          <div class="tpl-group" v-for="g in templatesByCat" :key="g.cat" :class="{ open: isGroupOpen(g.cat) }">
+          <template v-for="G in templateTree" :key="G.g">
+          <h4 class="tpl-top-h"><span class="tpl-top-ic">{{ G.i }}</span>{{ t(G.g) }}<span class="tpl-group-n">{{ G.n }}</span></h4>
+          <div class="tpl-group" v-for="g in G.subs" :key="g.cat" :class="{ open: isGroupOpen(g.cat) }">
             <button type="button" class="tpl-group-h" @click="toggleGroup(g.cat)" :aria-expanded="isGroupOpen(g.cat) ? 'true' : 'false'">
               <span class="tpl-group-caret">▶</span>
               <span class="tpl-group-ic">{{ catIcon(g.cat) }}</span>
@@ -1806,11 +1811,53 @@
               </div>
             </div>
           </div>
+          </template>
         </div>
         </div>
         <div class="modal-foot">
           <span class="spacer"></span>
           <button class="btn" @click="modal=null">{{ t('Close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-mask" v-if="modal==='tplsettings'">
+      <div class="modal wide fb-tplset">
+        <div class="modal-head"><h3>📐 {{ t('Template settings') }}</h3><button class="icon-btn" @click="closeTplSettings" :title="t('Cancel')">✕</button></div>
+        <div class="modal-body">
+          <p class="empty-hint sm">{{ t('Untick the templates you do not want to see. Hidden templates do not appear in the template list or its search.') }}</p>
+          <div class="fb-tplset-bar">
+            <span>{{ t('Shown: {n} of {total}', { n: tplSetShown, total: tplIndex.length }) }}</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn sm fb-tplset-all" @click="tplSetShowAll">{{ t('Show all') }}</button>
+          </div>
+          <p v-if="!tplIndexLoaded" class="empty-hint sm">{{ t('Loading templates…') }}</p>
+          <div class="fb-tplset-tree" v-else>
+            <div class="fb-tplset-g" v-for="G in tplSetTree" :key="G.g">
+              <div class="fb-tplset-row lvl0">
+                <button type="button" class="fb-tplset-fold" @click="tplSetFold('g', G.g)">{{ tplSet.openG[G.g] ? '▼' : '▶' }}</button>
+                <label><input type="checkbox" :checked="G.state === 'all'" :indeterminate.prop="G.state === 'some'" @change="tplSetToggle(G.names, $event.target.checked)"> {{ G.i }} {{ t(G.g) }}</label>
+                <span class="fb-tplset-n">{{ G.shown }} / {{ G.names.length }}</span>
+              </div>
+              <template v-if="tplSet.openG[G.g]">
+                <div class="fb-tplset-s" v-for="S in G.subs" :key="S.cat">
+                  <div class="fb-tplset-row lvl1">
+                    <button type="button" class="fb-tplset-fold" @click="tplSetFold('s', S.cat)">{{ tplSet.openS[S.cat] ? '▼' : '▶' }}</button>
+                    <label><input type="checkbox" :checked="S.state === 'all'" :indeterminate.prop="S.state === 'some'" @change="tplSetToggle(S.names, $event.target.checked)"> {{ catIcon(S.cat) }} {{ t(S.cat) }}</label>
+                    <span class="fb-tplset-n">{{ S.shown }} / {{ S.names.length }}</span>
+                  </div>
+                  <div v-if="tplSet.openS[S.cat]" class="fb-tplset-items">
+                    <label class="fb-tplset-row lvl2" v-for="nm in S.names" :key="nm"><input type="checkbox" :checked="!tplSet.hid[nm]" @change="tplSetToggle([nm], $event.target.checked)"> {{ t(nm) }}</label>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <span class="spacer"></span>
+          <button class="btn" @click="closeTplSettings">{{ t('Cancel') }}</button>
+          <button class="btn primary fb-tplset-save" @click="saveTplSettings">{{ t('Save') }}</button>
         </div>
       </div>
     </div>
@@ -1866,6 +1913,11 @@
               <span class="fp-cur" style="flex:1">/{{ exportFolder }}</span>
               <button type="button" class="btn sm" @click="openDefaultFolderPicker">{{ t('Change') }}</button>
             </div>
+          </div>
+          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <label>📐 {{ t('Template settings') }}</label>
+            <div class="field-hint" style="margin-bottom:8px">{{ t('Choose which formula templates appear in the template list and its search.') }}</div>
+            <button type="button" class="btn sm fb-tplset-open" @click="openTplSettings">📐 {{ t('Template settings') }}</button>
           </div>
           <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
             <label>💾 {{ t('Backup / Restore') }}</label>
@@ -2016,6 +2068,9 @@
         tplLoading: {},
         tplSearch: '',
         tplOpen: {},
+        // templates the user chose not to see: whole groups, whole subcategories, single names
+        tplHidden: { groups: {}, subs: {}, names: {} },
+        tplSet: { hid: {}, openG: {}, openS: {}, from: null },
         iconGroups: ICONS,
         iconPickerOpen: false,
         // Full Unicode 14.0 emoji set (1,849 emoji in the 9 Unicode groups) plus the CLDR
@@ -2107,25 +2162,45 @@
         const o = this.permOptions.find((x) => x.v === this.sharePanel.perm);
         return o ? o.label : this.t('View');
       },
-      templatesByCat() {
+      // The visible templates in field order (TAXONOMY), filtered by the search box. Hidden
+      // templates are dropped first, so no search, count or list can show them.
+      templateTree() {
         const q = (this.tplSearch || '').trim().toLowerCase();
         const match = (tp) => {
           if (!q) return true;
-          const hay = [tp.name, T(tp.name), tp.cat, T(tp.cat), tp.expression]
-            .concat((tp.variables || []).map((v) => v.label + ' ' + v.key));
+          const hay = [tp.name, T(tp.name), tp.cat, T(tp.cat), tp.group, T(tp.group), tp.expression]
+            .concat((tp.variables || []).map((v) => v.label + ' ' + T(v.label || '') + ' ' + v.key));
           return hay.some((s) => (s || '').toString().toLowerCase().includes(q));
         };
-        const groups = []; const idx = {};
+        const bySub = {};
         for (const tp of this.tplIndex) {
-          if (!match(tp)) continue;
-          if (!(tp.cat in idx)) { idx[tp.cat] = groups.length; groups.push({ cat: tp.cat, items: [] }); }
-          groups[idx[tp.cat]].items.push(tp);
+          if (this.isTplHidden(tp) || !match(tp)) continue;
+          (bySub[tp.cat] = bySub[tp.cat] || []).push(tp);
         }
-        return groups;
+        const out = [];
+        for (const G of TAXONOMY) {
+          const subs = G.subs.filter((S) => bySub[S.s]).map((S) => ({ cat: S.s, items: bySub[S.s] }));
+          if (subs.length) out.push({ g: G.g, i: G.i, subs, n: subs.reduce((k, x) => k + x.items.length, 0) });
+        }
+        return out;
       },
+      templatesByCat() { return this.templateTree.reduce((a, G) => a.concat(G.subs), []); },
       templateMatchCount() {
-        return this.templatesByCat.reduce((n, g) => n + g.items.length, 0) + ' / ' + this.tplIndex.length;
+        const shown = this.tplIndex.filter((tp) => !this.isTplHidden(tp)).length;
+        return this.templatesByCat.reduce((n, g) => n + g.items.length, 0) + ' / ' + shown;
       },
+      // Tree for the template-settings dialog (all templates, hidden or not).
+      tplSetTree() {
+        const bySub = {};
+        for (const tp of this.tplIndex) (bySub[tp.cat] = bySub[tp.cat] || []).push(tp.name);
+        const st = (names) => { const shown = names.filter((n) => !this.tplSet.hid[n]).length; return { shown, state: shown === names.length ? 'all' : shown ? 'some' : 'none' }; };
+        return TAXONOMY.map((G) => {
+          const subs = G.subs.filter((S) => bySub[S.s]).map((S) => Object.assign({ cat: S.s, names: bySub[S.s] }, st(bySub[S.s])));
+          const names = subs.reduce((a, S) => a.concat(S.names), []);
+          return Object.assign({ g: G.g, i: G.i, subs, names }, st(names));
+        }).filter((G) => G.names.length);
+      },
+      tplSetShown() { return this.tplIndex.filter((tp) => !this.tplSet.hid[tp.name]).length; },
       activeFormula() { return this.formulas.find((f) => f.id === this.activeId) || this.formulas[0] || null; },
       stepData() { return this.computeSteps(this.activeFormula); },
       stepError() {
@@ -2554,6 +2629,7 @@
           this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
           this.versionKeep = s.version_keep == null ? 10 : s.version_keep;
           this.versionWhen = s.version_when || 'manual';
+          this.setTplHidden(s.tpl_hidden);
           this.applyTheme();
           await this.applyLanguage(this.language);
         } catch (e) { this.applyTheme(); }
@@ -2944,9 +3020,58 @@
          body (description/notes/variables) loads only the first time it's expanded. */
       async openTemplates() {
         this.tplSearch = ''; this.tplOpen = {}; this.modal = 'templates';
+        await this.loadTplIndex();
+      },
+      async loadTplIndex() {
         if (this.tplIndexLoaded) return;
         try { this.tplIndex = await api('templates/index'); this.tplIndexLoaded = true; }
         catch (e) { this.notify(T('Could not load templates.'), 'error'); }
+      },
+      isTplHidden(tp) {
+        const h = this.tplHidden;
+        return !!(h.names[tp.name] || h.subs[tp.cat] || h.groups[tp.group]);
+      },
+      setTplHidden(v) {
+        const o = (a) => { const m = {}; (Array.isArray(a) ? a : []).forEach((x) => { m[String(x)] = true; }); return m; };
+        v = v || {};
+        this.tplHidden = { groups: o(v.groups), subs: o(v.subs), names: o(v.names) };
+      },
+      /* Template settings: works on a draft of hidden names; Save stores it compactly
+         (a whole group or subcategory as one entry). The dialog closes only by ✕, Cancel or Save. */
+      async openTplSettings() {
+        this.tplSet = { hid: {}, openG: {}, openS: {}, from: this.modal };
+        this.modal = 'tplsettings';
+        await this.loadTplIndex();
+        const hid = {};
+        for (const tp of this.tplIndex) if (this.isTplHidden(tp)) hid[tp.name] = true;
+        this.tplSet.hid = hid;
+      },
+      closeTplSettings() { this.modal = this.tplSet.from === 'settings' ? 'settings' : null; },
+      tplSetFold(kind, key) {
+        const k = kind === 'g' ? 'openG' : 'openS';
+        this.tplSet[k] = Object.assign({}, this.tplSet[k], { [key]: !this.tplSet[k][key] });
+      },
+      tplSetToggle(names, show) {
+        const hid = Object.assign({}, this.tplSet.hid);
+        names.forEach((n) => { if (show) delete hid[n]; else hid[n] = true; });
+        this.tplSet.hid = hid;
+      },
+      tplSetShowAll() { this.tplSet.hid = {}; },
+      async saveTplSettings() {
+        const out = { groups: [], subs: [], names: [] };
+        for (const G of this.tplSetTree) {
+          if (G.state === 'none') { out.groups.push(G.g); continue; }
+          for (const S of G.subs) {
+            if (S.state === 'none') out.subs.push(S.cat);
+            else if (S.state === 'some') S.names.forEach((n) => { if (this.tplSet.hid[n]) out.names.push(n); });
+          }
+        }
+        try {
+          const s = await api('settings', { method: 'PUT', body: JSON.stringify({ tpl_hidden: out }) });
+          this.setTplHidden(s.tpl_hidden);
+          this.notify(T('Settings saved'), 'success');
+          this.closeTplSettings();
+        } catch (e) { this.notify(T('Could not save.'), 'error'); }
       },
       async ensureCatLoaded(cat) {
         if (this.tplCache[cat] || this.tplLoading[cat]) return;
@@ -2966,12 +3091,14 @@
       // actually rendered to the names that matched in templatesByCat (the search index pass).
       catItems(g) {
         const cached = this.tplCache[g.cat] || [];
-        if (!(this.tplSearch || '').trim()) return cached;
         const names = new Set(g.items.map((it) => it.name));
         return cached.filter((tp) => names.has(tp.name));
       },
       isGroupOpen(cat) { if ((this.tplSearch || '').trim()) return true; return !!this.tplOpen[cat]; },
-      catIcon(cat) { return CAT_ICONS[cat] || '🧮'; },
+      catIcon(cat) {
+        for (const G of TAXONOMY) for (const S of G.subs) if (S.s === cat) return S.i;
+        return CAT_ICONS[cat] || '🧮';
+      },
       async addTemplate(tp) {
         try {
           if (this.currentId == null) {
