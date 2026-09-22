@@ -47,7 +47,7 @@ Requires Nextcloud 30–35.
 
 ### Help us test the template library
 
-Thank you for the downloads and the kind comments on apps.nextcloud.com. No problems were reported up to 0.6.2, so 0.7.0 adds 2,400 formulas (5,522 in all) and many new functions, without changing how you use the app.
+Thank you for the downloads and the kind comments on apps.nextcloud.com. No problems were reported up to 0.6.2, so 0.7.0 adds 2,400 formulas (5,522 in all) and many new functions, without changing how you use the app. The additions in this release are translated into English and Japanese only so far; in other languages they appear in English until their translations are added in a later version.
 
 I have not tried every formula myself, so your reports matter a great deal to me. If you find a mistake, please tell me in the FormulaBase 0.7.0 thread on help.nextcloud.com or [open a GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even one line helps.
 
@@ -89,7 +89,7 @@ Nextcloud 30〜35 対応。
 
 ### テンプレートの動作確認にご協力ください
 
-多くのダウンロードと、apps.nextcloud.com での温かいコメントをありがとうございます。0.6.2 まで問題の報告が無かったため、0.7.0 では使い方は変えずに、公式を2,400件（合計5,522件）と多くの関数を追加しました。
+多くのダウンロードと、apps.nextcloud.com での温かいコメントをありがとうございます。0.6.2 まで問題の報告が無かったため、0.7.0 では使い方は変えずに、公式を2,400件（合計5,522件）と多くの関数を追加しました。今回追加した分の翻訳は、まだ日本語と英語だけです。ほかの言語では、次の版以降で翻訳を追加するまで英語で表示されます。
 
 私自身がすべての式を試したわけではないので、実際に使ってくださる皆さんの報告がとても大切です。誤りを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドか、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)で教えてください（一行でも構いません）。
 
