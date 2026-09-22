@@ -332,6 +332,10 @@ class FormulaCompiler {
 		if (in_array($name, Values::AGGREGATES, true)) {
 			return Values::call($name, $a);
 		}
+		if ($name === 'gcd' || $name === 'lcm') {
+			// of numbers or of a whole list, like min/max
+			return MathLib::call($name, Values::flat($a));
+		}
 		foreach ($a as $i => $v) {
 			if (is_array($v)) {
 				return array_map(function ($x) use ($a, $i, $name) { $b = $a; $b[$i] = $x; return $this->callFn($name, $b); }, $v);
@@ -468,6 +472,10 @@ class FormulaCompiler {
 	private ?array $odfScope = null;
 
 	private function odf(array $n, array $cellMap): string {
+		if ($this->hasListPart($n)) {
+			// a list or complex number part: no spreadsheet cell can hold it, so write the value
+			return $this->literalOf($n);
+		}
 		switch ($n['type']) {
 			case 'num':
 				if (!empty($n['imag'])) {
@@ -536,6 +544,25 @@ class FormulaCompiler {
 			return $m . 'E' . (int)$e;
 		}
 		return str_contains($s, '.') ? rtrim(rtrim($s, '0'), '.') : $s;
+	}
+
+	/** True when this node, or one of its direct parts, comes to a list or a complex number. */
+	private function hasListPart(array $n): bool {
+		if ($this->odfScope === null || $n['type'] === 'num' || $n['type'] === 'const' || $n['type'] === 'var' || $this->isBinder($n)) {
+			return false;
+		}
+		$parts = $n['type'] === 'bin' ? [$n['l'], $n['r']] : ($n['type'] === 'unary' ? [$n['arg']] : $n['args']);
+		foreach (array_merge([$n], $parts) as $p) {
+			try {
+				$v = $this->evaluate($p, $this->odfScope);
+			} catch (\Throwable $e) {
+				continue;
+			}
+			if (is_array($v) || $v instanceof Cx) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** True when the formula holds something no spreadsheet can hold: ∞ or an imaginary number. */

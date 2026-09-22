@@ -18,7 +18,7 @@ class MathLib {
 	/** Names this library answers to (lower case), for the parser's function table. */
 	public const NAMES = [
 		'gcd', 'lcm', 'fact', 'binom', 'perm', 'isprime', 'nextprime', 'prevprime', 'primepi', 'nthprime',
-		'phi', 'sigma', 'tau', 'mu', 'omega', 'bigomega', 'rad', 'lpf', 'gpf', 'carmichael', 'powmod',
+		'phi', 'sigma', 'tau', 'mu', 'omega', 'bigomega', 'radical', 'lpf', 'gpf', 'carmichael', 'powmod',
 		'modinv', 'crt', 'fib', 'lucas', 'catalan', 'bell', 'partitions', 'stirling1', 'stirling2',
 		'derange', 'digitsum', 'digitalroot', 'numdigits', 'reversenum', 'collatz', 'legendre', 'jacobi',
 		'ord', 'primroot', 'isqrt', 'issquare', 'isperfect',
@@ -208,7 +208,7 @@ class MathLib {
 			case 'bigomega':
 				$f = self::factors($x);
 				return $f === null ? NAN : (float)array_sum($f);
-			case 'rad':
+			case 'radical':
 				$f = self::factors($x);
 				if ($f === null) { return NAN; }
 				$r = gmp_init(1);
@@ -442,17 +442,21 @@ class MathLib {
 
 	/** @param list<float> $a */
 	private static function crt(array $a): float {
-		[$a1, $m1, $a2, $m2] = [$a[0] ?? NAN, $a[1] ?? NAN, $a[2] ?? NAN, $a[3] ?? NAN];
-		if (!self::isInt($a1) || !self::isInt($a2) || !self::posInt($m1) || !self::posInt($m2)) { return NAN; }
-		[$A1, $M1, $A2, $M2] = [self::g($a1), self::g($m1), self::g($a2), self::g($m2)];
-		$g = gmp_gcd($M1, $M2);
-		if (gmp_cmp(gmp_mod(gmp_sub($A2, $A1), $g), 0) !== 0) { return NAN; }
-		$l = gmp_mul(gmp_div_q($M1, $g), $M2);
-		$m2g = gmp_div_q($M2, $g);
-		$inv = gmp_cmp($m2g, 1) === 0 ? gmp_init(0) : gmp_invert(gmp_mod(gmp_div_q($M1, $g), $m2g), $m2g);
-		$t = gmp_mod(gmp_mul(gmp_div_q(gmp_sub($A2, $A1), $g), $inv), $m2g);
-		$x = gmp_mod(gmp_add($A1, gmp_mul($t, $M1)), $l);
-		return self::f($x);
+		if (count($a) < 2 || count($a) % 2) { return NAN; }
+		$A = null; $L = null;
+		for ($i = 0; $i < count($a); $i += 2) {
+			if (!self::isInt((float)$a[$i]) || !self::posInt((float)$a[$i + 1])) { return NAN; }
+			[$ai, $mi] = [self::g((float)$a[$i]), self::g((float)$a[$i + 1])];
+			if ($A === null) { $A = gmp_mod($ai, $mi); $L = $mi; continue; }
+			$g = gmp_gcd($L, $mi);
+			if (gmp_cmp(gmp_mod(gmp_sub($ai, $A), $g), 0) !== 0) { return NAN; }
+			$l = gmp_mul(gmp_div_q($L, $g), $mi);
+			$mg = gmp_div_q($mi, $g);
+			$inv = gmp_cmp($mg, 1) === 0 ? gmp_init(0) : gmp_invert(gmp_mod(gmp_div_q($L, $g), $mg), $mg);
+			$t = gmp_mod(gmp_mul(gmp_div_q(gmp_sub($ai, $A), $g), $inv), $mg);
+			$A = gmp_mod(gmp_add($A, gmp_mul($t, $L)), $l); $L = $l;
+		}
+		return self::f($A);
 	}
 
 	private static function partitions(float $n): float {
