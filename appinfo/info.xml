@@ -2,39 +2,41 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>formulabase</id>
 	<name>FormulaBase</name>
-	<summary>Save your own formulas — plus 3,122 built-in templates — and calculate instantly by typing in numbers</summary>
-	<summary lang="ja">よく使う計算式を保存 ― 3,122件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
+	<summary>Save your own formulas — plus 5,522 built-in templates — and calculate instantly by typing in numbers</summary>
+	<summary lang="ja">よく使う計算式を保存 ― 5,522件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
 	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
 
 Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
 
 Features:
-- Nearly 3,000 built-in formula templates across 63 categories (physics, geometry, finance, health, chemistry, electricity, astronomy, computing, and many more) — searchable, and ready to drop into your own collections
+- 5,522 built-in formula templates in 13 fields (mathematics, statistics and probability, AI and computing, physics, chemistry and materials, engineering, personal money, investing, business and accounting, health and life sciences, everyday life, and more) — searchable, and ready to drop into your own collections
+- Template settings: hide whole fields, subcategories or single templates you do not need
 - Collections of reusable formulas
-- Named variables with labels, units and default values
-- Safe expression engine: + - * / % ^, parentheses, and functions (sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e)
+- Named variables with labels, units and default values — numbers, lists, matrices or complex numbers
+- Safe expression engine with more than 200 functions: arithmetic, conditions (if, piecewise), sums, products, integrals, derivatives and equation solving, statistics, cash flows, matrices, number theory, special functions, probability distributions and physical constants
 - Live result as you type, with unit and decimal-place control
 - Version history per formula — the version before each edit is kept beside it, numbered and restorable, separate from the calculation history
 - Share a collection with other Nextcloud users at three levels (view / edit / delete)
 - Same clean, themable design as RegiBase (light / dark)
 
-The template library is large (3,122 formulas) and not all of it has been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
+The 2,400 templates added in 0.7.0 were each checked against an independent calculation; they are in English and Japanese, and other languages show them in English. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
 	<description lang="ja"><![CDATA[FormulaBaseは、値上げ計算・単位換算・ローン返済額・配合比率・工学定数など、よく使う計算式を何度でもすぐに使える軽量な計算アプリです。
 
 計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。
 
 主な機能:
-- 63ジャンル・約3,000件の組み込み公式テンプレート（物理・幾何・金融・健康・化学・電気・天文・情報など多分野）― 検索可能で、そのまま自分のコレクションに追加できます
+- 13分野・5,522件の組み込み公式テンプレート（数学・統計・確率・AI・コンピュータ・物理・化学・材料・工学・暮らしのお金・投資・会社の会計・医療・生命科学・暮らしなど）― 検索可能で、そのまま自分のコレクションに追加できます
+- テンプレート設定：不要な分野・小分類・テンプレートを非表示にできます
 - よく使う計算式をコレクションで整理
-- ラベル・単位・初期値付きの変数を名前で管理
-- 安全な数式エンジン：+ - * / % ^、括弧、関数（sqrt, round, floor, ceil, abs, min, max, pow, log, ln, sin, cos, tan, pi, e）
+- ラベル・単位・初期値付きの変数を名前で管理 ― 数値・リスト・行列・複素数
+- 200を超える関数を備えた安全な数式エンジン：四則演算、条件（if・piecewise）、総和・総乗・積分・微分・方程式の解、統計、キャッシュフロー、行列、数論、特殊関数、確率分布、物理定数
 - 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
 - 数式ごとのバージョン履歴 ― 編集の直前の内容を番号付きで保存・復元可能（計算履歴とは別の仕組み）
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
 
-テンプレートライブラリは3,122件と件数が多く、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
-	<version>0.6.2</version>
+0.7.0で追加した2,400件のテンプレートは、すべて別の方法で計算した値と照合しています。英語と日本語で、ほかの言語では英語で表示されます。それ以前からの3,122件は、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
+	<version>0.7.0</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>

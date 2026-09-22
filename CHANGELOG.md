@@ -2,7 +2,7 @@
 
 All notable changes to FormulaBase.
 
-## 0.7.0 — unreleased（未公開）
+## 0.7.0 — 2026-09-22
 
 Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is
 useful. No problems were reported against the template library up to 0.6.2, so this release adds
