@@ -51,7 +51,34 @@ class FormulaCompiler {
 	}
 
 	/** @throws \RuntimeException on a malformed expression */
+	/**
+	 * How much one calculation may ask for. One formula -- a sum inside a sum, or
+	 * besselj(0, 1e12) -- held a PHP worker for hours, and a handful of them at once
+	 * took the whole instance down (REVIEW P1).
+	 */
+	private const MAX_EXPR = 10000;
+	private const MAX_DEPTH = 300;
+	private const MAX_STEPS = 50000000;
+	private const MAX_SECONDS = 15.0;
+	private int $steps = 0;
+	private float $until = 0.0;
+
+	private function spend(): void {
+		if ($this->until === 0.0) {
+			$this->until = microtime(true) + self::MAX_SECONDS;
+		}
+		if ($this->steps > self::MAX_STEPS || microtime(true) > $this->until) {
+			throw new \RuntimeException('The calculation is too large to finish.');
+		}
+	}
+
 	public function parse(string $src): array {
+		if (mb_strlen($src) > self::MAX_EXPR) {
+			throw new \RuntimeException('The formula is too long.');
+		}
+		$this->steps = 0;
+		$this->until = 0.0;
+		$depth = 0;
 		$toks = $this->tokenize($src);
 		$p = 0;
 		$peek = function () use (&$toks, &$p) { return $toks[$p] ?? null; };
@@ -111,13 +138,20 @@ class FormulaCompiler {
 			}
 			return $l;
 		};
-		$pUnary = function () use ($peek, $next, $pPow, &$pUnary): array {
-			$t = $peek();
-			if ($t && $t['t'] === 'op' && ($t['v'] === '+' || $t['v'] === '-')) {
-				$next();
-				return ['type' => 'unary', 'op' => $t['v'], 'arg' => $pUnary()];
+		$pUnary = function () use ($peek, $next, $pPow, &$pUnary, &$depth): array {
+			if (++$depth > self::MAX_DEPTH) {
+				throw new \RuntimeException('The formula is nested too deeply.');
 			}
-			return $pPow();
+			try {
+				$t = $peek();
+				if ($t && $t['t'] === 'op' && ($t['v'] === '+' || $t['v'] === '-')) {
+					$next();
+					return ['type' => 'unary', 'op' => $t['v'], 'arg' => $pUnary()];
+				}
+				return $pPow();
+			} finally {
+				$depth--;
+			}
 		};
 		$pMul = function () use ($pUnary, $peek, $next, $isOp): array {
 			$l = $pUnary();
@@ -156,7 +190,10 @@ class FormulaCompiler {
 	private function tokenize(string $s): array {
 		$toks = [];
 		$n = mb_strlen($s);
-		$ch = fn (int $k) => $k < $n ? mb_substr($s, $k, 1) : '';
+		// Split once: reading one character at a time with mb_substr took time in
+		// the square of the formula's length (REVIEW P1).
+		$chars = mb_str_split($s);
+		$ch = fn (int $k) => $chars[$k] ?? '';
 		$i = 0;
 		while ($i < $n) {
 			$c = $ch($i);
@@ -216,12 +253,38 @@ class FormulaCompiler {
 		return $toks;
 	}
 
-	private function isBinder(array $n): bool {
+	private function isBinder(array $n, ?array $scope = null): bool {
 		if ($n['type'] !== 'call') {
 			return false;
 		}
-		$ar = self::BINDER_ARITY[mb_strtolower($n['name'])] ?? null;
-		return $ar !== null && in_array(count($n['args']), $ar, true) && $n['args'][0]['type'] === 'var';
+		$kind = mb_strtolower($n['name']);
+		$ar = self::BINDER_ARITY[$kind] ?? null;
+		if (!($ar !== null && in_array(count($n['args']), $ar, true) && $n['args'][0]['type'] === 'var')) {
+			return false;
+		}
+		// sum(a, b, c, d) with four values is the total of the four, not Σ: a counter
+		// always appears in the expression it counts through (REVIEW P7/C1).
+		if (($kind === 'sum' || $kind === 'prod') && !$this->mentionsVar($n['args'][3], $n['args'][0]['name'])) {
+			// sum(k, 1, n, 1) is still Σ when there is no value named k to add up.
+			return $scope !== null && !array_key_exists($n['args'][0]['name'], $scope);
+		}
+		return true;
+	}
+
+	/** Whether a node mentions the name anywhere inside it. */
+	private function mentionsVar($n, string $name): bool {
+		if (!is_array($n)) {
+			return false;
+		}
+		if (($n['type'] ?? null) === 'var' && ($n['name'] ?? null) === $name) {
+			return true;
+		}
+		foreach ($n as $v) {
+			if (is_array($v) && $this->mentionsVar($v, $name)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private function binderBody(array $n): array {
@@ -281,6 +344,9 @@ class FormulaCompiler {
 
 	/** Evaluate a parsed AST against a variable scope (mirrors evalAST in formulabase.js). */
 	public function evaluate(array $n, array $scope): mixed {
+		if ((++$this->steps & 1023) === 0) {
+			$this->spend();
+		}
 		switch ($n['type']) {
 			case 'num':
 				return !empty($n['imag']) ? Values::simp(new Cx(0.0, (float)$n['v'])) : (float)$n['v'];
@@ -299,7 +365,7 @@ class FormulaCompiler {
 				return Values::bin($n['op'], $this->evaluate($n['l'], $scope), $this->evaluate($n['r'], $scope));
 			case 'call':
 				$name = mb_strtolower($n['name']);
-				if ($this->isBinder($n)) {
+				if ($this->isBinder($n, $scope)) {
 					return $this->evalBinder($n, $scope);
 				}
 				if ($name === 'if') {
@@ -548,7 +614,7 @@ class FormulaCompiler {
 
 	/** True when this node, or one of its direct parts, comes to a list or a complex number. */
 	private function hasListPart(array $n): bool {
-		if ($this->odfScope === null || $n['type'] === 'num' || $n['type'] === 'const' || $n['type'] === 'var' || $this->isBinder($n)) {
+		if ($this->odfScope === null || $n['type'] === 'num' || $n['type'] === 'const' || $n['type'] === 'var' || $this->isBinder($n, $this->odfScope)) {
 			return false;
 		}
 		$parts = $n['type'] === 'bin' ? [$n['l'], $n['r']] : ($n['type'] === 'unary' ? [$n['arg']] : $n['args']);
@@ -606,7 +672,7 @@ class FormulaCompiler {
 		$name = mb_strtolower($n['name']);
 		$args = $n['args'];
 		$a = fn () => array_map(fn ($x) => $this->odf($x, $cellMap), $args);
-		if ($this->isBinder($n)) {
+		if ($this->isBinder($n, $this->odfScope)) {
 			return $this->literalOf($n);
 		}
 		if (isset(self::ODF_NEW[$name])) {

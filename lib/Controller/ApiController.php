@@ -69,11 +69,20 @@ class ApiController extends Controller {
 		return $out;
 	}
 
+	/**
+	 * The FormulaBase language setting. The European Portuguese strings were shipped as
+	 * "pt" until 2026-09; a stored "pt" now means "pt_PT".
+	 */
+	private function userLanguage(string $uid): string {
+		$lang = $this->config->getUserValue($uid, Application::APP_ID, 'language', 'auto');
+		return $lang === 'pt' ? 'pt_PT' : $lang;
+	}
+
 	/** Available UI languages as [{code, name}], name being the endonym. */
 	private function availableLanguages(): array {
 		$names = [
 			'en' => 'English', 'ja' => '日本語', 'zh' => '简体中文', 'es' => 'Español',
-			'fr' => 'Français', 'de' => 'Deutsch', 'ru' => 'Русский', 'pt' => 'Português',
+			'fr' => 'Français', 'de' => 'Deutsch', 'ru' => 'Русский', 'pt_PT' => 'Português (Portugal)', 'pt_BR' => 'Português (Brasil)',
 			'ar' => 'العربية', 'hi' => 'हिन्दी', 'ko' => '한국어', 'it' => 'Italiano',
 		];
 		// The 'auto' option is rendered explicitly in the template (matches RegiBase),
@@ -88,7 +97,7 @@ class ApiController extends Controller {
 	private function settingsPayload(string $uid): array {
 		return [
 			'theme' => $this->config->getUserValue($uid, Application::APP_ID, 'theme', 'auto'),
-			'language' => $this->config->getUserValue($uid, Application::APP_ID, 'language', 'auto'),
+			'language' => $this->userLanguage($uid),
 			'languages' => $this->availableLanguages(),
 			// Default Files-relative folder for "save formula" exports; '' = the Nextcloud root.
 			'export_folder' => $this->config->getUserValue($uid, Application::APP_ID, 'export_folder', ''),
@@ -549,6 +558,11 @@ class ApiController extends Controller {
 			}
 		} catch (\RuntimeException $e) {
 			return new JSONResponse(['error' => $this->l->t($e->getMessage())], Http::STATUS_BAD_REQUEST);
+		} catch (\Throwable $e) {
+			// Anything else a formula can make go wrong (a nesting too deep for the
+			// engine, an arithmetic error) is the formula's fault, not the server's:
+			// it answers 400, not 500 (REVIEW P1).
+			return new JSONResponse(['error' => $this->l->t('The formula could not be calculated.')], Http::STATUS_BAD_REQUEST);
 		}
 
 		return new JSONResponse($saved);
@@ -1295,6 +1309,15 @@ class ApiController extends Controller {
 		];
 	}
 
+	/** The user whose collection the formula is in (their settings rule its versions). */
+	private function formulaOwner($f): string {
+		try {
+			return (string)$this->collections->findById((int)$f->getCollectionId())->getUserId();
+		} catch (\Throwable $e) {
+			return $this->uid();
+		}
+	}
+
 	#[NoAdminRequired]
 	public function updateFormula(int $id): JSONResponse {
 		try {
@@ -1305,10 +1328,13 @@ class ApiController extends Controller {
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
-		$uid = $this->uid();
+		// How many versions a formula keeps, and when they are taken, is the owner's
+		// setting, not whoever is editing: an editor it was shared with, set to keep
+		// one, wiped the owner's whole history with a single save (REVIEW P2).
+		$owner = $this->formulaOwner($f);
 		$manualVersion = in_array($this->request->getParam('_manualVersion'), ['1', 'true', true], true);
-		$keep = $this->versions->keep($uid);
-		if ($keep > 0 && ($manualVersion || $this->versions->when($uid) === 'auto')) {
+		$keep = $this->versions->keep($owner);
+		if ($keep > 0 && ($manualVersion || $this->versions->when($owner) === 'auto')) {
 			try {
 				$this->versions->take($id, $this->formulaSnapshot($f), $keep);
 			} catch (\Throwable $e) {
@@ -1371,7 +1397,7 @@ class ApiController extends Controller {
 		// What is there now becomes #1 first (unconditionally, so a restore can
 		// itself be undone), then the picked version's fields are written back.
 		try {
-			$this->versions->take($id, $this->formulaSnapshot($f), max(1, $this->versions->keep($uid)));
+			$this->versions->take($id, $this->formulaSnapshot($f), max(1, $this->versions->keep($this->formulaOwner($f))));
 		} catch (\Throwable $e) {
 			// A version that cannot be taken must not cost the writer their restore.
 		}
@@ -1700,7 +1726,7 @@ class ApiController extends Controller {
 			'collections' => $collections,
 			'settings' => [
 				'theme' => $this->config->getUserValue($uid, Application::APP_ID, 'theme', 'auto'),
-				'language' => $this->config->getUserValue($uid, Application::APP_ID, 'language', 'auto'),
+				'language' => $this->userLanguage($uid),
 			],
 		];
 	}

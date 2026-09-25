@@ -188,6 +188,8 @@ class MathLib {
 			case 'tau':
 				$k = $name === 'tau' ? 0.0 : ($a[1] ?? 1.0);
 				if (!self::nonNegInt($k)) { return NAN; }
+				// sigma(2, 1e10) asked for a number with ten billion digits (REVIEW P1).
+				if ($k > 1000) { return NAN; }
 				$f = self::factors($x);
 				if ($f === null) { return NAN; }
 				$r = gmp_init(1);

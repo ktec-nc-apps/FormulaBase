@@ -2,6 +2,54 @@
 
 All notable changes to FormulaBase.
 
+## 0.8.0 — 2026-09-25
+
+The 2,400 templates added in 0.7.0 now speak every language, and a set of fixes found by a review
+of the whole app is included.
+（0.7.0 で追加した 2,400 件のテンプレートが、すべての言語で使えるようになった。あわせて、アプリ
+全体の点検で見つかったものを直した。）
+
+### Languages
+
+- **Every template and every screen is now translated into all 13 languages** — the 2,400
+  templates added in 0.7.0 and the newer screens (Template settings, the function list) were in
+  English and Japanese only.
+  （**すべてのテンプレートと画面が 13 言語に対応した**。0.7.0 で追加した 2,400 件と新しい画面
+  （テンプレート設定・関数の一覧）は、これまで英語と日本語だけだった。）
+- **Brazilian Portuguese** is new. The Portuguese shipped so far is European Portuguese and is
+  now named **Português (Portugal)**; if you had chosen it, it stays selected.
+  （**ブラジルのポルトガル語**を加えた。これまでのポルトガル語は本国版で、名前を
+  **Português (Portugal)** とした。選んでいた人はそのまま。）
+- **The earlier translations were reviewed in every language**, and many terms that had been
+  translated in their everyday sense were corrected (for example "stroke" of an engine,
+  "charge" in physics, "discharge" of a river). The English and Japanese texts were reviewed as
+  well, and variable labels that were in Japanese in the English templates are now in English.
+  （**これまでの訳を全言語で見直した**。専門語を日常の意味で訳していたもの（エンジンの
+  「行程」、物理の「電荷」、川の「流量」など）を多数直した。英語と日本語の文も見直し、英語の
+  テンプレートで日本語になっていた変数名を英語にした。）
+
+### Fixed
+
+- **`sum` and `prod` with four plain values** (for example `sum(1, 2, 3, 4)`) are the total or
+  product of those values; they were taken as Σ / Π and gave a wrong result, on the screen and
+  in the spreadsheet export alike.
+  （**値を 4 つ並べた `sum`・`prod`**（例 `sum(1, 2, 3, 4)`）を、その値の合計・積として計算する。
+  これまでは Σ・Π として扱われ、画面でも表計算の書き出しでも誤った結果になった。）
+- **A formula that is too long, too deeply nested or too heavy to calculate** now shows a
+  message instead of freezing the page or keeping the server busy.
+  （**長すぎる・入れ子が深すぎる・重すぎる式**は、画面を止めたりサーバーを使い続けたりせず、
+  知らせを出す。）
+- In a shared collection, how many versions a formula keeps follows the owner's setting, so an
+  editor can no longer remove the owner's versions; a formula saved without changing its name
+  or labels keeps the wording it was written in.
+  （共有されたコレクションでは、式の版をいくつ残すかはオーナーの設定に従う。編集者がオーナーの
+  版を消せない。名前やラベルを変えずに保存した式は、元の言葉のまま残る。）
+- Saving one formula no longer resets the numbers typed into the others; switching collections
+  quickly no longer shows another collection's formulas; Restore waits until the chosen backup
+  has been read.
+  （一つの式を保存しても、ほかの式に入力した数値が消えない。コレクションをすばやく切り替えても、
+  別のコレクションの式が出ない。復元は、選んだバックアップを読み終えるまで押せない。）
+
 ## 0.7.0 — 2026-09-22
 
 Thank you for the downloads, and for the comments on apps.nextcloud.com saying FormulaBase is
@@ -12,10 +60,10 @@ much more content — new formulas and new functions — while the way you use t
 公式と関数を大きく追加した。）
 
 With 5,522 formulas there are now far too many for us to debug on our own — if you find a wrong
-formula, a bad default, a mistranslation or a missing unit, please tell us in the community thread
-on help.nextcloud.com: https://help.nextcloud.com/t/three-apps-i-built-for-my-own-nextcloud-instance-regibase-formulabase-talk-bot-feedback-welcome/247817 (a GitHub issue is fine too).
+formula, a bad default, a mistranslation or a missing unit, please tell us in the FormulaBase 0.7.0 thread
+on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-formula-templates-help-testing-them-is-very-welcome/249798 (a GitHub issue is fine too).
 （公式が 5,522 件になり、私たちだけではデバッグしきれない。誤った公式・不適切な初期値・誤訳・
-単位の誤りなどを見つけたら、help.nextcloud.com のコミュニティのスレッドで知らせてもらえると助かる
+単位の誤りなどを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドで知らせてもらえると助かる
 （GitHub の Issue でもよい）。）
 
 ### New: 2,400 more templates (5,522 in all)

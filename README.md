@@ -25,7 +25,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **You can see the math, not just the answer.** The step-by-step trace panel substitutes your values into the formula and reduces it one operation at a time, so you (or a student, or a colleague) can follow exactly how the result was reached.
 - **Your work is never lost.** Every formula keeps its own calculation history on the server — record a calculation, restore it later, delete what you don't need, scoped per user. Edits to a formula itself are protected too: the version before each edit is kept beside it, numbered and restorable, so a bad edit is never the end of the story.
 - **Built for teams, not just individuals.** Share a collection with other Nextcloud users at three permission levels (view / edit / delete), so a department can maintain one shared set of formulas instead of everyone reinventing them.
-- **Speaks your language.** The UI and the original 3,122 templates are localized — English, Japanese, Spanish, Chinese, French, German, Portuguese and more, with full technical/scientific terminology, not just menu labels. The 2,400 templates added in 0.7.0 and the newest screens (Template settings, the function list) are in English and Japanese so far; other languages show them in English.
+- **Speaks your language.** Every screen and all 5,522 templates are available in 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean — with full technical/scientific terminology, not just menu labels.
 
 ### Features
 - **5,522 built-in formula templates in 13 fields**, grouped by field — searchable and ready to drop into your own collections
@@ -38,7 +38,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **Server-side history** per formula (record / restore / delete / clear), scoped per user
 - **Version history** per formula — the version before each edit is kept beside it (numbered, restorable), independent of the calculation history above; how many to keep, and whether one is taken on every edit or only on request, is configurable in Settings
 - **Internal sharing** — share a collection with other Nextcloud users at three permission levels (view / edit / delete)
-- Multi-language UI and template library — English, Japanese, Spanish, Chinese, French, German, Portuguese and more (the 0.7.0 additions are in English and Japanese so far)
+- UI and template library in 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean
 
 ### Tech
 Buildless Vue 3 (Options API). The template is precompiled to an eval-free render function (`formulabase-build.mjs` using `@vue/compiler-dom`); the runtime loads `vue.runtime.global.prod.js` + `formulabase.dist.js`. Backend: Nextcloud AppFramework (PHP), three tables (`formulabase_colls`, `formulabase_formulas`, `formulabase_history`).
@@ -47,9 +47,9 @@ Requires Nextcloud 30–35.
 
 ### Help us test the template library
 
-Thank you for the downloads and the kind comments on apps.nextcloud.com. No problems were reported up to 0.6.2, so 0.7.0 adds 2,400 formulas (5,522 in all) and many new functions, without changing how you use the app. The additions in this release are translated into English and Japanese only so far; in other languages they appear in English until their translations are added in a later version.
+Thank you for the downloads and the kind comments on apps.nextcloud.com. No problems were reported up to 0.6.2, so 0.7.0 added 2,400 formulas (5,522 in all) and many new functions, without changing how you use the app. 0.8.0 translates those additions into every language, and adds Brazilian Portuguese.
 
-I have not tried every formula myself, so your reports matter a great deal to me. If you find a mistake, please tell me in the FormulaBase 0.7.0 thread on help.nextcloud.com or [open a GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even one line helps.
+I have not tried every formula myself, so your reports matter a great deal to me. If you find a mistake, please tell me in the [FormulaBase 0.7.0 thread](https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-formula-templates-help-testing-them-is-very-welcome/249798) on help.nextcloud.com or [open a GitHub issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml) — even one line helps.
 
 I hope the apps I make bring a little happiness to as many people as possible.
 
@@ -70,7 +70,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - **答えだけでなく、計算の過程が見えます。** 変数に値を代入し、1演算ずつ簡約していく様子をそのまま表示するので、自分自身の確認にも、学生や同僚への説明にも使えます。
 - **入力した計算は失われません。** 式ごとにサーバー保存の計算履歴を持ち、記録・復元・削除ができます（ユーザーごとに独立）。式そのものの編集も保護されており、編集の直前の内容が番号付きで保存され、いつでも復元できます。
 - **チームでも使えます。** コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有でき、部署内で1つの式集を管理・共用できます。
-- **多言語対応。** UIと元からの3,122件のテンプレートは、日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など多言語に対応し、専門用語もきちんと翻訳されています。0.7.0 で追加した2,400件と新しい画面（テンプレート設定・関数の一覧）は、今のところ日本語と英語のみで、ほかの言語では英語で表示されます。
+- **多言語対応。** すべての画面と5,522件のテンプレートが、13言語（日本語・英語・中国語・スペイン語・フランス語・ドイツ語・イタリア語・ポルトガル語〔ブラジル・ポルトガル〕・ロシア語・アラビア語・ヒンディー語・韓国語）に対応し、専門用語もきちんと翻訳されています。
 
 ### 特長
 - **13分野・5,522件の組み込み公式テンプレート**（分野ごとに区切って表示）— 検索してそのままコレクションに追加可能
@@ -83,15 +83,15 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - 式ごとの**サーバー保存の履歴**（記録／復元／削除／全消去、ユーザー単位）
 - **バージョン履歴** — 編集の直前の内容を式のそばに保存（番号付き・復元可能）。上記の計算履歴とは別の仕組みです。保存数と、毎回自動で残すか指示したときだけ残すかは設定で変更可能
 - **内部共有** — コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
-- UI・テンプレートとも多言語対応 — 日本語・英語・スペイン語・中国語・フランス語・ドイツ語・ポルトガル語など（0.7.0 の追加分は今のところ日本語と英語のみ）
+- UI・テンプレートとも13言語に対応 — 日本語・英語・中国語・スペイン語・フランス語・ドイツ語・イタリア語・ポルトガル語（ブラジル・ポルトガル）・ロシア語・アラビア語・ヒンディー語・韓国語
 
 Nextcloud 30〜35 対応。
 
 ### テンプレートの動作確認にご協力ください
 
-多くのダウンロードと、apps.nextcloud.com での温かいコメントをありがとうございます。0.6.2 まで問題の報告が無かったため、0.7.0 では使い方は変えずに、公式を2,400件（合計5,522件）と多くの関数を追加しました。今回追加した分の翻訳は、まだ日本語と英語だけです。ほかの言語では、次の版以降で翻訳を追加するまで英語で表示されます。
+多くのダウンロードと、apps.nextcloud.com での温かいコメントをありがとうございます。0.6.2 まで問題の報告が無かったため、0.7.0 では使い方は変えずに、公式を2,400件（合計5,522件）と多くの関数を追加しました。0.8.0 では、その追加分をすべての言語に翻訳し、ブラジルのポルトガル語を加えました。
 
-私自身がすべての式を試したわけではないので、実際に使ってくださる皆さんの報告がとても大切です。誤りを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドか、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)で教えてください（一行でも構いません）。
+私自身がすべての式を試したわけではないので、実際に使ってくださる皆さんの報告がとても大切です。誤りを見つけたら、help.nextcloud.com の [FormulaBase 0.7.0 のスレッド](https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-formula-templates-help-testing-them-is-very-welcome/249798)か、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)で教えてください（一行でも構いません）。
 
 私の作ったアプリで、少しでも多くの人が幸せになることを祈っています。
 

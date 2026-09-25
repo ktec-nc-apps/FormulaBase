@@ -176,6 +176,8 @@
     const phi = (n) => withFactors(n, (f, m) => { let r = m; for (const p of f.keys()) r = (r / p) * (p - 1n); return N(r); });
     function sigma(n, k) {
       if (k === undefined) k = 1; if (!nonNegInt(k)) return NaN;
+      // sigma(2, 1e10) asked for a number with ten billion digits (REVIEW P1).
+      if (k > 1000) return NaN;
       return withFactors(n, (f) => {
         let r = 1n; const K = B(k);
         for (const [p, e] of f) { if (K === 0n) { r *= B(e + 1); continue; } const pk = p ** K; r *= (pk ** B(e + 1) - 1n) / (pk - 1n); }
@@ -542,12 +544,15 @@
       if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
       if (n < 0) return (n % 2 ? -1 : 1) * besselj(-n, x);
       const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
+      // A limit on the work: besselj(0, 1e12) was 2×10¹² turns of this loop (REVIEW P1/C2).
+      if (M > 2e6) return NaN;
       for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.cos(n * t - x * Math.sin(t)); }
       return s / M;
     }
     function besseli(n, x) {
       if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
       n = Math.abs(n); const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
+      if (M > 2e6) return NaN;
       for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.exp(x * Math.cos(t)) * Math.cos(n * t); }
       return s / M;
     }
@@ -864,10 +869,26 @@
   // · solve(x, guess, expr) or solve(x, lo, hi, expr): the x that makes expr = 0.
   const BINDER_ARITY = { sum: [4], prod: [4], integral: [4], deriv: [3, 4], solve: [3, 4] };
   const LOOP_MAX = 1000000;
-  function isBinder(n) {
+  // Whether a node mentions the name anywhere inside it.
+  function mentionsVar(n, name) {
+    if (!n || typeof n !== 'object') return false;
+    if (n.type === 'var' && n.name === name) return true;
+    return Object.keys(n).some((k) => { const v = n[k]; return Array.isArray(v) ? v.some((x) => mentionsVar(x, name)) : (v && typeof v === 'object' ? mentionsVar(v, name) : false); });
+  }
+  function isBinder(n, scope) {
     if (n.type !== 'call') return false;
-    const ar = BINDER_ARITY[n.name.toLowerCase()];
-    return !!ar && ar.includes(n.args.length) && n.args[0].type === 'var';
+    const kind = n.name.toLowerCase();
+    const ar = BINDER_ARITY[kind];
+    if (!(!!ar && ar.includes(n.args.length) && n.args[0].type === 'var')) return false;
+    // sum(a, b, c, d) with four values is the total of the four, not Σ: a counter
+    // always appears in the expression it counts through. Taken as Σ, 1..4 summed
+    // to 8 instead of 10, on the screen and in the export alike (REVIEW P7/C1).
+    // A counter that is not used in what it counts -- sum(k, 1, n, 1), "1 added n
+    // times" -- is still a counter when there is no value of that name to add up.
+    if ((kind === 'sum' || kind === 'prod') && !mentionsVar(n.args[3], n.args[0].name)) {
+      return !!scope && !Object.prototype.hasOwnProperty.call(scope, n.args[0].name);
+    }
+    return true;
   }
   // Which argument is the body (the part the counter lives in).
   function binderBody(n) { const k = n.name.toLowerCase(); return k === 'deriv' ? n.args[2] : n.args[n.args.length - 1]; }
@@ -936,8 +957,21 @@
     return toks;
   }
 
+  // How much one calculation may ask for. A formula of a single line -- a sum
+  // inside a sum, or besselj(0, 1e12) -- could keep the page busy for days, and a
+  // collection shared with others froze their tab too (REVIEW C2).
+  const MAX_EXPR = 10000, MAX_DEPTH = 300, BUDGET_MS = 1500;
+  const BUDGET = { steps: 0, until: 0 };
+  function tooLarge() { const e = new Error('The calculation is too large to finish.'); e.budget = true; return e; }
+  // One calculation from the page: evalAST with a clock on it.
+  function evalTop(ast, scope) {
+    BUDGET.steps = 0; BUDGET.until = Date.now() + BUDGET_MS;
+    try { return evalAST(ast, scope); } finally { BUDGET.until = 0; }
+  }
   function parseAST(src) {
+    if (String(src || '').length > MAX_EXPR) throw new Error('The formula is too long.');
     const toks = tokenize(src);
+    let depth = 0;
     let p = 0;
     const peek = () => toks[p];
     const next = () => toks[p++];
@@ -949,7 +983,10 @@
     function pMul() { let l = pUnary(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = next().v; l = { type: 'bin', op, l, r: pUnary() }; } return l; }
     // Standard math precedence: '^' binds tighter than unary minus, so -x^2 = -(x^2), and
     // '^' is right-associative with a unary right operand so 2^-3 and 2^3^2 parse correctly.
-    function pUnary() { const t = peek(); if (t && t.t === 'op' && (t.v === '+' || t.v === '-')) { next(); return { type: 'unary', op: t.v, arg: pUnary() }; } return pPow(); }
+    function pUnary() {
+      if (++depth > MAX_DEPTH) throw new Error('The formula is nested too deeply.');
+      try { const t = peek(); if (t && t.t === 'op' && (t.v === '+' || t.v === '-')) { next(); return { type: 'unary', op: t.v, arg: pUnary() }; } return pPow(); } finally { depth--; }
+    }
     function pPow() { const l = pPrimary(); if (peek() && peek().t === 'op' && peek().v === '^') { next(); return { type: 'bin', op: '^', l, r: pUnary() }; } return l; }
     function pPrimary() {
       const t = next();
@@ -1027,6 +1064,7 @@
   function hasImag(n) { return !!n && (n.imag || (n.l && hasImag(n.l)) || (n.r && hasImag(n.r)) || (n.arg && hasImag(n.arg)) || (n.args && n.args.some(hasImag))); }
 
   function evalAST(n, scope) {
+    if (BUDGET.until && (++BUDGET.steps & 4095) === 0 && Date.now() > BUDGET.until) throw tooLarge();
     switch (n.type) {
       case 'num': return n.imag ? VAL.simp(new VAL.Cx(0, n.v)) : n.v;
       case 'const': return CONST[n.name.toLowerCase()];
@@ -1037,7 +1075,7 @@
       case 'bin': return applyBin(n.op, evalAST(n.l, scope), evalAST(n.r, scope));
       case 'call': {
         const k = n.name.toLowerCase();
-        if (isBinder(n)) return evalBinder(n, scope);
+        if (isBinder(n, scope || {})) return evalBinder(n, scope);
         // if(condition, then, else) and piecewise(c1, v1, c2, v2, …, otherwise) only evaluate the branch taken
         if (k === 'if') { if (n.args.length !== 3) return NaN; const c = evalAST(n.args[0], scope); if (Array.isArray(c)) return VAL.bin('+', VAL.bin('*', c, evalAST(n.args[1], scope)), VAL.bin('*', VAL.bin('-', 1, c), evalAST(n.args[2], scope))); return truthy(c) ? evalAST(n.args[1], scope) : evalAST(n.args[2], scope); }
         if (k === 'piecewise') { for (let i = 0; i + 1 < n.args.length; i += 2) { if (truthy(evalAST(n.args[i], scope))) return evalAST(n.args[i + 1], scope); } return n.args.length % 2 ? evalAST(n.args[n.args.length - 1], scope) : NaN; }
@@ -1071,9 +1109,12 @@
   // a finite number, or null if no root is found (domain error, no convergence, etc).
   function solveVar(expr, scope, key, target) {
     const ast = parseAST(expr);
+    const until = Date.now() + BUDGET_MS * 2;
     const f = (x) => {
       let v;
-      try { v = evalAST(ast, Object.assign({}, scope, { [key]: x })); } catch (e) { return NaN; }
+      if (Date.now() > until) return NaN;
+      BUDGET.steps = 0; BUDGET.until = until;
+      try { v = evalAST(ast, Object.assign({}, scope, { [key]: x })); } catch (e) { return NaN; } finally { BUDGET.until = 0; }
       return (typeof v === 'number' && isFinite(v)) ? v - target : NaN;
     };
     const tol = 1e-13 * Math.max(1, Math.abs(target));
@@ -1329,7 +1370,7 @@
       // a whole Σ/Π/∫/if is one step: reduce its other arguments, then evaluate it at once
       const body = isBinder(n) ? binderBody(n) : null;
       for (let k = isBinder(n) ? 1 : 0; k < n.args.length; k++) { if (n.args[k] === body || n.args[k].type === 'num') continue; if (!isBinder(n)) break; const [a, ch] = reduceStep(n.args[k]); if (ch) { const args = n.args.slice(); args[k] = a; return [{ type: 'call', name: n.name, args }, true]; } }
-      return [{ type: 'num', v: evalAST(n, {}) }, true];
+      return [{ type: 'num', v: evalTop(n, {}) }, true];
     }
     if (n.type === 'call') {
       for (let k = 0; k < n.args.length; k++) {
@@ -3576,7 +3617,7 @@ return function render(_ctx, _cache) {
               }, _toDisplayString(_ctx.t('Cancel')), 9 /* TEXT, PROPS */, _hoisted_313),
               _createElementVNode("button", {
                 class: _normalizeClass(["btn", _ctx.restoreForm.mode==='overwrite' ? 'danger' : 'primary']),
-                disabled: _ctx.restoreForm.busy || (_ctx.restoreForm.mode==='overwrite' && !_ctx.restoreForm.confirm),
+                disabled: _ctx.restoreForm.busy || !_ctx.restoreForm.dataUrl || (_ctx.restoreForm.mode==='overwrite' && !_ctx.restoreForm.confirm),
                 onClick: _cache[92] || (_cache[92] = (...args) => (_ctx.doRestore && _ctx.doRestore(...args)))
               }, _toDisplayString(_ctx.t('Restore')), 11 /* TEXT, CLASS, PROPS */, _hoisted_314)
             ])
@@ -3765,6 +3806,7 @@ return function render(_ctx, _cache) {
         version: '',
         collections: [],
         currentId: null,
+        loadedId: null, loadSeq: 0,
         formulas: [],
         inputs: {},
         activeId: null,
@@ -4406,10 +4448,10 @@ return function render(_ctx, _cache) {
         const scope = this.scopeFor(f);
         if (!scope) return { ok: false, err: false, text: '—' };
         try {
-          const val = evalAST(parseAST(f.expression), scope);
+          const val = evalTop(parseAST(f.expression), scope);
           if (!valueOk(val)) return { ok: false, err: true, text: (val === Infinity || val === -Infinity) ? '∞' : '—' };
           return { ok: true, err: false, text: fmtAny(val, f.decimals, fmtNum), value: val };
-        } catch (e) { return { ok: false, err: true, text: '⚠ ' + (e.message || 'error') }; }
+        } catch (e) { return { ok: false, err: true, text: '⚠ ' + (e.budget ? T('The calculation is too large to finish.') : (e.message || 'error')) }; }
       },
       /* reverse calculation: pick a variable, enter the target result, solve for it numerically */
       isSolving(f, key) { return this.solveFor[f.id] === key; },
@@ -4458,19 +4500,42 @@ return function render(_ctx, _cache) {
       },
       async selectCollection(id) { this.currentId = id; await this.loadFormulas(); },
       async loadFormulas() {
-        if (this.currentId == null) { this.formulas = []; return; }
-        this.formulas = await api('collections/' + this.currentId + '/formulas');
+        if (this.currentId == null) { this.formulas = []; this.loadedId = null; return; }
+        // A newer request (or a switch to another collection) wins: an answer that
+        // arrives late is thrown away, or the heading showed one collection and the
+        // cards another (REVIEW C9).
+        const want = this.currentId;
+        const seq = (this.loadSeq = (this.loadSeq || 0) + 1);
+        const list = await api('collections/' + want + '/formulas');
+        if (seq !== this.loadSeq || want !== this.currentId) return;
+        // The same collection read again -- after one formula was saved, added,
+        // deleted or put back -- keeps what was typed into the others. Everything
+        // used to go back to the defaults, and the numbers typed were gone for good
+        // (REVIEW C8). Only a switch to another collection starts afresh.
+        const same = this.loadedId === want;
+        const old = same ? (this.inputs || {}) : {};
+        this.formulas = list;
         const inputs = {};
         for (const f of this.formulas) {
           inputs[f.id] = {};
-          for (const v of (f.variables || [])) inputs[f.id][v.key] = (v.default !== '' && v.default != null) ? v.default : '';
+          const had = old[f.id];
+          for (const v of (f.variables || [])) {
+            inputs[f.id][v.key] = (had && Object.prototype.hasOwnProperty.call(had, v.key))
+              ? had[v.key]
+              : ((v.default !== '' && v.default != null) ? v.default : '');
+          }
         }
         this.inputs = inputs;
-        this.history = {};
-        this.solveFor = {};
-        this.solveTarget = {};
-        this.solveErr = {};
-        this.activeId = this.formulas.length ? this.formulas[0].id : null;
+        const alive = new Set(this.formulas.map((f) => String(f.id)));
+        const keep = (m) => { const out = {}; if (same) { for (const k of Object.keys(m || {})) if (alive.has(String(k))) out[k] = m[k]; } return out; };
+        this.history = keep(this.history);
+        this.solveFor = keep(this.solveFor);
+        this.solveTarget = keep(this.solveTarget);
+        this.solveErr = keep(this.solveErr);
+        if (!same || !this.formulas.some((f) => f.id === this.activeId)) {
+          this.activeId = this.formulas.length ? this.formulas[0].id : null;
+        }
+        this.loadedId = want;
         if (this.activeId != null) this.loadHistory(this.activeId);
       },
       /* history (persisted server-side, per user, per formula) */
@@ -4613,9 +4678,16 @@ return function render(_ctx, _cache) {
       onRestoreFile(e) {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
+        // The file chosen before is let go of at once: until the new one is read,
+        // there is nothing to send. Pressing Restore in that moment sent the file
+        // chosen before -- an older backup over everything, in overwrite mode
+        // (REVIEW C11). A read that finishes after yet another file was chosen is
+        // thrown away.
         this.restoreForm.fileName = f.name;
+        this.restoreForm.dataUrl = '';
+        const token = (this.restoreToken = (this.restoreToken || 0) + 1);
         const r = new FileReader();
-        r.onload = () => { this.restoreForm.dataUrl = String(r.result || ''); };
+        r.onload = () => { if (token === this.restoreToken) this.restoreForm.dataUrl = String(r.result || ''); };
         r.readAsDataURL(f);
       },
       async doRestore() {
@@ -4663,11 +4735,22 @@ return function render(_ctx, _cache) {
         // the English canonical text used as the t() lookup key. Prefilling with t(...) means
         // the edit form always matches the displayed card, and saving without further changes
         // quietly upgrades that one record to real text in the current language.
+        //
+        // But what is SAVED is what was there, unless the writer changed it. Common
+        // English words (Distance, Speed, Time, Notes) are translation keys too, so a
+        // formula the writer named in English was saved back in Japanese after only
+        // the decimals were changed -- and a shared collection's owner lost their
+        // wording without seeing it (REVIEW C10). Each field remembers what it held
+        // and what was shown; saveFormula writes the stored text back when the shown
+        // text was left alone.
+        const shown = (raw) => (raw ? this.t(raw) : raw);
         this.fForm = f
           ? {
-            id: f.id, name: this.t(f.name), expression: f.expression, description: f.description ? this.t(f.description) : '',
-            variables: JSON.parse(JSON.stringify(f.variables || [])).map((v) => Object.assign(v, { label: v.label ? this.t(v.label) : v.label, type: v.type || (vkind(v) === 'number' ? '' : vkind(v)) })),
-            result_unit: f.result_unit, decimals: f.decimals, notes: f.notes ? this.t(f.notes) : '', exprError: '',
+            id: f.id, name: shown(f.name), expression: f.expression, description: f.description ? shown(f.description) : '',
+            variables: JSON.parse(JSON.stringify(f.variables || [])).map((v) => Object.assign(v, { label: v.label ? shown(v.label) : v.label, _rawLabel: v.label, _shownLabel: v.label ? shown(v.label) : v.label, type: v.type || (vkind(v) === 'number' ? '' : vkind(v)) })),
+            result_unit: f.result_unit, decimals: f.decimals, notes: f.notes ? shown(f.notes) : '', exprError: '',
+            _raw: { name: f.name, description: f.description || '', notes: f.notes || '' },
+            _shown: { name: shown(f.name), description: f.description ? shown(f.description) : '', notes: f.notes ? shown(f.notes) : '' },
           }
           : { id: null, name: '', expression: '', description: '', variables: [], result_unit: '', decimals: 2, notes: '', exprError: '' };
         this.mdPreview = false;
@@ -4679,7 +4762,7 @@ return function render(_ctx, _cache) {
         const scope = {};
         for (const v of this.fForm.variables) if (v.key) { const val = v.type ? inputValue(v, v.default) : 1; scope[v.key] = val == null ? (v.type === 'list' ? [1, 2] : v.type === 'matrix' ? [[1, 0], [0, 1]] : 1) : val; }
         for (const k of extractVars(expr)) if (!(k in scope)) scope[k] = 1;
-        try { evalAST(parseAST(expr), scope); this.fForm.exprError = ''; } catch (e) { this.fForm.exprError = e.message || 'invalid'; }
+        try { evalTop(parseAST(expr), scope); this.fForm.exprError = ''; } catch (e) { this.fForm.exprError = e.budget ? T('The calculation is too large to finish.') : (e.message || 'invalid'); }
       },
       detectVars() {
         const have = {}; for (const v of this.fForm.variables) if (v.key) have[v.key] = 1;
@@ -4690,8 +4773,11 @@ return function render(_ctx, _cache) {
         const name = (this.fForm.name || '').trim();
         if (!name) { this.fForm.exprError = T('Name is required'); return; }
         this.onExpr(); if (this.fForm.exprError) return;
-        const vars = this.fForm.variables.filter((v) => (v.key || '').trim()).map((v) => Object.assign({ key: v.key.trim(), label: v.label || '', unit: v.unit || '', default: v.default === '' ? '' : v.default }, v.type ? { type: v.type } : {}));
-        const body = JSON.stringify({ name, expression: this.fForm.expression || '', description: this.fForm.description || '', variables: vars, result_unit: this.fForm.result_unit || '', decimals: this.fForm.decimals == null ? 2 : this.fForm.decimals, notes: this.fForm.notes || '' });
+        // A field left as it was shown goes back as it was stored (REVIEW C10).
+        const R = this.fForm._raw || null; const S = this.fForm._shown || {};
+        const back = (field, now) => (R && (now || '') === (S[field] || '') ? R[field] : now);
+        const vars = this.fForm.variables.filter((v) => (v.key || '').trim()).map((v) => Object.assign({ key: v.key.trim(), label: (v._shownLabel !== undefined && (v.label || '') === (v._shownLabel || '')) ? (v._rawLabel || '') : (v.label || ''), unit: v.unit || '', default: v.default === '' ? '' : v.default }, v.type ? { type: v.type } : {}));
+        const body = JSON.stringify({ name: back('name', name) || name, expression: this.fForm.expression || '', description: back('description', this.fForm.description || '') || '', variables: vars, result_unit: this.fForm.result_unit || '', decimals: this.fForm.decimals == null ? 2 : this.fForm.decimals, notes: back('notes', this.fForm.notes || '') || '' });
         try {
           if (this.fForm.id) await api('formulas/' + this.fForm.id, { method: 'PUT', body });
           else await api('collections/' + this.currentId + '/formulas', { method: 'POST', body });

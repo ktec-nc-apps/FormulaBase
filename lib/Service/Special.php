@@ -396,6 +396,8 @@ class Special {
 		if (!self::isInt($n) || is_nan($x)) { return NAN; }
 		if ($n < 0) { return (((int)$n) % 2 ? -1 : 1) * self::besselj(-$n, $x); }
 		$M = max(64, (int)ceil(2 * abs($x) + 2 * $n + 64));
+		// A limit on the work: besselj(0, 1e12) was 2×10¹² turns of this loop (REVIEW P1).
+		if ($M > 2000000) { return NAN; }
 		$s = 0.0;
 		for ($k = 0; $k < $M; $k++) {
 			$t = ($k + 0.5) * M_PI / $M;
@@ -408,6 +410,7 @@ class Special {
 		if (!self::isInt($n) || is_nan($x)) { return NAN; }
 		$n = abs($n);
 		$M = max(64, (int)ceil(2 * abs($x) + 2 * $n + 64));
+		if ($M > 2000000) { return NAN; }
 		$s = 0.0;
 		for ($k = 0; $k < $M; $k++) {
 			$t = ($k + 0.5) * M_PI / $M;

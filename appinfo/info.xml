@@ -19,7 +19,7 @@ Features:
 - Share a collection with other Nextcloud users at three levels (view / edit / delete)
 - Same clean, themable design as RegiBase (light / dark)
 
-The 2,400 templates added in 0.7.0 were each checked against an independent calculation; they are in English and Japanese, and other languages show them in English. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
+The 2,400 templates added in 0.7.0 were each checked against an independent calculation. Since 0.8.0 the whole library and every screen are translated into 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
 	<description lang="ja"><![CDATA[FormulaBaseは、値上げ計算・単位換算・ローン返済額・配合比率・工学定数など、よく使う計算式を何度でもすぐに使える軽量な計算アプリです。
 
 計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。
@@ -35,8 +35,8 @@ The 2,400 templates added in 0.7.0 were each checked against an independent calc
 - コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
 - RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
 
-0.7.0で追加した2,400件のテンプレートは、すべて別の方法で計算した値と照合しています。英語と日本語で、ほかの言語では英語で表示されます。それ以前からの3,122件は、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
-	<version>0.7.0</version>
+0.7.0で追加した2,400件のテンプレートは、すべて別の方法で計算した値と照合しています。0.8.0からは、すべてのテンプレートと画面が13言語（英語・日本語・中国語・スペイン語・フランス語・ドイツ語・イタリア語・ポルトガル語〔ブラジル・ポルトガル〕・ロシア語・アラビア語・ヒンディー語・韓国語）に対応しています。それ以前からの3,122件は、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
+	<version>0.8.0</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
