@@ -49,6 +49,22 @@ class HistoryMapper extends QBMapper {
 		$qb->executeStatement();
 	}
 
+	/** Every user's history of one formula (for when the formula itself is deleted). */
+	public function deleteForFormula(int $formulaId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('formula_id', $qb->createNamedParameter($formulaId, IQueryBuilder::PARAM_INT)));
+		$qb->executeStatement();
+	}
+
+	/** Everything one user recorded, in their own and in shared collections (for when the account is deleted). */
+	public function deleteForUser(string $userId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+		$qb->executeStatement();
+	}
+
 	/** Keep only the newest $keep rows for a formula/user. */
 	public function trim(string $userId, int $formulaId, int $keep = 50): void {
 		$qb = $this->db->getQueryBuilder();

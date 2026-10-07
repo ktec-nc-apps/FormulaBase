@@ -2,6 +2,33 @@
 
 All notable changes to FormulaBase.
 
+## 0.9.0 — 2026-10-08
+
+An AI assistant, through the new AI-Hub app, and the fixes from a review of the whole app.
+（新しいアプリ AI-Hub を通した AI アシスタントと、アプリ全体の点検で見つかったものの修正。）
+
+### Added
+
+- **An AI assistant, through the AI-Hub app.** A chat beside the formulas that knows FormulaBase and how its expressions are written. It answers in words and writes a formula out as text you can type in; it changes nothing, and it reads the open collection only as the administrator allows. Administration settings → FormulaBase → AI assistant: on or off, who may use it, what it may read. Shown only when AI-Hub is installed.
+  （**AI-Hub アプリを通した AI アシスタント。** FormulaBase と式の書き方を知っているチャットが横に出る。答えを言葉で返し、式は打ち込める文字として書き出す。何も変更せず、開いているコレクションは管理者が許した範囲でだけ読む。管理者設定 → FormulaBase → AI アシスタントで、使うかどうか・使える人・読める範囲を決める。AI-Hub が入っているときだけ表示される。）
+
+### Fixed
+
+- **A formula that takes too long now stops.** Expressions such as `primepi(1e11)` or `partitions(100000)` could hold a server process for minutes; the calculation now stops after 15 seconds with "The calculation is too large to finish."
+  （**時間のかかりすぎる式は止まる。** `primepi(1e11)` などがサーバーを数分占有できた。15 秒で「計算が大きすぎる」と止める。）
+- **Huge matrices no longer use up the server's memory.** A product that would have a hundred million cells now gives NaN; a backup file or its data that is too large is refused.
+  （**巨大な行列でサーバーのメモリを使い切らない。** 1 億セルになる積は NaN に。大きすぎるバックアップは受け付けない。）
+- **Dividing by zero and the like no longer breaks an export.** `csc(0)`, `logb(5,1)`, `root(8,0)` and similar gave an ODS export an error, or dropped the result row of an ODT; they now give ∞ or NaN, as on the screen.
+  （**0 での割り算などで書き出しが壊れない。** ODS が失敗し、ODT は結果の行が消えていた。画面と同じ ∞・NaN になる。）
+- **Restoring a backup over a collection is checked first and done in one step**, so a broken backup no longer leaves the collection empty.
+  （**バックアップでの置き換え復元は、先に中身を確かめ、一括で行う。** 壊れたバックアップでコレクションが空になることがない。）
+- **Choosing whom to share with follows Nextcloud's sharing settings.** Everybody could be listed, outside the groups the administrator allows.
+  （**共有相手の検索が Nextcloud の共有設定に従う。** 許されていないグループの人まで検索で出ていた。）
+- **Names, icons and colours that are too long** are cut or refused instead of causing an error.
+  （長すぎる名前・アイコン・色は、エラーにせず切るか断る。）
+- **Deleting a formula, or an account, deletes the history kept for it**; it used to be left behind.
+  （数式やアカウントを消すと、その履歴も消える。これまでは残っていた。）
+
 ## 0.8.0 — 2026-09-25
 
 The 2,400 templates added in 0.7.0 now speak every language, and a set of fixes found by a review

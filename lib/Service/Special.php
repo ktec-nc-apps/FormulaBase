@@ -15,8 +15,13 @@ class Special {
 	private static function isInt(float $x): bool { return is_finite($x) && floor($x) == $x; }
 	private static function nonNegInt(float $x): bool { return self::isInt($x) && $x >= 0; }
 
-	/** @param list<float> $a  @return float|null null when the name is not one of these */
+	/**
+	 * @param list<float> $a  @return float|null null when the name is not one of these
+	 * The loops below call FormulaCompiler::tick() so the formula's time limit holds
+	 * inside them, and divide with fdiv() where a 0 can occur (REVIEW 2026-10-04 高1, 5).
+	 */
 	public static function call(string $name, array $a): ?float {
+		FormulaCompiler::tick();
 		$x = $a[0] ?? NAN;
 		$y = $a[1] ?? NAN;
 		$z = $a[2] ?? NAN;
@@ -131,9 +136,9 @@ class Special {
 
 	public static function digamma(float $x): float {
 		if (is_nan($x) || (self::isInt($x) && $x <= 0)) { return NAN; }
-		if ($x < 0) { return self::digamma(1 - $x) - M_PI / tan(M_PI * $x); }
+		if ($x < 0) { return self::digamma(1 - $x) - fdiv(M_PI, tan(M_PI * $x)); }
 		$r = 0.0;
-		while ($x < 6) { $r -= 1 / $x; $x += 1; }
+		while ($x < 6) { $r -= fdiv(1, $x); $x += 1; }
 		$f = 1 / ($x * $x);
 		return $r + log($x) - 0.5 / $x - $f * (1 / 12 - $f * (1 / 120 - $f * (1 / 252 - $f * (1 / 240 - $f / 132))));
 	}
@@ -228,7 +233,7 @@ class Special {
 		$fa = $cdf($a) - $p;
 		$fb = $cdf($b) - $p;
 		for ($i = 0; $i < 300; $i++) {
-			$m = $b - $fb * ($b - $a) / ($fb - $fa);
+			$m = $b - fdiv($fb * ($b - $a), $fb - $fa);
 			if (!($m > min($a, $b) && $m < max($a, $b))) { $m = ($a + $b) / 2; }
 			if ($i % 3 === 2) { $m = ($a + $b) / 2; }
 			$fm = $cdf($m) - $p;
@@ -295,8 +300,8 @@ class Special {
 		for ($i = 1; $i < 1000; $i++) {
 			$an = -$i * $i;
 			$b += 2;
-			$d = 1 / ($an * $d + $b);
-			$c = $b + $an / $c;
+			$d = fdiv(1, $an * $d + $b);
+			$c = $b + fdiv($an, $c);
 			$del = $c * $d;
 			$h *= $del;
 			if (abs($del - 1) < 1e-16) { break; }
@@ -341,11 +346,11 @@ class Special {
 			$tR = $an * $dR + $bR;
 			$tI = $an * $dI + $bI;
 			$den = $tR * $tR + $tI * $tI;
-			$dR = $tR / $den;
-			$dI = -$tI / $den;
+			$dR = fdiv($tR, $den);
+			$dI = fdiv(-$tI, $den);
 			$den = $cR * $cR + $cI * $cI;
-			$tR = $bR + $an * $cR / $den;
-			$tI = $bI - $an * $cI / $den;
+			$tR = $bR + fdiv($an * $cR, $den);
+			$tI = $bI - fdiv($an * $cI, $den);
 			$cR = $tR;
 			$cI = $tI;
 			$delR = $cR * $dR - $cI * $dI;
@@ -400,6 +405,7 @@ class Special {
 		if ($M > 2000000) { return NAN; }
 		$s = 0.0;
 		for ($k = 0; $k < $M; $k++) {
+			FormulaCompiler::tick();
 			$t = ($k + 0.5) * M_PI / $M;
 			$s += cos($n * $t - $x * sin($t));
 		}
@@ -413,6 +419,7 @@ class Special {
 		if ($M > 2000000) { return NAN; }
 		$s = 0.0;
 		for ($k = 0; $k < $M; $k++) {
+			FormulaCompiler::tick();
 			$t = ($k + 0.5) * M_PI / $M;
 			$s += exp($x * cos($t)) * cos($n * $t);
 		}
@@ -425,6 +432,7 @@ class Special {
 		$h = 0.02;
 		$s = 0.5 * exp(-$x);
 		for ($k = 1; $k < 100000; $k++) {
+			FormulaCompiler::tick();
 			$t = $k * $h;
 			$v = exp(-$x * cosh($t)) * cosh($n * $t);
 			$s += $v;
@@ -544,6 +552,7 @@ class Special {
 		$sum = 0.0;
 		$zk = 1.0;
 		for ($k = 1; $k < 100000; $k++) {
+			FormulaCompiler::tick();
 			$zk *= $z;
 			$add = $zk / ($k ** $s);
 			$sum += $add;
@@ -593,6 +602,7 @@ class Special {
 		$total = 0.0;
 		$n = 0;
 		while ($stack && $n < 20000) {
+			FormulaCompiler::tick();
 			[$x0, $x1] = array_pop($stack);
 			[$v, $e] = self::gk($f, $x0, $x1);
 			$n++;
@@ -643,7 +653,7 @@ class Special {
 					}
 					$d = $f2 - $f1;
 					if ($d == 0) { break; }
-					$x3 = $x2 - $f2 * ($x2 - $x1) / $d;
+					$x3 = $x2 - fdiv($f2 * ($x2 - $x1), $d);
 					$x1 = $x2;
 					$f1 = $f2;
 					$x2 = $x3;
@@ -659,7 +669,7 @@ class Special {
 		if ($fb == 0) { return $b; }
 		if (($fa > 0) === ($fb > 0)) { return NAN; }
 		for ($i = 0; $i < 300; $i++) {
-			$m = $b - $fb * ($b - $a) / ($fb - $fa);
+			$m = $b - fdiv($fb * ($b - $a), $fb - $fa);
 			if (!($m > min($a, $b) && $m < max($a, $b)) || $i % 4 === 3) { $m = ($a + $b) / 2; }
 			$fm = $f($m);
 			if ($fm == 0 || abs($b - $a) < 1e-15 * max(1, abs($m))) { return $m; }

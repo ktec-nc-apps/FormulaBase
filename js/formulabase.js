@@ -12,6 +12,10 @@
   const { createApp } = Vue;
 
   const BASE = ((window.OC && OC.generateUrl) ? OC.generateUrl('/apps/formulabase') : '/apps/formulabase') + '/';
+  // AI-Hub's own pages for a remembered conversation: read back, saved, summed up (the owner, 2026-10-06).
+  const HUB = ((window.OC && OC.generateUrl) ? OC.generateUrl('/apps/ai_hub') : '/apps/ai_hub') + '/conversation';
+  /** Where this tab keeps the token of a collection's conversation with the AI (sessionStorage). */
+  const AI_CONV_KEY = 'formulabase.ai.conversation';
   let TOKEN = (window.OC && OC.requestToken) ? OC.requestToken : '';
   let rootProxy = null;
   // In-app language override map (fetched from /api/i18n/<lang>); null → follow Nextcloud's own locale.
@@ -38,6 +42,19 @@
     try { const h = document.getElementsByTagName('head')[0]; const t = h && h.getAttribute('data-requesttoken'); if (t) return t; } catch (e) { /* */ }
     try { if (window.oc_requesttoken) return window.oc_requesttoken; } catch (e) { /* */ }
     return TOKEN;
+  }
+
+  /** A request to AI-Hub's conversation pages: GET without a body, POST with one. */
+  async function hub(path, body) {
+    const res = await fetch(HUB + path, {
+      method: body ? 'POST' : 'GET', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', requesttoken: (window.OC && OC.requestToken) || TOKEN },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await res.json() : null;
+    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    return data;
   }
 
   async function api(path, opts = {}) {
@@ -74,6 +91,13 @@
     const isInt = (x) => typeof x === 'number' && Number.isFinite(x) && Number.isInteger(x);
     const B = (x) => BigInt(x);
     const N = (b) => Number(b);
+    // The engine's clock. evalAST sets onTick to a function that throws when the
+    // calculation's time is up; the long loops below call tick() once a turn, so one
+    // primepi(1e11) or partitions(100000) stops the way a sum inside a sum does instead
+    // of freezing the tab (REVIEW 2026-10-04 高1). The clock is read once per 1024 units
+    // of work; a turn with a long inner loop passes that loop's length as `work`.
+    let onTick = null; let ticks = 0; let nextCheck = 1024;
+    const tick = (work) => { ticks += work || 1; if (ticks >= nextCheck) { nextCheck = ticks + 1024; if (onTick) onTick(); } };
     const babs = (b) => (b < 0n ? -b : b);
     function bgcd(a, b) { a = babs(a); b = babs(b); while (b) { const t = a % b; a = b; b = t; } return a; }
     function bpowmod(base, exp, m) {
@@ -102,7 +126,7 @@
       for (let c = 1n; c < 200n; c++) {
         let x = 2n, y = 2n, d = 1n;
         const f = (v) => (v * v + c) % n;
-        while (d === 1n) { x = f(x); y = f(f(y)); d = bgcd(x > y ? x - y : y - x, n); }
+        while (d === 1n) { tick(); x = f(x); y = f(f(y)); d = bgcd(x > y ? x - y : y - x, n); }
         if (d !== n) return d;
       }
       return n;
@@ -141,8 +165,8 @@
     function binom(n, k) { if (!nonNegInt(n) || !isInt(k) || n > 100000) return NaN; return N(bbinom(B(n), B(k))); }
     function perm(n, k) { if (!nonNegInt(n) || !isInt(k) || n > 100000) return NaN; if (k < 0 || k > n) return 0; let r = 1n; for (let i = 0n; i < B(k); i++) r *= B(n) - i; return N(r); }
     function isprime(n) { if (!isInt(n)) return NaN; return n >= 2 && bIsPrime(B(n)) ? 1 : 0; }
-    function nextprime(n) { if (!isInt(n) || n > BIG_LIMIT) return NaN; let m = n < 2 ? 2n : B(n) + 1n; while (!bIsPrime(m)) m++; return N(m); }
-    function prevprime(n) { if (!isInt(n) || n <= 2 || n > BIG_LIMIT) return NaN; let m = B(n) - 1n; while (m >= 2n && !bIsPrime(m)) m--; return m >= 2n ? N(m) : NaN; }
+    function nextprime(n) { if (!isInt(n) || n > BIG_LIMIT) return NaN; let m = n < 2 ? 2n : B(n) + 1n; while (!bIsPrime(m)) { tick(); m++; } return N(m); }
+    function prevprime(n) { if (!isInt(n) || n <= 2 || n > BIG_LIMIT) return NaN; let m = B(n) - 1n; while (m >= 2n && !bIsPrime(m)) { tick(); m--; } return m >= 2n ? N(m) : NaN; }
     // π(x): Lucy_Hedgehog's O(x^(3/4)) sieve on two flat arrays, exact for x up to 1e11.
     function primepi(x) {
       if (typeof x !== 'number' || !Number.isFinite(x)) return NaN;
@@ -153,7 +177,7 @@
       for (let p = 2; p <= r; p++) {
         if (small[p] === small[p - 1]) continue;
         const sp = small[p - 1]; const p2 = p * p;
-        const lim = Math.min(r, Math.floor(x / p2));
+        const lim = Math.min(r, Math.floor(x / p2)); tick(lim + 1);
         for (let i = 1; i <= lim; i++) {
           const d = i * p;
           large[i] -= (d <= r ? large[d] : small[Math.floor(x / d)]) - sp;
@@ -168,7 +192,7 @@
       const lim = Math.ceil(n * (Math.log(n) + Math.log(Math.log(n)))) + 10;
       const sieve = new Uint8Array(lim + 1); let c = 0;
       for (let i = 2; i <= lim; i++) {
-        if (!sieve[i]) { c++; if (c === n) return i; for (let j = i * i; j <= lim; j += i) sieve[j] = 1; }
+        if (!sieve[i]) { c++; if (c === n) return i; tick(Math.floor(lim / i) + 1); for (let j = i * i; j <= lim; j += i) sieve[j] = 1; }
       }
       return NaN;
     }
@@ -238,14 +262,19 @@
     function bell(n) {
       if (!nonNegInt(n) || n > 1000) return NaN;
       let row = [1n];
-      for (let i = 0; i < n; i++) { const next = [row[row.length - 1]]; for (const v of row) next.push(next[next.length - 1] + v); row = next; }
+      for (let i = 0; i < n; i++) { tick(i + 1); const next = [row[row.length - 1]]; for (const v of row) next.push(next[next.length - 1] + v); row = next; }
       return N(row[0]);
     }
     // p(n) by Euler's pentagonal-number recurrence.
+    // From n = 79446 on, p(n) rounds to Infinity as a double (p(n) ≥ 2^1024 − 2^970): the
+    // recurrence need not run for 15 s to say so (REVIEW 2026-10-04 高1).
+    const PARTITIONS_INF = 79446;
     function partitions(n) {
       if (!nonNegInt(n) || n > 100000) return NaN;
+      if (n >= PARTITIONS_INF) return Infinity;
       const p = [1n];
       for (let m = 1; m <= n; m++) {
+        tick();
         let s = 0n;
         for (let k = 1; ; k++) {
           const g1 = (k * (3 * k - 1)) / 2; if (g1 > m) break;
@@ -268,10 +297,10 @@
     function stirling1(n, k) {
       if (!nonNegInt(n) || !nonNegInt(k) || n > 2000) return NaN;
       let row = [1n];
-      for (let i = 0; i < n; i++) { const next = new Array(i + 2).fill(0n); for (let j = 0; j <= i; j++) { next[j + 1] += row[j]; next[j] += B(i) * row[j]; } row = next; }
+      for (let i = 0; i < n; i++) { tick(i + 1); const next = new Array(i + 2).fill(0n); for (let j = 0; j <= i; j++) { next[j + 1] += row[j]; next[j] += B(i) * row[j]; } row = next; }
       return k <= n ? N(row[k]) : 0;
     }
-    function derange(n) { if (!nonNegInt(n) || n > 5000) return NaN; let a = 1n, b = 0n; if (n === 0) return 1; for (let i = 2n; i <= B(n); i++) { const c = (i - 1n) * (a + b); a = b; b = c; } return N(b); }
+    function derange(n) { if (!nonNegInt(n) || n > 5000) return NaN; let a = 1n, b = 0n; if (n === 0) return 1; for (let i = 2n; i <= B(n); i++) { tick(); const c = (i - 1n) * (a + b); a = b; b = c; } return N(b); }
     function digitsum(n, base) {
       if (base === undefined) base = 10; if (!isInt(n) || !isInt(base) || base < 2) return NaN;
       let m = babs(B(n)); const b = B(base); let s = 0n; while (m) { s += m % b; m /= b; } return N(s);
@@ -282,7 +311,7 @@
       let m = babs(B(n)); if (m === 0n) return 1; let c = 0; const b = B(base); while (m) { m /= b; c++; } return c;
     }
     function reversenum(n) { if (!nonNegInt(n)) return NaN; return N(B(String(B(n)).split('').reverse().join(''))); }
-    function collatz(n) { if (!posInt(n)) return NaN; let m = B(n), c = 0; while (m !== 1n && c < 1e6) { m = (m & 1n) ? 3n * m + 1n : m >> 1n; c++; } return c; }
+    function collatz(n) { if (!posInt(n)) return NaN; let m = B(n), c = 0; while (m !== 1n && c < 1e6) { tick(); m = (m & 1n) ? 3n * m + 1n : m >> 1n; c++; } return c; }
     function jacobi(a, n) {
       if (!isInt(a) || !posInt(n) || n % 2 === 0) return NaN;
       let A = B(a), M = B(n); A %= M; if (A < 0n) A += M; let t = 1;
@@ -309,6 +338,7 @@
       const lam = carmichael(n); if (lam !== phi(n)) return NaN;
       const M = B(n), L = B(lam); const ps = [...factor(L).keys()];
       for (let g = 2n; g < M; g++) {
+        tick();
         if (bgcd(g, M) !== 1n) continue;
         if (ps.every((p) => bpowmod(g, L / p, M) !== 1n)) return N(g);
       }
@@ -410,7 +440,7 @@
       return w;
     }
     // n! mod m, exact (Wilson's theorem and friends).
-    function factmod(n, m) { if (!nonNegInt(n) || !posInt(m) || n > 1e6) return NaN; const M = B(m); let r = 1n % M; for (let i = 2n; i <= B(n); i++) r = (r * i) % M; return N(r); }
+    function factmod(n, m) { if (!nonNegInt(n) || !posInt(m) || n > 1e6) return NaN; const M = B(m); let r = 1n % M; for (let i = 2n; i <= B(n); i++) { tick(); r = (r * i) % M; } return N(r); }
 
     // ---- more special functions ----
     const EG = 0.5772156649015329;
@@ -546,20 +576,20 @@
       const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
       // A limit on the work: besselj(0, 1e12) was 2×10¹² turns of this loop (REVIEW P1/C2).
       if (M > 2e6) return NaN;
-      for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.cos(n * t - x * Math.sin(t)); }
+      for (let k = 0; k < M; k++) { tick(); const t = (k + 0.5) * Math.PI / M; s += Math.cos(n * t - x * Math.sin(t)); }
       return s / M;
     }
     function besseli(n, x) {
       if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
       n = Math.abs(n); const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
       if (M > 2e6) return NaN;
-      for (let k = 0; k < M; k++) { const t = (k + 0.5) * Math.PI / M; s += Math.exp(x * Math.cos(t)) * Math.cos(n * t); }
+      for (let k = 0; k < M; k++) { tick(); const t = (k + 0.5) * Math.PI / M; s += Math.exp(x * Math.cos(t)) * Math.cos(n * t); }
       return s / M;
     }
     function besselk(n, x) {
       if (!isInt(n) || !(x > 0)) return NaN; n = Math.abs(n);
       const h = 0.02; let s = 0.5 * Math.exp(-x);
-      for (let k = 1; k < 100000; k++) { const t = k * h; const v = Math.exp(-x * Math.cosh(t)) * Math.cosh(n * t); s += v; if (v < 1e-18 * s && x * Math.cosh(t) > 40) break; }
+      for (let k = 1; k < 100000; k++) { tick(); const t = k * h; const v = Math.exp(-x * Math.cosh(t)) * Math.cosh(n * t); s += v; if (v < 1e-18 * s && x * Math.cosh(t) > 40) break; }
       return s * h;
     }
     function bessely(n, x) {
@@ -597,7 +627,7 @@
       if (z === 0) return 0; if (z === 1) return s > 1 ? zeta(s) : NaN; if (z === -1) return -(1 - Math.pow(2, 1 - s)) * zeta(s);
       if (s === 1) return -Math.log(1 - z);
       if (Math.abs(z) > 0.5 && s === 2) { const w = 1 - z; if (z > 0) return Math.PI * Math.PI / 6 - Math.log(z) * Math.log(w) - polylog(2, w); }
-      let sum = 0, zk = 1; for (let k = 1; k < 100000; k++) { zk *= z; const add = zk / Math.pow(k, s); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; }
+      let sum = 0, zk = 1; for (let k = 1; k < 100000; k++) { tick(); zk *= z; const add = zk / Math.pow(k, s); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; }
       return sum;
     }
     // Adaptive Gauss–Kronrod (7/15) integration, also used by integral(x, a, b, …).
@@ -622,6 +652,7 @@
       const stack = [[a, b]]; let total = 0, n = 0;
       const whole = gk(f, a, b); if (whole[1] <= tol * Math.max(1, Math.abs(whole[0]))) return whole[0];
       while (stack.length && n < 20000) {
+        tick();
         const [x0, x1] = stack.pop(); const [v, e] = gk(f, x0, x1); n++;
         if (e <= Math.max(tol * Math.abs(v), 1e-15 * Math.abs(x1 - x0)) || Math.abs(x1 - x0) < 1e-12 * Math.max(1, Math.abs(x0))) total += v;
         else { const m = (x0 + x1) / 2; stack.push([m, x1], [x0, m]); }
@@ -674,6 +705,7 @@
       exppdf, expcdf, expinv, lognpdf, logncdf, logninv, weibpdf, weibcdf, weibinv, geompdf, geomcdf, hygepdf, nbinpdf,
       erfinv, expint, ei, si, ci, besselj, bessely, besseli, besselk, ellipk, ellipe, ellipf, ellipeinc, polylog,
       _integrate: integrate, _derivative: derivative, _findRoot: findRoot,
+      _tick: tick, _onTick: (fn) => { onTick = fn; },
       gcd, lcm, fact, binom, perm, isprime, nextprime, prevprime, primepi, nthprime, phi, sigma, tau, mu,
       omega, bigomega, radical: rad, lpf, gpf, carmichael, powmod, modinv, crt, fib, lucas, catalan, bell, partitions,
       stirling1, stirling2, derange, digitsum, digitalroot, numdigits, reversenum, collatz, legendre, jacobi,
@@ -751,6 +783,15 @@
     }
     const flat = (args) => { const out = []; const walk = (v) => { if (isA(v)) v.forEach(walk); else out.push(v); }; args.forEach(walk); return out; };
     const nums = (args) => { const f = flat(args); return f.every((x) => typeof x === 'number') ? f : null; };
+    // The list functions take plain numbers: a complex number or a nested list where a
+    // number is needed gives NaN (the PHP port does the same) instead of a text like
+    // "0[object Object]" (REVIEW 2026-10-04 5).
+    const reals = (v) => (isA(v) && v.every((x) => typeof x === 'number') ? v : null);
+    // How many numbers one value may hold: mmul(trans(seq(0, 10000)), list(seq(0, 10000)))
+    // asked for a hundred million cells; beyond this a list or matrix is NaN (REVIEW 2026-10-04 中2).
+    const MAX_ELEMENTS = 1000000;
+    const tooBig = (v) => flat([v]).length > MAX_ELEMENTS;
+    const tick = ML._tick;
     function sumv() { const f = flat(Array.from(arguments)); let acc = 0; for (const x of f) acc = scalarBin('+', acc, x); return acc; }
     function prodv() { const f = flat(Array.from(arguments)); let acc = 1; for (const x of f) acc = scalarBin('*', acc, x); return acc; }
     const count = function () { return flat(Array.from(arguments)).length; };
@@ -765,62 +806,64 @@
     const stdevp = function () { return Math.sqrt(varp.apply(null, arguments)); };
     function gmean() { const f = nums(Array.from(arguments)); if (!f || !f.length || f.some((x) => x <= 0)) return NaN; return Math.exp(f.reduce((a, x) => a + Math.log(x), 0) / f.length); }
     function hmean() { const f = nums(Array.from(arguments)); if (!f || !f.length || f.some((x) => x <= 0)) return NaN; return f.length / f.reduce((a, x) => a + 1 / x, 0); }
-    function wmean(x, w) { if (!isA(x) || !isA(w) || x.length !== w.length || !x.length) return NaN; let sw = 0, s = 0; for (let i = 0; i < x.length; i++) { s += x[i] * w[i]; sw += w[i]; } return s / sw; }
+    function wmean(x, w) { x = reals(x); w = reals(w); if (!x || !w || x.length !== w.length || !x.length) return NaN; let sw = 0, s = 0; for (let i = 0; i < x.length; i++) { s += x[i] * w[i]; sw += w[i]; } return s / sw; }
     // Percentile with linear interpolation between order statistics (p from 0 to 1, like PERCENTILE.INC).
     function percentile(x, p) { const f = sorted([x]); if (!f || !f.length || !(p >= 0 && p <= 1)) return NaN; const h = (f.length - 1) * p; const lo = Math.floor(h); return lo + 1 < f.length ? f[lo] + (h - lo) * (f[lo + 1] - f[lo]) : f[lo]; }
     function skew(x) { const f = nums([x]); if (!f || f.length < 3) return NaN; const n = f.length, m = f.reduce((a, b) => a + b, 0) / n; const s = Math.sqrt(ss(f) / (n - 1)); return n / ((n - 1) * (n - 2)) * f.reduce((a, v) => a + Math.pow((v - m) / s, 3), 0); }
     function kurt(x) { const f = nums([x]); if (!f || f.length < 4) return NaN; const n = f.length, m = f.reduce((a, b) => a + b, 0) / n; const s2 = ss(f) / (n - 1); const k4 = f.reduce((a, v) => a + Math.pow(v - m, 4), 0) / (s2 * s2); return n * (n + 1) / ((n - 1) * (n - 2) * (n - 3)) * k4 - 3 * (n - 1) * (n - 1) / ((n - 2) * (n - 3)); }
-    function pairs(x, y) { if (!isA(x) || !isA(y) || x.length !== y.length || x.length < 2) return null; return [x, y]; }
+    function pairs(x, y) { x = reals(x); y = reals(y); if (!x || !y || x.length !== y.length || x.length < 2) return null; return [x, y]; }
     function cov(x, y) { const p = pairs(x, y); if (!p) return NaN; const n = x.length, mx = mean(x), my = mean(y); let s = 0; for (let i = 0; i < n; i++) s += (x[i] - mx) * (y[i] - my); return s / (n - 1); }
     function corr(x, y) { const c = cov(x, y); return c / (stdev(x) * stdev(y)); }
     function slope(x, y) { return cov(x, y) / variance(x); }
     function intercept(x, y) { return mean(y) - slope(x, y) * mean(x); }
     function rsq(x, y) { const r = corr(x, y); return r * r; }
     // Cash flows: npv(r, cf) with cf[0] at time 0; irr(cf); mirr(cf, finance rate, reinvestment rate).
-    function npv(r, cf) { if (!isA(cf)) return NaN; let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t); return s; }
+    function npv(r, cf) { cf = reals(cf); if (!cf) return NaN; let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t); return s; }
     function irr(cf, guess) {
-      if (!isA(cf) || cf.length < 2) return NaN; const f = (r) => npv(r, cf);
+      cf = reals(cf); if (!cf || cf.length < 2) return NaN; const f = (r) => npv(r, cf);
       const r0 = ML._findRoot(f, guess === undefined ? 0.1 : guess); if (Number.isFinite(r0) && r0 > -1) return r0;
       return ML._findRoot(f, -0.9999, 10);
     }
-    function mirr(cf, fr, rr) { if (!isA(cf) || cf.length < 2) return NaN; const n = cf.length - 1; let pvNeg = 0, fvPos = 0; for (let t = 0; t <= n; t++) { if (cf[t] < 0) pvNeg += cf[t] / Math.pow(1 + fr, t); else fvPos += cf[t] * Math.pow(1 + rr, n - t); } return Math.pow(-fvPos / pvNeg, 1 / n) - 1; }
+    function mirr(cf, fr, rr) { cf = reals(cf); if (!cf || cf.length < 2) return NaN; const n = cf.length - 1; let pvNeg = 0, fvPos = 0; for (let t = 0; t <= n; t++) { if (cf[t] < 0) pvNeg += cf[t] / Math.pow(1 + fr, t); else fvPos += cf[t] * Math.pow(1 + rr, n - t); } return Math.pow(-fvPos / pvNeg, 1 / n) - 1; }
     // Lists
-    const list = function () { return Array.from(arguments); };
+    const list = function () { const out = Array.from(arguments); return tooBig(out) ? NaN : out; };
     function seq(a, b, st) { if (st === undefined) st = 1; if (!(st !== 0) || !Number.isFinite(a) || !Number.isFinite(b) || Math.abs((b - a) / st) > 1e6) return NaN; const out = []; for (let x = a; st > 0 ? x <= b + 1e-12 : x >= b - 1e-12; x += st) out.push(x); return out; }
     function at(v, i, j) { if (!isA(v) || !Number.isInteger(i) || i < 1 || i > v.length) return NaN; const r = v[i - 1]; return j === undefined ? r : at(r, j); }
     function sortv(v) { const f = sorted([v]); return f || NaN; }
-    function cumsum(v) { if (!isA(v)) return NaN; let s = 0; return v.map((x) => (s += x)); }
+    function cumsum(v) { v = reals(v); if (!v) return NaN; let s = 0; return v.map((x) => (s += x)); }
     // running maximum / minimum: cummax(prices) is the peak so far, for drawdowns
-    function cummax(v) { if (!isA(v)) return NaN; let m = -Infinity; return v.map((x) => (m = Math.max(m, x))); }
-    function cummin(v) { if (!isA(v)) return NaN; let m = Infinity; return v.map((x) => (m = Math.min(m, x))); }
-    function diffv(v) { if (!isA(v) || v.length < 2) return NaN; return v.slice(1).map((x, i) => x - v[i]); }
+    function cummax(v) { v = reals(v); if (!v) return NaN; let m = -Infinity; return v.map((x) => (m = Math.max(m, x))); }
+    function cummin(v) { v = reals(v); if (!v) return NaN; let m = Infinity; return v.map((x) => (m = Math.min(m, x))); }
+    function diffv(v) { v = reals(v); if (!v || v.length < 2) return NaN; return v.slice(1).map((x, i) => x - v[i]); }
     // Vectors and matrices
     function dot(u, v) { if (!isA(u) || !isA(v) || u.length !== v.length) return NaN; let s = 0; for (let i = 0; i < u.length; i++) s = scalarBin('+', s, scalarBin('*', u[i], isC(v[i]) ? new Cx(v[i].re, -v[i].im) : v[i])); return s; }
-    function cross(u, v) { if (!isA(u) || !isA(v) || u.length !== 3 || v.length !== 3) return NaN; return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; }
+    function cross(u, v) { u = reals(u); v = reals(v); if (!u || !v || u.length !== 3 || v.length !== 3) return NaN; return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]; }
     function norm(v) { if (!isA(v)) return isC(v) ? cabs(v) : Math.abs(v); const f = flat([v]); return Math.sqrt(f.reduce((a, x) => a + (isC(x) ? x.re * x.re + x.im * x.im : x * x), 0)); }
     const shape = (M) => (isM(M) && M.every((r) => r.length === M[0].length) ? [M.length, M[0].length] : null);
     function trans(M) { const sh = shape(M); if (!sh) return isA(M) ? M.map((x) => [x]) : NaN; return M[0].map((_, j) => M.map((r) => r[j])); }
     function mmul(A, Bm) {
       const a = shape(A); const b = isM(Bm) ? shape(Bm) : (isA(Bm) ? [Bm.length, 1] : null); if (!a || !b || a[1] !== b[0]) return NaN;
+      // the product's size is known before any of it is computed: refuse what would not fit
+      if (a[0] * b[1] > MAX_ELEMENTS || !nums([A, Bm])) return NaN;
       const Bmat = isM(Bm) ? Bm : Bm.map((x) => [x]);
-      const out = A.map((r) => Bmat[0].map((_, j) => r.reduce((s, x, k) => s + x * Bmat[k][j], 0)));
+      const out = A.map((r) => Bmat[0].map((_, j) => { tick(); return r.reduce((s, x, k) => s + x * Bmat[k][j], 0); }));
       return isM(Bm) ? out : out.map((r) => r[0]);
     }
     function lu(M) {
-      const sh = shape(M); if (!sh || sh[0] !== sh[1]) return null; const n = sh[0]; const A = M.map((r) => r.slice()); const perm = A.map((_, i) => i); let sign = 1;
+      const sh = shape(M); if (!sh || sh[0] !== sh[1] || !nums([M])) return null; const n = sh[0]; const A = M.map((r) => r.slice()); const perm = A.map((_, i) => i); let sign = 1;
       for (let k = 0; k < n; k++) {
         let p = k; for (let i = k + 1; i < n; i++) if (Math.abs(A[i][k]) > Math.abs(A[p][k])) p = i;
         if (A[p][k] === 0) return { A, perm, sign: 0, n };
         if (p !== k) { [A[p], A[k]] = [A[k], A[p]]; [perm[p], perm[k]] = [perm[k], perm[p]]; sign = -sign; }
-        for (let i = k + 1; i < n; i++) { A[i][k] /= A[k][k]; for (let j = k + 1; j < n; j++) A[i][j] -= A[i][k] * A[k][j]; }
+        for (let i = k + 1; i < n; i++) { tick(); A[i][k] /= A[k][k]; for (let j = k + 1; j < n; j++) A[i][j] -= A[i][k] * A[k][j]; }
       }
       return { A, perm, sign, n };
     }
     function det(M) { const L = lu(M); if (!L) return NaN; if (L.sign === 0) return 0; let d = L.sign; for (let i = 0; i < L.n; i++) d *= L.A[i][i]; return d; }
-    function luSolve(L, b) { const n = L.n; const y = new Array(n); for (let i = 0; i < n; i++) { let s = b[L.perm[i]]; for (let j = 0; j < i; j++) s -= L.A[i][j] * y[j]; y[i] = s; } const x = new Array(n); for (let i = n - 1; i >= 0; i--) { let s = y[i]; for (let j = i + 1; j < n; j++) s -= L.A[i][j] * x[j]; x[i] = s / L.A[i][i]; } return x; }
-    function linsolve(M, b) { const L = lu(M); if (!L || L.sign === 0 || !isA(b) || b.length !== L.n) return NaN; return luSolve(L, b); }
+    function luSolve(L, b) { const n = L.n; const y = new Array(n); for (let i = 0; i < n; i++) { tick(); let s = b[L.perm[i]]; for (let j = 0; j < i; j++) s -= L.A[i][j] * y[j]; y[i] = s; } const x = new Array(n); for (let i = n - 1; i >= 0; i--) { tick(); let s = y[i]; for (let j = i + 1; j < n; j++) s -= L.A[i][j] * x[j]; x[i] = s / L.A[i][i]; } return x; }
+    function linsolve(M, b) { const L = lu(M); b = reals(b); if (!L || L.sign === 0 || !b || b.length !== L.n) return NaN; return luSolve(L, b); }
     function inv(M) { const L = lu(M); if (!L || L.sign === 0) return NaN; const cols = []; for (let j = 0; j < L.n; j++) { const e = new Array(L.n).fill(0); e[j] = 1; cols.push(luSolve(L, e)); } return trans(cols); }
-    function trace(M) { const sh = shape(M); if (!sh || sh[0] !== sh[1]) return NaN; let s = 0; for (let i = 0; i < sh[0]; i++) s += M[i][i]; return s; }
+    function trace(M) { const sh = shape(M); if (!sh || sh[0] !== sh[1] || !nums([M])) return NaN; let s = 0; for (let i = 0; i < sh[0]; i++) s += M[i][i]; return s; }
     function eye(n) { if (!Number.isInteger(n) || n < 1 || n > 100) return NaN; return Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))); }
     // Complex helpers exposed as functions
     const re = (a) => (isC(a) ? a.re : a); const im = (a) => (isC(a) ? a.im : 0);
@@ -963,6 +1006,8 @@
   const MAX_EXPR = 10000, MAX_DEPTH = 300, BUDGET_MS = 1500;
   const BUDGET = { steps: 0, until: 0 };
   function tooLarge() { const e = new Error('The calculation is too large to finish.'); e.budget = true; return e; }
+  // The long loops of the maths library look at the same clock (REVIEW 2026-10-04 高1).
+  ML._onTick(() => { if (BUDGET.until && Date.now() > BUDGET.until) throw tooLarge(); });
   // One calculation from the page: evalAST with a clock on it.
   function evalTop(ast, scope) {
     BUDGET.steps = 0; BUDGET.until = Date.now() + BUDGET_MS;
@@ -1493,12 +1538,30 @@
     return isFinite(n) ? Math.min(SIDE_WIDTH_PCT_MAX, Math.max(SIDE_WIDTH_PCT_MIN, n)) : SIDE_WIDTH_PCT_DEFAULT;
   }
 
+  // Width of the AI assistant's column (the owner, 2026-10-04): pixels 240–1200, or a percentage
+  // 15–60 of the window, kept as the user setting ai_width ("500px", "30%") the way EditBase
+  // keeps the widths of its bars.
+  function parseAiWidth(w) {
+    const m = /^(\d+(?:\.\d+)?)(px|%)$/.exec(String(w || '').trim());
+    return m ? { w: Number(m[1]), u: m[2] } : { w: 500, u: 'px' };
+  }
+  function clampAiWidth(w, u) {
+    u = u === '%' ? '%' : 'px';
+    let n = Number(w);
+    if (!(n > 0)) n = u === '%' ? 30 : 500;
+    n = u === '%' ? Math.min(60, Math.max(15, n)) : Math.min(1200, Math.max(240, n));
+    return (Math.round(n * 100) / 100) + u;
+  }
+
+  // The text field the right button's menu was opened on (a DOM node, so not in the reactive state).
+  let ctxField = null;
+
   const TEMPLATE = `
-  <div class="layout">
+  <div class="layout" :class="{ 'has-ai': ai.show }">
     <aside class="sidebar">
       <div class="brand"><span class="logo"><svg viewBox="320 403 1348 1011"><path fill="none" stroke="#fff" stroke-width="100" d="M1043.28,1357.05c-3.65-4.48-4.91-9.79-3.78-15.97l115.97-542.86c1.12-6.16,4.33-11.48,9.66-15.97,5.32-4.48,11.06-6.72,17.23-6.72h262.19c37.53,0,69.33,7.14,95.38,21.43,26.05,14.29,45.51,33.06,58.4,56.3,12.88,23.25,19.33,47.77,19.33,73.53,0,12.33-1.13,22.98-3.36,31.93-5.61,28.02-15.27,50.56-28.99,67.65-13.73,17.1-27.31,30.12-40.76,39.08,25.21,20.73,37.82,47.62,37.82,80.67,0,12.89-1.68,27.46-5.04,43.7-7.85,35.29-19.05,65.42-33.61,90.34-14.57,24.93-37.12,45.1-67.65,60.5-30.54,15.42-71.01,23.11-121.43,23.11h-296.64c-6.17,0-11.07-2.23-14.71-6.72ZM1356.31,1233.52c19.04,0,35.15-6.16,48.32-18.49,13.16-12.31,19.75-27.17,19.75-44.54,0-11.77-4.2-21.29-12.6-28.57-8.4-7.27-19.62-10.92-33.61-10.92h-138.66l-21.85,102.52h138.66ZM1287.4,905.79l-20.17,95.8h130.25c16.81,0,30.53-4.2,41.18-12.61,10.64-8.4,17.36-20.17,20.17-35.29,1.12-6.72,1.68-11.2,1.68-13.45,0-11.2-3.65-19.75-10.92-25.63-7.29-5.88-17.94-8.82-31.93-8.82h-130.25Z"/><path fill="#2e3192" d="M1043.28,1357.05c-3.65-4.48-4.91-9.79-3.78-15.97l115.97-542.86c1.12-6.16,4.33-11.48,9.66-15.97,5.32-4.48,11.06-6.72,17.23-6.72h262.19c37.53,0,69.33,7.14,95.38,21.43,26.05,14.29,45.51,33.06,58.4,56.3,12.88,23.25,19.33,47.77,19.33,73.53,0,12.33-1.13,22.98-3.36,31.93-5.61,28.02-15.27,50.56-28.99,67.65-13.73,17.1-27.31,30.12-40.76,39.08,25.21,20.73,37.82,47.62,37.82,80.67,0,12.89-1.68,27.46-5.04,43.7-7.85,35.29-19.05,65.42-33.61,90.34-14.57,24.93-37.12,45.1-67.65,60.5-30.54,15.42-71.01,23.11-121.43,23.11h-296.64c-6.17,0-11.07-2.23-14.71-6.72ZM1356.31,1233.52c19.04,0,35.15-6.16,48.32-18.49,13.16-12.31,19.75-27.17,19.75-44.54,0-11.77-4.2-21.29-12.6-28.57-8.4-7.27-19.62-10.92-33.61-10.92h-138.66l-21.85,102.52h138.66ZM1287.4,905.79l-20.17,95.8h130.25c16.81,0,30.53-4.2,41.18-12.61,10.64-8.4,17.36-20.17,20.17-35.29,1.12-6.72,1.68-11.2,1.68-13.45,0-11.2-3.65-19.75-10.92-25.63-7.29-5.88-17.94-8.82-31.93-8.82h-130.25Z"/><path fill="#e56b00" d="M1298.45,464.1c6.23,6.91,8.39,15.12,6.48,24.62l-33.09,137.38c-1.92,9.5-7.67,17.72-17.27,24.62s-19.66,10.36-30.2,10.36h-430.14l-41.72,177.56h401.38c10.53,0,18.92,3.47,25.16,10.38s7.92,15.11,5.05,24.61l-31.66,137.37c-1.92,9.52-7.67,17.73-17.27,24.64s-19.66,10.36-30.2,10.36h-401.38l-66.17,279.94c-1.92,9.5-7.44,17.72-16.55,24.62s-18.94,10.36-29.48,10.36h-188.47c-10.55,0-18.94-3.45-25.17-10.36s-8.39-15.12-6.47-24.62l198.53-837.22c1.91-9.5,7.42-17.72,16.53-24.62s18.94-10.38,29.5-10.38h657.44c10.55,0,18.94,3.47,25.17,10.38Z"/><path fill="none" stroke="#fff" stroke-width="100" d="M1298.45,464.1c6.23,6.91,8.39,15.12,6.48,24.62l-33.09,137.38c-1.92,9.5-7.67,17.72-17.27,24.62s-19.66,10.36-30.2,10.36h-430.14l-41.72,177.56h401.38c10.53,0,18.92,3.47,25.16,10.38s7.92,15.11,5.05,24.61l-31.66,137.37c-1.92,9.52-7.67,17.73-17.27,24.64s-19.66,10.36-30.2,10.36h-401.38l-66.17,279.94c-1.92,9.5-7.44,17.72-16.55,24.62s-18.94,10.36-29.48,10.36h-188.47c-10.55,0-18.94-3.45-25.17-10.36s-8.39-15.12-6.47-24.62l198.53-837.22c1.91-9.5,7.42-17.72,16.53-24.62s18.94-10.38,29.5-10.38h657.44c10.55,0,18.94,3.47,25.17,10.38Z"/><path fill="#39b54a" d="M1298.45,464.1c6.23,6.91,8.39,15.12,6.48,24.62l-33.09,137.38c-1.92,9.5-7.67,17.72-17.27,24.62s-19.66,10.36-30.2,10.36h-430.14l-41.72,177.56h401.38c10.53,0,18.92,3.47,25.16,10.38s7.92,15.11,5.05,24.61l-31.66,137.37c-1.92,9.52-7.67,17.73-17.27,24.64s-19.66,10.36-30.2,10.36h-401.38l-66.17,279.94c-1.92,9.5-7.44,17.72-16.55,24.62s-18.94,10.36-29.48,10.36h-188.47c-10.55,0-18.94-3.45-25.17-10.36s-8.39-15.12-6.47-24.62l198.53-837.22c1.91-9.5,7.42-17.72,16.53-24.62s18.94-10.38,29.5-10.38h657.44c10.55,0,18.94,3.47,25.17,10.38Z"/></svg></span><span>FormulaBase</span><span class="tag" v-if="version">v{{ version }}</span></div>
       <nav class="coll-list">
-        <button v-for="c in collections" :key="c.id" class="coll-item" :class="{active: c.id===currentId}" @click="selectCollection(c.id)">
+        <button v-for="c in collections" :key="c.id" class="coll-item" :class="{active: c.id===currentId}" :data-cid="c.id" @click="selectCollection(c.id)">
           <span class="ci-bar" :style="{background: c.color || 'var(--primary)'}"></span>
           <span v-if="shareBadge(c)" class="share-badge" :title="shareBadgeTitle(c)">{{ shareBadge(c) }}</span>
           <span class="ic">{{ c.icon }}</span>
@@ -1541,7 +1604,7 @@
           </div>
           <template v-else>
             <p v-if="!formulas.length" class="empty-hint">{{ t('No formulas yet. Add one or pick a template to start calculating.') }}</p>
-            <div v-for="f in formulas" :key="f.id" class="card fb-card" :class="{active: f.id===activeId}" @focusin="activeId=f.id" @click="activeId=f.id">
+            <div v-for="f in formulas" :key="f.id" class="card fb-card" :class="{active: f.id===activeId}" :data-fid="f.id" @focusin="activeId=f.id" @click="activeId=f.id">
               <div class="fb-head">
                 <div class="fb-name">{{ f.name }}</div>
                 <span class="badge-outline" v-if="isReversible(f)" :title="t('This formula can be reverse-calculated (solve for a variable from the result).')">⇄ {{ t('Reversible') }}</span>
@@ -1624,6 +1687,98 @@
         </aside>
       </div>
     </main>
+
+    <!-- The AI assistant (through AI-Hub), at the far right: shut, a narrow handle whose
+         triangle points the way it opens; open, a column as wide as Settings says. It
+         only reads what the browser sends and changes nothing (the owner, 2026-10-04). -->
+    <div class="fb-aibar" v-if="ai.show && !ai.open">
+      <button type="button" class="hnd" @click="aiToggle" :title="t('Show') + ' — ' + t('AI assistant')">◀</button>
+      <span class="lb">{{ t('AI assistant') }}</span>
+    </div>
+    <section class="fb-ai" :class="{ 'is-drop': ai.drop }" v-if="ai.show && ai.open" :style="{ '--fb-ai-width': aiWidth() }"
+      @dragover="aiDragOver" @dragleave="aiDragLeave" @drop="aiDrop">
+      <!-- The edge between the work and the assistant (the owner, 2026-10-06): dragged, the
+           column takes the width there and then and the work gives up the same; let go, the
+           width is kept as Settings keeps it. A double click puts back the 500px it starts at;
+           with the keyboard, ← and → move it 10px. -->
+      <div class="fb-ai-grip" role="separator" aria-orientation="vertical" tabindex="0"
+        :aria-valuenow="parseFloat(aiWidthNow())" :aria-valuemin="aiWidthU === '%' ? 15 : 240" :aria-valuemax="aiWidthU === '%' ? 60 : 1200" :aria-valuetext="aiWidthNow()"
+        :title="t('Drag to change the width; double-click to reset')" :aria-label="t('Drag to change the width; double-click to reset')"
+        @pointerdown="aiGripDown" @pointermove="aiGripMove" @pointerup="aiGripUp" @pointercancel="aiGripUp" @lostpointercapture="aiGripUp"
+        @dblclick="aiGripReset" @keydown="aiGripKey"></div>
+      <div class="fb-ai-head">
+        <span class="ttl">{{ t('AI assistant') }}</span>
+        <span class="grow"></span>
+        <span class="model" v-if="ai.model" :title="ai.model">{{ ai.model }}</span>
+        <!-- The conversation saved to Files as Markdown, as it stands or summed up by the AI
+             (the owner, 2026-10-06): AI-Hub/FormulaBase/ in the person's Files. -->
+        <button type="button" class="fb-ai-ic" @click="aiSave(false)" :disabled="!ai.msgs.length || ai.busy || !!ai.saving" :title="t('Save the conversation')" :aria-label="t('Save the conversation')"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2.5h8l2 2v8.5a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5z"/><path d="M5.5 2.5v3h5v-3M5 13.5v-4h6v4"/></svg></button>
+        <button type="button" class="fb-ai-ic" @click="aiSave(true)" :disabled="!ai.msgs.length || ai.busy || !!ai.saving || !ai.ready" :title="t('Sum up the conversation and save it')" :aria-label="t('Sum up the conversation and save it')"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h6M3 12.5h4"/><path d="M11.5 10v4M9.5 12l2 2 2-2"/></svg></button>
+        <button type="button" class="btn xs fb-ai-new" @click="aiClear" :disabled="ai.busy" :title="t('New conversation')" :aria-label="t('New conversation')">＋<span class="lb"> {{ t('New conversation') }}</span></button>
+        <button type="button" class="hnd" @click="aiToggle" :title="t('Hide') + ' — ' + t('AI assistant')">▶</button>
+      </div>
+      <div class="fb-ai-msgs" ref="aiMsgs">
+        <p class="fb-ai-hint" v-if="!ai.msgs.length">{{ t('Ask what a formula calculates, how to write one, or how to do something in FormulaBase.') }}</p>
+        <p class="fb-ai-hint" v-if="!ai.msgs.length && ai.imagesOk">{{ t('You can also paste (Ctrl+V) or drop images here.') }}</p>
+        <!-- Each message can be copied as it stands (the owner, 2026-10-06): the button shows while
+             the pointer is on the message; images sent with a question are shown small above its words. -->
+        <div class="fb-ai-msg" :class="m.role === 'user' ? 'is-user' : 'is-bot'" v-for="(m, i) in ai.msgs" :key="i"><div class="fb-ai-bubble"><div class="fb-ai-imgs" v-if="m.images && m.images.length"><img v-for="(im, k) in m.images" :key="k" :src="im.url" :alt="im.name" :title="im.name"></div>{{ m.text }}</div><button type="button" class="fb-ai-copy" v-if="m.text" :class="{ done: m.copied }" :title="t('Copy')" :aria-label="t('Copy')" @click="aiCopy(m)">{{ m.copied ? '✓' : '📋' }}<span class="fb-ai-copied" v-if="m.copied" role="status">{{ t('Copied') }}</span></button></div>
+        <div class="fb-ai-msg is-bot" v-if="ai.busy"><div class="fb-ai-bubble is-busy">{{ t('Thinking…') }}</div></div>
+        <p class="fb-ai-err" v-if="ai.error">{{ ai.error }}</p>
+        <p class="fb-ai-note" v-if="ai.note" role="status">{{ ai.note }}</p>
+        <p class="fb-ai-note" v-if="ai.saving" role="status">{{ ai.saving === 'summary' ? t('Summing up the conversation…') : t('Saving the conversation…') }}</p>
+        <p class="fb-ai-saved" v-if="ai.saved" role="status">{{ t('Saved to {path}.', { path: ai.saved.path }) }}
+          <a :href="ai.saved.url" target="_blank" rel="noopener">{{ t('Open in Files') }}</a></p>
+      </div>
+      <div class="fb-ai-foot">
+        <!-- Images pasted (Ctrl+V) or dropped go with the next question: shown small here, × takes one off. -->
+        <div class="fb-ai-att" v-if="ai.images.length || ai.attNote">
+          <span class="fb-ai-thumb" v-for="(im, k) in ai.images" :key="im.id"><img :src="im.url" :alt="im.name" :title="im.name"><button type="button" :title="t('Remove image')" :aria-label="t('Remove image')" @click="aiUnattach(k)">×</button></span>
+          <p class="fb-ai-attnote" v-if="ai.attNote" role="alert">{{ ai.attNote }}</p>
+        </div>
+        <textarea v-model="ai.input" rows="2" :placeholder="ai.ready ? t('Message to the assistant…') : aiNotReady()" :disabled="!ai.ready"
+          @keydown="aiKey($event)" @paste="aiPaste" @compositionstart="ai.composing = true" @compositionend="ai.composing = false"></textarea>
+        <button type="button" class="btn primary" @click="aiSend" :disabled="ai.busy || !ai.ready || (!ai.input.trim() && !ai.images.length)">{{ t('Send') }}</button>
+      </div>
+    </section>
+
+    <!-- The right button (the owner, 2026-10-04). The browser's own menu is kept off the whole
+         app; this one, drawn as EditBase draws its own, offers only what the screen already
+         offers for the thing under the pointer. Mousedown is stopped on it so that a text
+         field keeps its focus and its selection while an item is chosen. -->
+    <div v-if="ctx.open" class="fb-ctxmenu" :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }" @mousedown.prevent @contextmenu.prevent>
+      <template v-if="ctx.kind === 'formula' && ctx.formula">
+        <div class="hd">{{ ctx.formula.name }}</div>
+        <button type="button" class="ci" v-if="canEdit" @click="ctxDo('edit')">{{ t('Edit') }}</button>
+        <button type="button" class="ci" @click="ctxDo('copy-expr')">⧉ {{ t('Copy expression') }}</button>
+        <button type="button" class="ci" @click="ctxDo('output')">📤 {{ t('Output') }}</button>
+        <div class="sep"></div>
+        <button type="button" class="ci" v-if="canEdit" @click="ctxDo('versions')">🕐 {{ t('Versions') }}…</button>
+        <div class="sep"></div>
+        <button type="button" class="ci danger" v-if="canDelete" @click="ctxDo('delete')">{{ t('Delete') }}</button>
+      </template>
+      <template v-else-if="ctx.kind === 'coll' && ctx.coll">
+        <div class="hd">{{ ctx.coll.icon }} {{ ctx.coll.name }}</div>
+        <button type="button" class="ci" @click="ctxDo('coll-open')">{{ t('Open') }}</button>
+        <button type="button" class="ci" v-if="ctxCollCanSettings(ctx.coll)" @click="ctxDo('coll-settings')">{{ t('⚙️ Collection settings') }}</button>
+        <button type="button" class="ci" v-if="ctxCollIsOwner(ctx.coll)" @click="ctxDo('coll-share')">👥 {{ t('Share settings') }}</button>
+        <div class="sep"></div>
+        <button type="button" class="ci danger" v-if="ctxCollCanSettings(ctx.coll)" @click="ctxDo('coll-delete')">{{ t('Delete') }}</button>
+      </template>
+      <template v-else-if="ctx.kind === 'field'">
+        <button type="button" class="ci" :disabled="!ctx.canCut" @click="ctxDo('cut')">{{ t('Cut') }}<span class="s">Ctrl+X</span></button>
+        <button type="button" class="ci" :disabled="!ctx.hasSel" @click="ctxDo('copy')">{{ t('Copy') }}<span class="s">Ctrl+C</span></button>
+        <button type="button" class="ci" :disabled="!ctx.canPaste" @click="ctxDo('paste')">{{ t('Paste') }}<span class="s">Ctrl+V</span></button>
+        <div class="sep"></div>
+        <button type="button" class="ci" @click="ctxDo('selectall')">{{ t('Select all') }}<span class="s">Ctrl+A</span></button>
+      </template>
+      <template v-else>
+        <button type="button" class="ci" v-if="current && canEdit" @click="ctxDo('new-formula')">＋ {{ t('New formula') }}</button>
+        <button type="button" class="ci" v-if="current && canEdit" @click="ctxDo('templates')">＋ {{ t('Templates') }}</button>
+        <div class="sep"></div>
+        <button type="button" class="ci" @click="ctxDo('new-coll')">{{ t('＋ New collection') }}</button>
+      </template>
+    </div>
 
     <div class="modal-mask" v-if="modal==='collection'">
       <div class="modal">
@@ -1905,69 +2060,106 @@
 
     <div class="modal-mask" v-if="modal==='settings'">
       <div class="modal">
-        <div class="modal-head"><h3>{{ t('⚙️ Settings') }}</h3><button class="icon-btn" @click="cancelSettings">✕</button></div>
+        <!-- The settings dialog looks the same in every Base-series app (the owner, 2026-10-04):
+             NetBase's is the reference -- a head that says whose settings these are, tabs with an
+             icon each, one heading per tab, the theme as three pictured cards, and a quiet line
+             of help under each control. -->
+        <div class="modal-head set-head">
+          <span class="ic big">⚙</span>
+          <div><strong>{{ t('Settings') }}</strong><div class="dim">{{ t('Applies to FormulaBase only, for your account.') }}</div></div>
+          <button type="button" class="set-close" :title="t('Close')" :aria-label="t('Close')" @click="cancelSettings"><svg viewBox="0 0 24 24"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg></button>
+        </div>
         <div class="modal-body settings-body">
-          <div class="field">
-            <label>🌗 {{ t('Theme') }}</label>
-            <div class="radios">
-              <label><input type="radio" value="auto" v-model="settingsForm.theme" @change="previewTheme"> {{ t('Default (match Nextcloud)') }}</label>
-              <label><input type="radio" value="light" v-model="settingsForm.theme" @change="previewTheme"> {{ t('Light') }}</label>
-              <label><input type="radio" value="dark" v-model="settingsForm.theme" @change="previewTheme"> {{ t('Dark') }}</label>
-            </div>
+          <div class="set-tabs" role="tablist">
+            <button v-for="s in settingsTabs" :key="s.id" type="button"
+                    class="set-tab" :class="{active: settingsTab === s.id}"
+                    role="tab" :aria-selected="settingsTab === s.id ? 'true' : 'false'" :title="t(s.label)"
+                    @click="settingsTab = s.id">
+              <span class="ic">{{ s.icon }}</span>{{ t(s.label) }}
+            </button>
           </div>
-          <div class="field" style="margin-top:16px">
-            <label>🌐 {{ t('Language') }}</label>
-            <select v-model="settingsForm.language">
-              <option value="auto">{{ t('System default (match Nextcloud)') }}</option>
-              <option v-for="lg in languages" :key="lg.code" :value="lg.code">{{ lg.name }}</option>
-            </select>
-            <div class="field-hint">{{ t('The display language switches when you press “Save”.') }}</div>
-          </div>
-          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <label>🧭 {{ t('Calculation steps panel width') }}</label>
-            <div class="field-hint" style="margin-bottom:8px">{{ t('How wide the calculation-steps panel opens next to a formula.') }}</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <input type="range" min="20" max="50" step="1" v-model.number="settingsForm.stepsWidthPct" @input="previewStepsWidth" style="flex:1">
-              <span style="min-width:40px;text-align:right">{{ settingsForm.stepsWidthPct }}%</span>
+
+          <section class="set-group" v-show="settingsTab === 'look'">
+            <h3><span class="ic">🎨</span>{{ t('Appearance and language') }}</h3>
+            <div class="theme-picks">
+              <button v-for="opt in themeOptions" :key="opt.id" type="button" class="theme-pick" :class="{active: settingsForm.theme === opt.id}" @click="settingsForm.theme = opt.id; previewTheme()">
+                <span class="swatch" :class="opt.id"><i class="bar"></i><i class="line"></i><i class="line short"></i></span>
+                <strong>{{ t(opt.label) }}</strong>
+                <span class="dim">{{ t(opt.hint) }}</span>
+                <span class="tick" v-if="settingsForm.theme === opt.id">✓</span>
+              </button>
             </div>
-          </div>
-          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <label>🕐 {{ t('Formula versions') }}</label>
-            <div class="field-hint" style="margin-bottom:8px">{{ t('The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.') }}</div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:13px;color:var(--muted)">{{ t('Keep up to') }}</span>
-              <input type="number" min="0" max="99" step="1" v-model.number="settingsForm.versionKeep" style="width:88px">
-              <span style="font-size:13px;color:var(--muted)">{{ t('versions per formula') }}</span>
+            <p class="dim tiny">{{ t('Saved to your account, so it follows you to every browser you sign in from.') }}</p>
+
+            <h4>{{ t('Language') }}</h4>
+            <label class="fl">
+              <select v-model="settingsForm.language">
+                <option value="auto">{{ t('Follow Nextcloud') }}</option>
+                <option v-for="lg in languages" :key="lg.code" :value="lg.code">{{ lg.name }}</option>
+              </select>
+            </label>
+            <p class="dim tiny">{{ t('FormulaBase can speak a different language from the rest of Nextcloud.') }}</p>
+            <p class="dim tiny">{{ t('The display language switches when you press “Save”.') }}</p>
+
+            <template v-if="ai.show">
+              <h4>🤖 {{ t('Width of the AI assistant') }}</h4>
+              <div class="fl">
+                <span class="ai-widthbox">
+                  <input type="number" step="1" :min="settingsForm.aiWidthU === '%' ? 15 : 240" :max="settingsForm.aiWidthU === '%' ? 60 : 1200" v-model.number="settingsForm.aiWidthW" :aria-label="t('Width of the AI assistant')">
+                  <select v-model="settingsForm.aiWidthU" :aria-label="t('Width of the AI assistant')"><option value="px">px</option><option value="%">%</option></select>
+                </span>
+              </div>
+              <p class="dim tiny">{{ t('In pixels (240 to 1200), or as a percentage of the width of the window (15 to 60).') }}</p>
+            </template>
+          </section>
+
+          <section class="set-group" v-show="settingsTab === 'calc'">
+            <h3><span class="ic">🧮</span>{{ t('Calculation and saving') }}</h3>
+
+            <h4>{{ t('Calculation steps panel width') }}</h4>
+            <div class="fl-row range">
+              <input type="range" min="20" max="50" step="1" v-model.number="settingsForm.stepsWidthPct" @input="previewStepsWidth" :aria-label="t('Calculation steps panel width')">
+              <span class="pct">{{ settingsForm.stepsWidthPct }}%</span>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
-              <span style="font-size:13px;color:var(--muted)">{{ t('A version is kept') }}</span>
-              <select v-model="settingsForm.versionWhen">
+            <p class="dim tiny">{{ t('How wide the calculation-steps panel opens next to a formula.') }}</p>
+
+            <h4>{{ t('Formula versions') }}</h4>
+            <p class="dim tiny">{{ t('The version before each edit is kept beside the formula, numbered #01 (newest) upward; the oldest falls off past the limit below. Nought keeps none.') }}</p>
+            <div class="fl-row inline">
+              <span class="dim">{{ t('Keep up to') }}</span>
+              <input class="short" type="number" min="0" max="99" step="1" v-model.number="settingsForm.versionKeep" :aria-label="t('Keep up to')">
+              <span class="dim">{{ t('versions per formula') }}</span>
+            </div>
+            <div class="fl-row inline">
+              <span class="dim">{{ t('A version is kept') }}</span>
+              <select v-model="settingsForm.versionWhen" :aria-label="t('A version is kept')">
                 <option value="manual">{{ t('only when you ask for one') }}</option>
                 <option value="auto">{{ t('every time a formula is edited') }}</option>
               </select>
             </div>
-          </div>
-          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <label>📤 {{ t('Formula save destination') }}</label>
-            <div class="field-hint" style="margin-bottom:8px">{{ t('The folder "Save" opens to when exporting a formula.') }}</div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span class="fp-cur" style="flex:1">/{{ exportFolder }}</span>
+
+            <h4>{{ t('Formula save destination') }}</h4>
+            <div class="fl-row">
+              <span class="fp-cur grow">/{{ exportFolder }}</span>
               <button type="button" class="btn sm" @click="openDefaultFolderPicker">{{ t('Change') }}</button>
             </div>
-          </div>
-          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <label>📐 {{ t('Template settings') }}</label>
-            <div class="field-hint" style="margin-bottom:8px">{{ t('Choose which formula templates appear in the template list and its search.') }}</div>
-            <button type="button" class="btn sm fb-tplset-open" @click="openTplSettings">📐 {{ t('Template settings') }}</button>
-          </div>
-          <div class="field" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-            <label>💾 {{ t('Backup / Restore') }}</label>
-            <div class="field-hint" style="margin-bottom:8px">{{ t('Save all your collections and formulas to a ZIP file, or restore them from one.') }}</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <p class="dim tiny">{{ t('The folder "Save" opens to when exporting a formula.') }}</p>
+
+            <h4>{{ t('Template settings') }}</h4>
+            <p class="dim tiny">{{ t('Choose which formula templates appear in the template list and its search.') }}</p>
+            <div class="fl-row">
+              <button type="button" class="btn sm fb-tplset-open" @click="openTplSettings">📐 {{ t('Template settings') }}</button>
+            </div>
+          </section>
+
+          <section class="set-group" v-show="settingsTab === 'backup'">
+            <h3><span class="ic">💾</span>{{ t('Backup / Restore') }}</h3>
+            <p class="dim tiny">{{ t('Save all your collections and formulas to a ZIP file, or restore them from one.') }}</p>
+            <div class="fl-row">
               <button type="button" class="btn sm" @click="openBackup">💾 {{ t('Download all data') }}</button>
               <button type="button" class="btn sm" @click="openRestore">♻ {{ t('Restore from backup') }}</button>
             </div>
-          </div>
+          </section>
         </div>
         <div class="modal-foot">
           <span class="spacer"></span>
@@ -2142,7 +2334,33 @@
         versionKeep: 10, versionWhen: 'manual',
         // versions kept beside a formula (floats above the formula edit modal)
         vers: { open: false, id: null, title: '', list: [] },
-        settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT, versionKeep: 10, versionWhen: 'manual' },
+        settingsForm: { theme: 'auto', language: 'auto', stepsWidthPct: SIDE_WIDTH_PCT_DEFAULT, versionKeep: 10, versionWhen: 'manual', aiWidthW: 500, aiWidthU: 'px' },
+        // The AI assistant: shown only when AI-Hub is there and the administrator allows
+        // this person; always shut when the app opens. Its column's width is a user setting.
+        ai: { show: false, ready: false, reason: '', model: '', read: [], search: false, open: false,
+          msgs: [], input: '', busy: false, busyText: '', error: '', composing: false, ask: 0,
+          // images waiting to go with the next question; whether this AI connection takes images
+          images: [], attNote: '', drop: false, imagesOk: false,
+          // the conversation's token on the server (kept per tab and collection), saving to Files
+          // and what was saved, and a word when AI-Hub had let the conversation go
+          conv: '', saving: '', saved: null, note: '' },
+        aiWidthW: 500, aiWidthU: 'px',
+        // Which group of the settings dialog is on screen; named, as NetBase names its own.
+        settingsTab: 'look',
+        settingsTabs: [
+          { id: 'look', icon: '🎨', label: 'Appearance and language' },
+          { id: 'calc', icon: '🧮', label: 'Calculation and saving' },
+          { id: 'backup', icon: '💾', label: 'Backup / Restore' },
+        ],
+        themeOptions: [
+          { id: 'auto', label: 'Default (match Nextcloud)', hint: 'Follows whatever theme Nextcloud is using' },
+          { id: 'light', label: 'Light', hint: 'Always light, whatever Nextcloud does' },
+          { id: 'dark', label: 'Dark', hint: 'Always dark, whatever Nextcloud does' },
+        ],
+        // The right button's menu: where it is and what it was opened on (a formula card, a
+        // collection in the sidebar, a text field, or nothing in particular). The field itself
+        // is kept outside the reactive state, in ctxField.
+        ctx: { open: false, x: 0, y: 0, kind: '', formula: null, coll: null, hasSel: true, canCut: true, canPaste: false },
         pad: PAD,
         showFuncs: false,
         funcQuery: '',
@@ -2671,6 +2889,7 @@
           this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
           this.versionKeep = s.version_keep == null ? 10 : s.version_keep;
           this.versionWhen = s.version_when || 'manual';
+          this.setAiWidth(s.ai_width);
           this.setTplHidden(s.tpl_hidden);
           this.applyTheme();
           await this.applyLanguage(this.language);
@@ -2679,7 +2898,8 @@
       openSettings() {
         this._themeBefore = this.theme;
         this._sideWidthPctBefore = this.sideWidthPct;
-        this.settingsForm = { theme: this.theme, language: this.language, stepsWidthPct: this.sideWidthPct, versionKeep: this.versionKeep, versionWhen: this.versionWhen };
+        this.settingsTab = 'look';
+        this.settingsForm = { theme: this.theme, language: this.language, stepsWidthPct: this.sideWidthPct, versionKeep: this.versionKeep, versionWhen: this.versionWhen, aiWidthW: this.aiWidthW, aiWidthU: this.aiWidthU };
         this.modal = 'settings';
       },
       cancelSettings() {
@@ -2689,6 +2909,486 @@
         this.modal = null;
       },
       previewStepsWidth() { this.sideWidthPct = clampSideWidthPct(this.settingsForm.stepsWidthPct); },
+      setAiWidth(w) { const a = parseAiWidth(w); this.aiWidthW = a.w; this.aiWidthU = a.u; },
+      /** The column's width for CSS: a percentage is of the window's width. */
+      aiWidth() { return clampAiWidth(this.aiWidthW, this.aiWidthU).replace(/%$/, 'vw'); },
+      /** The width as it is kept: "500px" or "30%". */
+      aiWidthNow() { return clampAiWidth(this.aiWidthW, this.aiWidthU); },
+      // ---- the edge between the work and the AI assistant (the owner, 2026-10-06) ----
+      // Dragged, the column takes the width the pointer leaves it, in the unit the setting is
+      // kept in (a percentage stays a percentage of the window's width), within the limits
+      // Settings allows and never past the column's own 70% of the window. Let go, it is kept
+      // where Settings keeps it. A double click puts back 500px; ← → move it 10px.
+      aiGripDown(e) {
+        if (e.button !== 0) return;
+        this._aiGrip = { x: e.clientX, w: e.currentTarget.parentElement.getBoundingClientRect().width, was: this.aiWidthNow() };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* the moves still come while the pointer is over it */ }
+        document.documentElement.classList.add('fb-col-resizing');
+        e.preventDefault();
+      },
+      aiGripMove(e) {
+        if (this._aiGrip) this.aiGripPx(this._aiGrip.w + this._aiGrip.x - e.clientX);
+      },
+      aiGripUp() {
+        const g = this._aiGrip;
+        if (!g) return;
+        this._aiGrip = null;
+        document.documentElement.classList.remove('fb-col-resizing');
+        if (this.aiWidthNow() !== g.was) this.aiGripSave();
+      },
+      aiGripPx(px) {
+        const win = window.innerWidth || document.documentElement.clientWidth || 1000;
+        px = Math.max(1, Math.min(px, win * 0.7)); // a pointer past the right edge is the narrowest, not "no width"
+        this.setAiWidth(this.aiWidthU === '%' ? clampAiWidth(px / win * 100, '%') : clampAiWidth(Math.round(px), 'px'));
+      },
+      aiGripKey(e) {
+        const d = { ArrowLeft: 10, ArrowRight: -10 }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        this.aiGripPx(e.currentTarget.parentElement.getBoundingClientRect().width + d);
+        clearTimeout(this._aiGripT);
+        this._aiGripT = setTimeout(() => this.aiGripSave(), 400);
+      },
+      aiGripReset() { this.setAiWidth('500px'); this.aiGripSave(); },
+      async aiGripSave() {
+        clearTimeout(this._aiGripT);
+        const w = this.aiWidthNow();
+        if (this.settingsForm) { this.settingsForm.aiWidthW = this.aiWidthW; this.settingsForm.aiWidthU = this.aiWidthU; }
+        try { await api('settings', { method: 'PUT', body: JSON.stringify({ ai_width: w }) }); } catch (e) { /* kept on this page at least */ }
+      },
+      // ---- the right button (the owner, 2026-10-04) ----
+      // The browser's own menu is kept off everywhere in the app. In its place a menu of the
+      // app's own offers what the screen already offers for the thing under the pointer: a
+      // formula card, a collection in the sidebar, or a text field (whose cut, copy and paste
+      // would otherwise be lost with the browser's menu). Nothing that is not already a button.
+      onContextMenu(e) {
+        const tg = e.target;
+        if (!tg || tg.nodeType !== 1) return;
+        e.preventDefault();
+        if (tg.closest('.fb-ctxmenu')) return;
+        this.closeCtx();
+        const ctx = { kind: '', formula: null, coll: null, hasSel: true, canCut: true, canPaste: false };
+        ctxField = null;
+        const field = tg.closest('input, textarea');
+        const textual = field && (field.tagName === 'TEXTAREA' || /^(text|search|url|email|tel|password|number|)$/.test(field.type || ''));
+        if (textual) {
+          if (field.disabled) return;
+          ctx.kind = 'field';
+          ctxField = field;
+          let hasSel = true;
+          // A number input keeps its selection to itself; its items stay enabled.
+          try { hasSel = field.selectionStart !== field.selectionEnd; } catch (err) { hasSel = true; }
+          ctx.hasSel = hasSel;
+          ctx.canCut = hasSel && !field.readOnly;
+          ctx.canPaste = !field.readOnly && !!(navigator.clipboard && navigator.clipboard.readText);
+        } else {
+          const card = tg.closest('.fb-card[data-fid]');
+          const item = tg.closest('.coll-item[data-cid]');
+          if (card) {
+            ctx.kind = 'formula';
+            ctx.formula = this.formulas.find((f) => String(f.id) === card.getAttribute('data-fid')) || null;
+            if (!ctx.formula) return;
+            this.activeId = ctx.formula.id;
+          } else if (item) {
+            ctx.kind = 'coll';
+            ctx.coll = this.collections.find((c) => String(c.id) === item.getAttribute('data-cid')) || null;
+            if (!ctx.coll) return;
+          } else {
+            // A dialog or the assistant: nothing of the app's to offer there; only no browser menu.
+            if (tg.closest('.modal-mask, .fb-ai, .fb-aibar')) return;
+            ctx.kind = 'empty';
+          }
+        }
+        Object.assign(this.ctx, ctx);
+        this.placeCtx(e.clientX, e.clientY);
+      },
+      /** Put the menu where the pointer is and keep it on the screen (measured once it is drawn). */
+      placeCtx(x, y) {
+        this.ctx.x = Math.max(6, Math.min(x, window.innerWidth - 250));
+        this.ctx.y = Math.max(6, Math.min(y, window.innerHeight - 160));
+        this.ctx.open = true;
+        this.$nextTick(() => {
+          const el = document.querySelector('#formulabase-root .fb-ctxmenu');
+          if (!el) return;
+          const r = el.getBoundingClientRect();
+          if (r.right > window.innerWidth - 6) this.ctx.x = Math.max(6, window.innerWidth - r.width - 6);
+          if (r.bottom > window.innerHeight - 6) this.ctx.y = Math.max(6, window.innerHeight - r.height - 6);
+        });
+      },
+      closeCtx() { if (this.ctx.open) this.ctx.open = false; },
+      // The same rights the collection's own buttons go by (canSettings / isOwner), for a
+      // collection that is not the open one.
+      ctxCollCanSettings(c) { return ['owner', 'delete'].includes((c && c.perm) || 'owner'); },
+      ctxCollIsOwner(c) { return c ? c.is_owner !== false : false; },
+      /** One item of the menu: the very methods the buttons on the screen call. */
+      async ctxDo(what) {
+        const f = this.ctx.formula, c = this.ctx.coll, field = ctxField;
+        this.closeCtx();
+        switch (what) {
+          case 'edit': if (f) this.openFormulaModal(f); break;
+          case 'copy-expr': if (f) this.copyExpr(f); break;
+          case 'output': if (f) this.openExportDialog(f); break;
+          case 'versions': if (f) await this.openVersions(f.id); break;
+          case 'delete': if (f) await this.removeFormula(f); break;
+          case 'coll-open': if (c) await this.selectCollection(c.id); break;
+          case 'coll-settings': if (c) this.openCollectionModal(c); break;
+          case 'coll-share': if (c) { this.openCollectionModal(c); this.shareExpanded = true; } break;
+          case 'coll-delete': if (c) await this.removeCollection(c); break;
+          case 'cut': case 'copy': this.fieldClip(field, what); break;
+          case 'paste': await this.fieldPaste(field); break;
+          case 'selectall': if (field) { field.focus(); try { field.select(); } catch (e) { document.execCommand('selectAll'); } } break;
+          case 'new-formula': this.openFormulaModal(); break;
+          case 'templates': await this.openTemplates(); break;
+          case 'new-coll': this.openCollectionModal(); break;
+          default: break;
+        }
+      },
+      /** Cut or copy from a text field as the keyboard would; the field still has its selection. */
+      fieldClip(field, kind) {
+        if (!field) return;
+        field.focus();
+        let ok = false;
+        try { ok = document.execCommand(kind); } catch (e) { ok = false; }
+        if (!ok) this.notify(T('The browser only allows this from the keyboard: {keys}', { keys: kind === 'cut' ? 'Ctrl+X' : 'Ctrl+C' }), 'error');
+      },
+      /**
+       * Paste at the caret. Reading the clipboard needs the browser's leave, which it gives
+       * only to a page the reader is using; when it says no, say which keys do work.
+       */
+      async fieldPaste(field) {
+        if (!field) return;
+        let text = '';
+        try { text = await navigator.clipboard.readText(); }
+        catch (e) { this.notify(T('The browser would not hand over the clipboard. Use {keys} instead.', { keys: 'Ctrl+V' }), 'error'); return; }
+        if (!text) return;
+        field.focus();
+        let ok = false;
+        // insertText replaces the selection and fires the input event the way typing does, so
+        // v-model sees it. Where it is refused (Firefox), the text is put in by hand and told.
+        try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+        if (!ok) {
+          try { field.setRangeText(text, field.selectionStart, field.selectionEnd, 'end'); }
+          catch (e) { field.value = text; }
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      },
+      // ---- the AI assistant (through AI-Hub; the owner, 2026-10-04) ----
+      // It answers in words only: it reads what the browser sends with each question
+      // (the open collection, the selected formula with its values) and changes nothing.
+      async aiLoad() {
+        try {
+          const st = await api('ai/status');
+          Object.assign(this.ai, { show: !!st.show, ready: !!st.ready, reason: st.reason || '', model: st.model || '',
+            read: Array.isArray(st.read) ? st.read : [], search: !!st.search, imagesOk: !!st.images });
+        } catch (e) { this.ai.show = false; }
+        if (this.ai.show) await this.aiRestore();
+      },
+      // ---- the conversation lasts while this tab is open and the person stays logged in
+      // (the owner, 2026-10-06). Each collection has its own, as before; its token is kept in
+      // this tab's sessionStorage, so a reload goes on with it and a new tab starts afresh.
+      // AI-Hub keeps what was said, for the login it was said in, so after logging out and in
+      // again it starts afresh too.
+      aiConvKey() { return AI_CONV_KEY + ':' + (this.currentId == null ? '' : this.currentId); },
+      aiConvToken(make) {
+        let id = this.ai.conv;
+        if (!id) { try { id = sessionStorage.getItem(this.aiConvKey()) || ''; } catch (e) { id = ''; } }
+        if (!id && make) {
+          const bytes = new Uint8Array(16);
+          (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(bytes) : bytes.forEach((b, i) => { bytes[i] = Math.floor(Math.random() * 256); });
+          id = 'fb' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+          try { sessionStorage.setItem(this.aiConvKey(), id); } catch (e) { /* kept for this page only */ }
+        }
+        this.ai.conv = id;
+        return id;
+      },
+      /** Another collection (or the first one opened): its own conversation, if this tab has one. */
+      aiSwitch() {
+        this.ai.ask += 1;
+        Object.assign(this.ai, { msgs: [], busy: false, busyText: '', error: '', conv: '', saved: null, saving: '', note: '' });
+        if (this.ai.show) this.aiRestore();
+      },
+      /** What AI-Hub still keeps of this collection's conversation in this tab, back on the screen. */
+      async aiRestore() {
+        const id = this.aiConvToken(false);
+        if (!id || this.ai.msgs.length) return;
+        try {
+          const r = await hub('?app=formulabase&conversation=' + encodeURIComponent(id));
+          const turns = Array.isArray(r && r.turns) ? r.turns : [];
+          if (!this.ai.msgs.length && this.ai.conv === id) {
+            this.ai.msgs = turns.filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.text === 'string')
+              .map((m) => ({ role: m.role, text: m.text }));
+            this.aiScroll();
+          }
+        } catch (e) { /* nothing to show: a new conversation */ }
+      },
+      /**
+       * Save the conversation to Files as Markdown (AI-Hub/FormulaBase/…), or have the AI sum
+       * it up once and save the summary. AI-Hub does both, from what it keeps.
+       */
+      async aiSave(summary) {
+        const id = this.aiConvToken(false);
+        if (!id || !this.ai.msgs.length || this.ai.busy || this.ai.saving) return;
+        this.ai.error = '';
+        this.ai.saved = null;
+        this.ai.saving = summary ? 'summary' : 'plain';
+        this.aiScroll();
+        try {
+          let file = null;
+          if (!summary) {
+            file = await hub('/save', { app: 'formulabase', conversation: id });
+          } else {
+            const r = await hub('/summary', { app: 'formulabase', conversation: id });
+            if (!r || !r.id) throw new Error((r && r.error) || 'not-ready');
+            const until = Date.now() + 10 * 60 * 1000;
+            while (Date.now() < until && !file) {
+              await new Promise((res) => setTimeout(res, 1500));
+              const x = await hub('/result/' + encodeURIComponent(r.id));
+              if (x.state === 'running') continue;
+              if (x.state === 'done' && x.file) { file = x.file; break; }
+              throw new Error(x.error || x.state);
+            }
+            if (!file) throw new Error('timeout');
+          }
+          if (!file || !file.path) throw new Error('not-saved');
+          this.ai.saved = { path: file.path, url: file.url || '' };
+        } catch (e) {
+          const m = String((e && e.message) || e || '');
+          this.ai.error = m === 'empty' || m === 'HTTP 404' ? this.t('There is nothing kept of this conversation to save.')
+            : (summary && ['busy', 'not-ready', 'timeout'].indexOf(m) >= 0 ? this.aiError(e) : this.t('The conversation could not be saved.'));
+        } finally {
+          this.ai.saving = '';
+          this.aiScroll();
+        }
+      },
+      aiNotReady() {
+        return {
+          'no-key': this.t('AI-Hub has no API key yet.'),
+          'no-cli': this.t('AI-Hub\'s command line tool is not set up.'),
+          'no-model': this.t('AI-Hub has no model chosen yet.'),
+          'no-store': this.t('AI-Hub cannot keep an answer on this server.'),
+        }[this.ai.reason] || this.t('The assistant is not ready.');
+      },
+      aiToggle() {
+        this.ai.open = !this.ai.open;
+        if (this.ai.open) {
+          this.$nextTick(() => { const ta = this.$el && this.$el.querySelector('.fb-ai textarea'); if (ta) ta.focus(); this.aiScroll(); });
+        }
+      },
+      /** A new conversation. An answer still on its way to the old one is dropped. */
+      aiClear() {
+        this.ai.ask += 1;
+        const old = this.aiConvToken(false);
+        if (old) hub('/forget', { app: 'formulabase', conversation: old }).catch(() => {});
+        try { sessionStorage.removeItem(this.aiConvKey()); } catch (e) { /* nothing kept */ }
+        Object.assign(this.ai, { msgs: [], busy: false, busyText: '', error: '', conv: '', saved: null, note: '' });
+      },
+      aiKey(e) {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !this.ai.composing && e.keyCode !== 229) {
+          e.preventDefault();
+          this.aiSend();
+        }
+      },
+      aiScroll() { this.$nextTick(() => { const box = this.$refs.aiMsgs; if (box) box.scrollTop = box.scrollHeight; }); },
+      // ---- copying a message, and images with a question (the owner, 2026-10-06) ----
+      /**
+       * Copy one message as it stands on the screen: the person's own words, or the answer's
+       * plain text (Markdown marks and all). The clipboard API where the browser offers it,
+       * otherwise a hidden text box and the copy command.
+       */
+      async aiCopy(m) {
+        const text = String((m && m.text) || '');
+        let ok = false;
+        try {
+          if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; }
+        } catch (e) { ok = false; }
+        if (!ok) {
+          const prev = document.activeElement;
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.setAttribute('readonly', '');
+          ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0;';
+          document.body.appendChild(ta);
+          ta.select();
+          try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+          document.body.removeChild(ta);
+          if (prev && prev.focus) { try { prev.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }
+        }
+        if (!ok) { return; }
+        m.copied = (m.copied || 0) + 1;
+        const mark = m.copied;
+        setTimeout(() => { if (m.copied === mark) { m.copied = 0; } }, 1500);
+      },
+      /** A pasted image goes with the question; pasted words are pasted as ever (text from Word or Excel brings a picture of itself too). */
+      aiPaste(e) {
+        const cd = e.clipboardData;
+        const files = Array.from((cd && cd.files) || []);
+        if (!files.length) { return; }
+        let text = '';
+        try { text = cd.getData('text/plain') || ''; } catch (err) { text = ''; }
+        if (text.trim()) { return; }
+        e.preventDefault();
+        this.aiAddFiles(files);
+      },
+      aiHasFiles(e) {
+        const types = e.dataTransfer && e.dataTransfer.types;
+        return !!types && Array.from(types).includes('Files');
+      },
+      aiDragOver(e) {
+        if (!this.aiHasFiles(e)) { return; }
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        this.ai.drop = true;
+      },
+      aiDragLeave(e) {
+        if (!e.currentTarget || !e.currentTarget.contains(e.relatedTarget)) { this.ai.drop = false; }
+      },
+      aiDrop(e) {
+        this.ai.drop = false;
+        if (!this.aiHasFiles(e)) { return; }
+        e.preventDefault();
+        this.aiAddFiles(Array.from(e.dataTransfer.files || []));
+      },
+      /**
+       * Add images to the question: PNG, JPEG, GIF or WebP, up to 4, at most 5 MB each. A photo
+       * longer than 2000px is made smaller here first; anything refused says why under the
+       * thumbnails. AI-Hub checks all of it again on the server.
+       */
+      async aiAddFiles(files) {
+        const MAX_N = 4;
+        const MAX_BYTES = 5 * 1024 * 1024;
+        const TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+        this.ai.attNote = '';
+        if (!this.ai.ready) { return; }
+        if (!this.ai.imagesOk) { this.ai.attNote = this.t('This AI connection cannot send images.'); return; }
+        for (const f of files) {
+          if (!TYPES.includes(f.type)) { this.ai.attNote = this.t('Only PNG, JPEG, GIF and WebP images can be sent.'); continue; }
+          if (this.ai.images.length >= MAX_N) { this.ai.attNote = this.t('Up to 4 images can be sent at once.'); break; }
+          let img = null;
+          try { img = await this.aiPrepImage(f, MAX_BYTES); } catch (e) { this.ai.attNote = this.t('The image could not be read.'); continue; }
+          if (!img) { this.ai.attNote = this.t('An image can be at most 5 MB.'); continue; }
+          if (this.ai.images.length >= MAX_N) { this.ai.attNote = this.t('Up to 4 images can be sent at once.'); break; }
+          this.ai.images.push(img);
+        }
+        this.aiScroll();
+      },
+      /** One image, ready to send: made smaller if its long side is over 2000px; null when it is still over the size limit. */
+      async aiPrepImage(file, maxBytes) {
+        const LONG = 2000;
+        let blob = file;
+        const src = URL.createObjectURL(file);
+        try {
+          const im = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = src; });
+          const w = im.naturalWidth; const h = im.naturalHeight;
+          if (!w || !h) { throw new Error('unreadable'); }
+          if (Math.max(w, h) > LONG) {
+            const k = LONG / Math.max(w, h);
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+            const g = c.getContext('2d');
+            const encode = (type) => new Promise((resolve) => c.toBlob(resolve, type, 0.9));
+            g.drawImage(im, 0, 0, c.width, c.height);
+            blob = await encode(file.type === 'image/jpeg' || file.type === 'image/webp' ? file.type : 'image/png');
+            if (blob && blob.size > maxBytes && blob.type !== 'image/jpeg') {
+              // A photo kept as PNG can still be too large: as JPEG, on white (JPEG has no transparency).
+              g.globalCompositeOperation = 'destination-over';
+              g.fillStyle = '#fff';
+              g.fillRect(0, 0, c.width, c.height);
+              blob = await encode('image/jpeg');
+            }
+            if (!blob) { throw new Error('unreadable'); }
+          }
+        } finally { URL.revokeObjectURL(src); }
+        if (blob.size > maxBytes) { return null; }
+        const url = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = reject; r.readAsDataURL(blob); });
+        const comma = url.indexOf(',');
+        return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), name: file.name || '', type: blob.type || file.type, size: blob.size, url, data: url.slice(comma + 1) };
+      },
+      aiUnattach(k) {
+        this.ai.images.splice(k, 1);
+        this.ai.attNote = '';
+      },
+      /** What the model is shown: the open collection's formulas, and the selected one with its values and result. */
+      aiContext() {
+        const out = { collection: this.current ? this.current.name : '', formulas: [], selected: null };
+        const vars = (f) => (f.variables || []).map((v) => ({ key: v.key, label: v.label || '', unit: v.unit || '', default: v.default == null ? '' : String(v.default), type: v.type || '' }));
+        for (const f of this.formulas.slice(0, 60)) {
+          out.formulas.push({ name: f.name, expression: f.expression, variables: vars(f), result_unit: f.result_unit || '', description: (f.description || '').slice(0, 300) });
+        }
+        const f = this.activeFormula;
+        if (f) {
+          const values = {}; const src = this.inputs[f.id] || {};
+          for (const v of f.variables || []) { const raw = src[v.key]; values[v.key] = (raw === '' || raw == null) ? this.ph(v) : String(raw); }
+          const r = this.result(f);
+          out.selected = { name: f.name, expression: f.expression, variables: vars(f), result_unit: f.result_unit || '', values,
+            result: r.ok ? r.text + (f.result_unit ? ' ' + f.result_unit : '') : '' };
+        }
+        return out;
+      },
+      aiError(e) {
+        const m = String((e && e.message) || e || '');
+        if (m === 'busy') return this.t('Too many questions at once. Wait a moment and ask again.');
+        if (m === 'not-ready') return this.aiNotReady();
+        if (m === 'not-allowed' || m === 'user-not-allowed') return this.t('The administrator has not allowed the assistant for you.');
+        if (m === 'app-not-allowed') return this.t('AI-Hub does not allow FormulaBase to ask.');
+        if (m === 'timeout') return this.t('No answer came back in time.');
+        if (m === 'no-images') return this.t('This AI connection cannot send images.');
+        if (m === 'too-many-images') return this.t('Up to 4 images can be sent at once.');
+        if (m === 'image-too-large') return this.t('An image can be at most 5 MB.');
+        if (m === 'image-type') return this.t('Only PNG, JPEG, GIF and WebP images can be sent.');
+        return this.t('The assistant could not answer: {e}', { e: m });
+      },
+      async aiSend() {
+        const text = this.ai.input.trim();
+        const images = this.ai.images.slice();
+        if ((!text && !images.length) || this.ai.busy || !this.ai.ready) return;
+        this.ai.input = '';
+        this.ai.error = '';
+        this.ai.images = [];
+        this.ai.attNote = '';
+        this.ai.saved = null;
+        this.ai.note = '';
+        this.ai.msgs.push({ role: 'user', text, images: images.map((im) => ({ url: im.url, name: im.name })) });
+        this.aiScroll();
+        await this.aiRound(text, images);
+      },
+      /** One question and its answer: ask, then poll for the result every 1.5 s, up to 10 minutes. */
+      async aiRound(message, images = []) {
+        const ticket = this.ai.ask;
+        // A turn that had images says how many; the images themselves go with their own question only.
+        const history = this.ai.msgs.slice(0, -1).map((m) => (m.images && m.images.length ? { role: m.role, text: m.text, images: m.images.length } : { role: m.role, text: m.text }));
+        this.ai.busy = true;
+        this.aiScroll();
+        let answer = null;
+        let fresh = false;
+        try {
+          const r = await api('ai/ask', { method: 'POST', body: JSON.stringify({ history, message, context: this.aiContext(), conversation: this.aiConvToken(true),
+            images: images.map((im) => ({ type: im.type, data: im.data })) }) });
+          if (!r || !r.id) throw new Error((r && r.error) || 'not-ready');
+          const until = Date.now() + 10 * 60 * 1000;
+          while (Date.now() < until) {
+            await new Promise((res) => setTimeout(res, 1500));
+            if (ticket !== this.ai.ask) return;
+            const x = await api('ai/result/' + encodeURIComponent(r.id));
+            if (x.state === 'running') continue;
+            if (x.state === 'done') { answer = String(x.text || ''); fresh = !!x.fresh; break; }
+            throw new Error(x.error || x.state);
+          }
+          if (answer === null) throw new Error('timeout');
+        } catch (e) {
+          if (ticket === this.ai.ask) { this.ai.busy = false; this.ai.error = this.aiError(e); this.aiScroll(); }
+          return;
+        }
+        if (ticket !== this.ai.ask) return;
+        // AI-Hub no longer kept the conversation (a new login, or twelve hours unused): what the
+        // screen still showed before this question is gone from the AI too, so it goes from here.
+        if (fresh && this.ai.msgs.length > 1) {
+          this.ai.msgs = this.ai.msgs.slice(-1);
+          this.ai.note = this.t('The earlier conversation had ended, so this one starts afresh.');
+        }
+        this.ai.msgs.push({ role: 'assistant', text: answer.trim() });
+        this.ai.busy = false;
+        this.aiScroll();
+      },
       async saveSettings() {
         try {
           const s = await api('settings', {
@@ -2699,6 +3399,7 @@
               steps_width_pct: this.settingsForm.stepsWidthPct,
               version_keep: this.settingsForm.versionKeep,
               version_when: this.settingsForm.versionWhen,
+              ai_width: clampAiWidth(this.settingsForm.aiWidthW, this.settingsForm.aiWidthU),
             }),
           });
           this.theme = s.theme || 'auto';
@@ -2707,6 +3408,7 @@
           this.sideWidthPct = clampSideWidthPct(s.steps_width_pct);
           this.versionKeep = s.version_keep == null ? 10 : s.version_keep;
           this.versionWhen = s.version_when || 'manual';
+          this.setAiWidth(s.ai_width);
           this.applyTheme();
           await this.applyLanguage(this.language);
           this.modal = null;
@@ -3003,13 +3705,15 @@
           this.modal = null;
         } catch (e) { this.notify(T('Could not save.'), 'error'); }
       },
-      async removeCollection() {
-        if (!this.collForm.id) return;
+      /** From the collection's dialog (no argument: the button hands over its click event), or from the right button on a collection in the sidebar. */
+      async removeCollection(coll) {
+        const id = (coll && !(coll instanceof Event) && coll.id) ? coll.id : this.collForm.id;
+        if (!id) return;
         if (!window.confirm(T('Delete this collection and all its formulas?'))) return;
         try {
-          await api('collections/' + this.collForm.id, { method: 'DELETE' });
-          this.collections = this.collections.filter((c) => c.id !== this.collForm.id);
-          if (this.currentId === this.collForm.id) { this.currentId = null; this.formulas = []; if (this.collections.length) await this.selectCollection(this.collections[0].id); }
+          await api('collections/' + id, { method: 'DELETE' });
+          this.collections = this.collections.filter((c) => c.id !== id);
+          if (this.currentId === id) { this.currentId = null; this.formulas = []; if (this.collections.length) await this.selectCollection(this.collections[0].id); }
           this.modal = null;
         } catch (e) { this.notify(T('Could not delete.'), 'error'); }
       },
@@ -3213,6 +3917,8 @@
     },
     watch: {
       activeId(id) { if (id != null && !this.history[id]) this.loadHistory(id); },
+      // another collection is another subject: the assistant starts a new conversation
+      currentId() { this.aiSwitch(); },
       // search force-opens every matching group; make sure their bodies are actually loaded
       tplSearch() {
         if (!(this.tplSearch || '').trim()) return;
@@ -3224,6 +3930,19 @@
       try { const el = document.getElementById('formulabase-root'); if (el) this.version = el.getAttribute('data-version') || ''; } catch (e) { /* */ }
       this.loadSettings();
       this.loadCollections();
+      this.aiLoad();
+      // The right button, everywhere in the app (the owner, 2026-10-04): the browser's menu
+      // never shows; the app's own closes on a click elsewhere, Escape, a scroll or a resize.
+      try {
+        const root = document.getElementById('formulabase-root');
+        if (root) root.addEventListener('contextmenu', (e) => this.onContextMenu(e));
+        document.addEventListener('mousedown', (e) => {
+          if (this.ctx.open && !(e.target && e.target.closest && e.target.closest('.fb-ctxmenu'))) this.closeCtx();
+        }, true);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.ctx.open) { e.stopPropagation(); this.closeCtx(); } }, true);
+        window.addEventListener('scroll', () => this.closeCtx(), true);
+        window.addEventListener('resize', () => this.closeCtx());
+      } catch (e) { /* */ }
       // Re-evaluate the auto theme when the OS/Nextcloud scheme changes.
       try {
         const mq = window.matchMedia('(prefers-color-scheme: dark)');

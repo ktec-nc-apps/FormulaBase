@@ -38,6 +38,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **Server-side history** per formula (record / restore / delete / clear), scoped per user
 - **Version history** per formula — the version before each edit is kept beside it (numbered, restorable), independent of the calculation history above; how many to keep, and whether one is taken on every edit or only on request, is configurable in Settings
 - **Internal sharing** — share a collection with other Nextcloud users at three permission levels (view / edit / delete)
+- **An AI assistant, through the AI-Hub app** — a chat beside the formulas that knows FormulaBase and how its expressions are written; it answers in words and writes a formula out as text you can type in, reads the open collection only as the administrator allows, and changes nothing. It needs the free **AI-Hub** app, where the AI service, its key and its limits are set once for every app on the server; without it, it is simply not shown
 - UI and template library in 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean
 
 ### Tech
@@ -83,6 +84,7 @@ FormulaBase は、何度も使う計算式（利益率、単位換算、ロー�
 - 式ごとの**サーバー保存の履歴**（記録／復元／削除／全消去、ユーザー単位）
 - **バージョン履歴** — 編集の直前の内容を式のそばに保存（番号付き・復元可能）。上記の計算履歴とは別の仕組みです。保存数と、毎回自動で残すか指示したときだけ残すかは設定で変更可能
 - **内部共有** — コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
+- **AI-Hub アプリを通した AI アシスタント** — FormulaBase と式の書き方を知っているチャットが横に出て、答えを言葉で返し、式は打ち込める文字として書き出します。開いているコレクションは管理者が許した範囲でだけ読み、何も変更しません。無料の **AI-Hub** アプリが必要で、AI サービス・キー・制限はそこでサーバー内の全アプリ分を一度に設定します。AI-Hub が無ければ表示されません
 - UI・テンプレートとも13言語に対応 — 日本語・英語・中国語・スペイン語・フランス語・ドイツ語・イタリア語・ポルトガル語（ブラジル・ポルトガル）・ロシア語・アラビア語・ヒンディー語・韓国語
 
 Nextcloud 30〜35 対応。

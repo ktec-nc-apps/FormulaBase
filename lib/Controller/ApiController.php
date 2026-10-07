@@ -23,17 +23,27 @@ use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Collaboration\Collaborators\ISearch;
 use OCP\IConfig;
+use OCP\IDBConnection;
+use OCP\IGroupManager;
 use OCP\IL10N;
 use OCP\IRequest;
 use OCP\ITempManager;
 use OCP\IUserManager;
 use OCP\IUserSession;
 use OCP\L10N\IFactory;
+use OCP\Share\IShare;
 
 class ApiController extends Controller {
 	/** Theme is an appearance mode only (matches RegiBase): follow Nextcloud, or force light/dark. */
 	private const ALLOWED_THEMES = ['auto', 'light', 'dark'];
+	/** A backup ZIP, and the data.json inside it, may be this big (bytes); both are held in memory (REVIEW 2026-10-04 中2). */
+	private const MAX_BACKUP_BYTES = 32 * 1024 * 1024;
+	/** The icon and colour columns are 16 characters wide; longer values were a 500 (REVIEW 2026-10-04 低7). */
+	private const ICON_LENGTH = 16;
+	private const DEFAULT_ICON = '🧮';
+	private const DEFAULT_COLOR = '#2563eb';
 
 	// recipient permission ranks; the owner is implicitly above all of these.
 	public const PERM_VIEW = 'view';
@@ -56,8 +66,28 @@ class ApiController extends Controller {
 		private FilesService $files,
 		private FormulaCompiler $compiler,
 		private FormulaVersionService $versions,
+		private ISearch $collaboratorSearch,
+		private IGroupManager $groupManager,
+		private IDBConnection $db,
 	) {
 		parent::__construct(Application::APP_ID, $request);
+	}
+
+	/* ---- collection fields, cut to what the columns hold ---- */
+
+	private function cleanName(string $name): string {
+		return mb_substr(trim($name), 0, 255);
+	}
+
+	private function cleanIcon(string $icon): string {
+		$icon = trim($icon);
+		return $icon === '' ? self::DEFAULT_ICON : mb_substr($icon, 0, self::ICON_LENGTH);
+	}
+
+	/** A colour is a hex value (#rgb … #rrggbbaa) as the picker gives it; anything else is the default. */
+	private function cleanColor(string $color): string {
+		$color = trim($color);
+		return preg_match('/^#[0-9a-fA-F]{3,8}$/', $color) ? $color : self::DEFAULT_COLOR;
 	}
 
 	/** Language codes for which we ship an l10n/<code>.json bundle. */
@@ -71,17 +101,18 @@ class ApiController extends Controller {
 
 	/**
 	 * The FormulaBase language setting. The European Portuguese strings were shipped as
-	 * "pt" until 2026-09; a stored "pt" now means "pt_PT".
+	 * "pt" until 2026-09, the Chinese as "zh" until 2026-10; a stored "pt" now means "pt_PT"
+	 * and a stored "zh" "zh_CN" (Application::OLD_LANGUAGES).
 	 */
 	private function userLanguage(string $uid): string {
 		$lang = $this->config->getUserValue($uid, Application::APP_ID, 'language', 'auto');
-		return $lang === 'pt' ? 'pt_PT' : $lang;
+		return Application::OLD_LANGUAGES[$lang] ?? $lang;
 	}
 
 	/** Available UI languages as [{code, name}], name being the endonym. */
 	private function availableLanguages(): array {
 		$names = [
-			'en' => 'English', 'ja' => '日本語', 'zh' => '简体中文', 'es' => 'Español',
+			'en' => 'English', 'ja' => '日本語', 'zh_CN' => '简体中文', 'es' => 'Español',
 			'fr' => 'Français', 'de' => 'Deutsch', 'ru' => 'Русский', 'pt_PT' => 'Português (Portugal)', 'pt_BR' => 'Português (Brasil)',
 			'ar' => 'العربية', 'hi' => 'हिन्दी', 'ko' => '한국어', 'it' => 'Italiano',
 		];
@@ -89,6 +120,9 @@ class ApiController extends Controller {
 		// so this list contains only the shipped concrete languages.
 		$out = [];
 		foreach ($this->languageCodes() as $c) {
+			if (isset(Application::OLD_LANGUAGES[$c])) {
+				continue; // l10n/zh.json: the same strings as zh_CN, kept for the browser fallback
+			}
 			$out[] = ['code' => $c, 'name' => $names[$c] ?? $c];
 		}
 		return $out;
@@ -110,6 +144,9 @@ class ApiController extends Controller {
 			'version_when' => $this->versions->when($uid),
 			// Templates this user chose not to see (Settings → Template settings).
 			'tpl_hidden' => $this->tplHidden($uid),
+			// Width of the AI assistant's column: pixels (240-1200) or a percentage of the
+			// window (15-60), as EditBase keeps the widths of its bars.
+			'ai_width' => $this->config->getUserValue($uid, Application::APP_ID, 'ai_width', '500px'),
 		];
 	}
 
@@ -142,6 +179,7 @@ class ApiController extends Controller {
 		}
 		if (array_key_exists('language', $params)) {
 			$lang = (string)$params['language'];
+			$lang = Application::OLD_LANGUAGES[$lang] ?? $lang;
 			if ($lang === 'auto' || in_array($lang, $this->languageCodes(), true)) {
 				$this->config->setUserValue($uid, Application::APP_ID, 'language', $lang);
 			}
@@ -176,6 +214,15 @@ class ApiController extends Controller {
 		}
 		if (array_key_exists('version_keep', $params)) {
 			$this->versions->setKeep($uid, (int)$params['version_keep']);
+		}
+		if (array_key_exists('ai_width', $params)) {
+			$w = $params['ai_width'];
+			if (is_string($w) && preg_match('/^(\d{1,4}(?:\.\d{1,2})?)(px|%)$/', $w, $m)) {
+				$n = (float)$m[1];
+				if (($m[2] === 'px' && $n >= 240 && $n <= 1200) || ($m[2] === '%' && $n >= 15 && $n <= 60)) {
+					$this->config->setUserValue($uid, Application::APP_ID, 'ai_width', $w);
+				}
+			}
 		}
 		if (array_key_exists('version_when', $params)) {
 			$when = (string)$params['version_when'];
@@ -217,6 +264,10 @@ class ApiController extends Controller {
 			return new JSONResponse(['error' => 'not found'], Http::STATUS_NOT_FOUND);
 		}
 		$names = realpath($base . '/' . $lang . '.json');
+		if ($names === false) {
+			// the emoji names exist per language, not per region (zh_CN → zh, pt_PT → pt)
+			$names = realpath($base . '/' . substr($lang, 0, 2) . '.json');
+		}
 		if ($names === false || strpos($names, $base) !== 0) {
 			$names = $base . '/en.json';
 		}
@@ -375,9 +426,9 @@ class ApiController extends Controller {
 		}
 		$c = new CollectionEntity();
 		$c->setUserId($this->uid());
-		$c->setName(mb_substr($name, 0, 255));
-		$c->setIcon((string)$this->request->getParam('icon', '🧮'));
-		$c->setColor((string)$this->request->getParam('color', '#2563eb'));
+		$c->setName($this->cleanName($name));
+		$c->setIcon($this->cleanIcon((string)$this->request->getParam('icon', self::DEFAULT_ICON)));
+		$c->setColor($this->cleanColor((string)$this->request->getParam('color', self::DEFAULT_COLOR)));
 		$c->setDescription(mb_substr((string)$this->request->getParam('description', ''), 0, 2000));
 		$c->setSort($this->collections->maxSort($this->uid()) + 1);
 		$c->setCreatedAt($this->now());
@@ -395,10 +446,16 @@ class ApiController extends Controller {
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
+		$clean = [
+			'name' => fn (string $v) => $this->cleanName($v),
+			'icon' => fn (string $v) => $this->cleanIcon($v),
+			'color' => fn (string $v) => $this->cleanColor($v),
+			'description' => fn (string $v) => mb_substr($v, 0, 2000),
+		];
 		foreach (['name' => 'setName', 'icon' => 'setIcon', 'color' => 'setColor', 'description' => 'setDescription'] as $p => $setter) {
 			$v = $this->request->getParam($p, null);
 			if ($v !== null) {
-				$c->$setter((string)$v);
+				$c->$setter($clean[$p]((string)$v));
 			}
 		}
 		$sort = $this->request->getParam('sort', null);
@@ -1422,7 +1479,9 @@ class ApiController extends Controller {
 		} catch (DoesNotExistException $e) {
 			return new JSONResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
 		}
-		$this->historyMapper->clearForFormula($this->uid(), $f->getId());
+		// everyone's history of it, not only the caller's: a recipient with the delete
+		// level deleting a formula left the other users' rows behind (REVIEW 2026-10-04 低9)
+		$this->historyMapper->deleteForFormula($f->getId());
 		$this->versions->drop($f->getId());
 		$this->formulas->delete($f);
 		return new JSONResponse(['ok' => true]);
@@ -1495,6 +1554,13 @@ class ApiController extends Controller {
 
 	/* ---- internal collection sharing (permission-only, no encryption) ---- */
 
+	/**
+	 * People to share a collection with. The same search the Files sharing dialog uses
+	 * (the collaborators search behind the sharee API), so the administrator's sharing
+	 * settings hold here too: no listing of users when enumeration is off, only the
+	 * same groups when it is restricted to them. Searching the whole account list
+	 * directly let any logged-in user enumerate everyone (REVIEW 2026-10-04 中4).
+	 */
 	#[NoAdminRequired]
 	public function searchUsers(): JSONResponse {
 		$q = trim((string)$this->request->getParam('q', ''));
@@ -1502,24 +1568,40 @@ class ApiController extends Controller {
 		if (mb_strlen($q) < 1) {
 			return new JSONResponse(['users' => []]);
 		}
-		$found = [];
-		foreach ($this->userManager->searchDisplayName($q, 25) as $u) {
-			$found[$u->getUID()] = $u->getDisplayName();
-		}
-		foreach ($this->userManager->search($q, 25) as $u) {
-			$found[$u->getUID()] = $u->getDisplayName();
-		}
+		[$result] = $this->collaboratorSearch->search($q, [IShare::TYPE_USER], false, 20, 0);
 		$users = [];
-		foreach ($found as $uid => $name) {
-			if ($uid === $me) {
+		$seen = [];
+		foreach (array_merge($result['exact']['users'] ?? [], $result['users'] ?? []) as $row) {
+			$uid = (string)($row['value']['shareWith'] ?? '');
+			if ($uid === '' || $uid === $me || isset($seen[$uid])) {
 				continue;
 			}
-			$users[] = ['uid' => $uid, 'name' => $name];
+			$seen[$uid] = true;
+			$users[] = ['uid' => $uid, 'name' => (string)($row['label'] ?? $uid)];
 			if (count($users) >= 20) {
 				break;
 			}
 		}
 		return new JSONResponse(['users' => $users]);
+	}
+
+	/**
+	 * Whether the current user may share with $recipient under Nextcloud's own rule for
+	 * user shares: when "only share with group members" is on, the two must have a group
+	 * in common (minus the excluded groups), as the share manager checks for file shares.
+	 */
+	private function mayShareWith(string $recipient): bool {
+		$target = $this->userManager->get($recipient);
+		$me = $this->userSession->getUser();
+		if ($target === null || $me === null) {
+			return false;
+		}
+		if ($this->config->getAppValue('core', 'shareapi_only_share_with_group_members', 'no') !== 'yes') {
+			return true;
+		}
+		$excluded = json_decode($this->config->getAppValue('core', 'shareapi_only_share_with_group_members_exclude_group_list', '[]'), true);
+		$mine = array_diff($this->groupManager->getUserGroupIds($me), is_array($excluded) ? $excluded : []);
+		return array_intersect($mine, $this->groupManager->getUserGroupIds($target)) !== [];
 	}
 
 	#[NoAdminRequired]
@@ -1549,6 +1631,9 @@ class ApiController extends Controller {
 		}
 		if ($recipient === $this->uid()) {
 			return new JSONResponse(['error' => $this->l->t('Cannot share with yourself')], Http::STATUS_BAD_REQUEST);
+		}
+		if (!$this->mayShareWith($recipient)) {
+			return new JSONResponse(['error' => $this->l->t('Sharing is only allowed with members of your groups')], Http::STATUS_BAD_REQUEST);
 		}
 		if ($this->shares->findOne($id, $recipient) !== null) {
 			return new JSONResponse(['error' => $this->l->t('Already shared with this user')], Http::STATUS_BAD_REQUEST);
@@ -1618,8 +1703,12 @@ class ApiController extends Controller {
 			$zip->setPassword($password);
 		}
 		$zip->addFromString('data.json', (string)json_encode($struct, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-		if ($password !== '') {
-			$zip->setEncryptionName('data.json', \ZipArchive::EM_AES_256);
+		if ($password !== '' && !$zip->setEncryptionName('data.json', \ZipArchive::EM_AES_256)) {
+			// a libzip without encryption returns false here and would have written the
+			// archive in plain text under a password the user believes in (REVIEW 2026-10-04 低8)
+			$zip->close();
+			@unlink($tmp);
+			return new JSONResponse(['error' => $this->l->t('Encrypted archives are not supported on this server')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 		$zip->close();
 		$content = (string)file_get_contents($tmp);
@@ -1652,12 +1741,22 @@ class ApiController extends Controller {
 		if ($bin === false || $bin === '') {
 			return new JSONResponse(['error' => $this->l->t('The archive is invalid')], Http::STATUS_BAD_REQUEST);
 		}
+		if (strlen($bin) > self::MAX_BACKUP_BYTES) {
+			return new JSONResponse(['error' => $this->l->t('The archive is too large')], Http::STATUS_BAD_REQUEST);
+		}
 		$tmp = $this->tempManager->getTemporaryFile('.zip');
 		file_put_contents($tmp, $bin);
 		$zip = new \ZipArchive();
 		if ($zip->open($tmp) !== true) {
 			@unlink($tmp);
 			return new JSONResponse(['error' => $this->l->t('Cannot open the archive')], Http::STATUS_BAD_REQUEST);
+		}
+		// the unpacked size is in the archive's directory: look before unpacking (REVIEW 2026-10-04 中2)
+		$stat = $zip->statName('data.json');
+		if (is_array($stat) && (int)($stat['size'] ?? 0) > self::MAX_BACKUP_BYTES) {
+			$zip->close();
+			@unlink($tmp);
+			return new JSONResponse(['error' => $this->l->t('The archive is too large')], Http::STATUS_BAD_REQUEST);
 		}
 		if ($password !== '') {
 			$zip->setPassword($password);
@@ -1672,25 +1771,75 @@ class ApiController extends Controller {
 		@unlink($tmp);
 
 		$struct = json_decode($json, true);
-		if (!is_array($struct) || !isset($struct['collections'])) {
+		if (!is_array($struct) || !isset($struct['collections']) || !$this->validBackup($struct)) {
 			return new JSONResponse(['error' => $this->l->t('The archive contents are invalid')], Http::STATUS_BAD_REQUEST);
+		}
+
+		// All or nothing: the import used to delete everything first and then insert row
+		// by row, so a row the database refused left the user with no formulas at all
+		// (REVIEW 2026-10-04 中3). Inside the transaction the new rows go in before the
+		// old ones are deleted; a failure rolls the whole thing back.
+		$this->db->beginTransaction();
+		try {
+			$result = $this->importAllData($uid, $struct, $mode);
+			$this->db->commit();
+		} catch (\Throwable $e) {
+			$this->db->rollBack();
+			return new JSONResponse(['error' => $this->l->t('The backup could not be restored; nothing was changed')], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 
 		if ($mode === 'overwrite' && is_array($struct['settings'] ?? null)) {
 			$s = $struct['settings'];
-			foreach (['theme', 'language'] as $k) {
-				if (array_key_exists($k, $s)) {
-					$v = (string)$s[$k];
-					if ($k === 'theme' && !in_array($v, self::ALLOWED_THEMES, true)) {
-						continue;
-					}
-					$this->config->setUserValue($uid, Application::APP_ID, $k, $v);
-				}
+			if (array_key_exists('theme', $s) && in_array((string)$s['theme'], self::ALLOWED_THEMES, true)) {
+				$this->config->setUserValue($uid, Application::APP_ID, 'theme', (string)$s['theme']);
+			}
+			// only a language the app ships, like the settings screen accepts (REVIEW 2026-10-04 低6)
+			$lang = array_key_exists('language', $s) ? (string)$s['language'] : '';
+			$lang = Application::OLD_LANGUAGES[$lang] ?? $lang;
+			if ($lang === 'auto' || in_array($lang, $this->languageCodes(), true)) {
+				$this->config->setUserValue($uid, Application::APP_ID, 'language', $lang);
 			}
 		}
 
-		$result = $this->importAllData($uid, $struct, $mode);
 		return new JSONResponse($result);
+	}
+
+	/**
+	 * The shape importAllData() relies on: collections are arrays, their formulas are
+	 * arrays, and the text fields are scalars (a list where a name should be would have
+	 * failed half-way through the import).
+	 */
+	private function validBackup(array $struct): bool {
+		if (!is_array($struct['collections'])) {
+			return false;
+		}
+		foreach ($struct['collections'] as $col) {
+			if (!is_array($col)) {
+				return false;
+			}
+			foreach (['name', 'icon', 'color', 'description'] as $k) {
+				if (isset($col[$k]) && !is_scalar($col[$k])) {
+					return false;
+				}
+			}
+			if (isset($col['formulas']) && !is_array($col['formulas'])) {
+				return false;
+			}
+			foreach ($col['formulas'] ?? [] as $f) {
+				if (!is_array($f)) {
+					return false;
+				}
+				foreach (['name', 'expression', 'description', 'result_unit', 'decimals', 'notes'] as $k) {
+					if (isset($f[$k]) && !is_scalar($f[$k])) {
+						return false;
+					}
+				}
+				if (isset($f['variables']) && !is_array($f['variables']) && !is_string($f['variables'])) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	/** Everything needed to reconstruct the user's collections and formulas. */
@@ -1767,15 +1916,8 @@ class ApiController extends Controller {
 	 * same-named collection; add = always create new collections.
 	 */
 	private function importAllData(string $uid, array $struct, string $mode): array {
-		if ($mode === 'overwrite') {
-			foreach ($this->collections->findAllForUser($uid) as $c) {
-				$cid = (int)$c->getId();
-				$this->historyMapper->deleteForCollection($cid);
-				$this->versions->dropMany(array_map(fn ($f) => (int)$f->getId(), $this->formulas->findForCollection($cid)));
-				$this->formulas->deleteForCollection($cid);
-				$this->collections->delete($c);
-			}
-		}
+		// overwrite: the collections that exist now go only after the new ones are in
+		$old = $mode === 'overwrite' ? $this->collections->findAllForUser($uid) : [];
 
 		// merge: index existing collections by name + their formula signatures.
 		$existingByName = [];
@@ -1816,9 +1958,9 @@ class ApiController extends Controller {
 
 			$c = new CollectionEntity();
 			$c->setUserId($uid);
-			$c->setName(mb_substr($name, 0, 255));
-			$c->setIcon((string)($col['icon'] ?? '🧮'));
-			$c->setColor((string)($col['color'] ?? '#2563eb'));
+			$c->setName($this->cleanName($name) === '' ? 'FormulaBase' : $this->cleanName($name));
+			$c->setIcon($this->cleanIcon((string)($col['icon'] ?? self::DEFAULT_ICON)));
+			$c->setColor($this->cleanColor((string)($col['color'] ?? self::DEFAULT_COLOR)));
 			$c->setDescription(mb_substr((string)($col['description'] ?? ''), 0, 2000));
 			$c->setSort($this->collections->maxSort($uid) + 1);
 			$c->setCreatedAt($this->now());
@@ -1830,6 +1972,15 @@ class ApiController extends Controller {
 				$formCount++;
 			}
 			$colCount++;
+		}
+
+		foreach ($old as $c) {
+			$cid = (int)$c->getId();
+			$this->shares->deleteForCollection($cid);
+			$this->historyMapper->deleteForCollection($cid);
+			$this->versions->dropMany(array_map(fn ($f) => (int)$f->getId(), $this->formulas->findForCollection($cid)));
+			$this->formulas->deleteForCollection($cid);
+			$this->collections->delete($c);
 		}
 		return ['collections' => $colCount, 'formulas' => $formCount, 'mode' => $mode];
 	}

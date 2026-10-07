@@ -86,6 +86,7 @@ class MathLib {
 			$y = gmp_init(2);
 			$d = gmp_init(1);
 			while (gmp_cmp($d, 1) === 0) {
+				FormulaCompiler::tick();
 				$x = gmp_mod(gmp_add(gmp_mul($x, $x), $c), $n);
 				$y = gmp_mod(gmp_add(gmp_mul($y, $y), $c), $n);
 				$y = gmp_mod(gmp_add(gmp_mul($y, $y), $c), $n);
@@ -139,42 +140,49 @@ class MathLib {
 	private static function bfact(int $n): \GMP { return gmp_fact(max(0, $n)); }
 	private static function bbinom(int $n, int $k): \GMP { return ($k < 0 || $k > $n) ? gmp_init(0) : gmp_binomial($n, $k); }
 
-	/** @param list<float> $a */
+	/**
+	 * @param list<float> $a
+	 * A missing argument (binom(5)) is NaN, as in the JS engine, not a TypeError; the
+	 * long loops below call FormulaCompiler::tick() so the formula's time limit holds
+	 * inside them too (REVIEW 2026-10-04 高1, 5).
+	 */
 	public static function call(string $name, array $a): float {
+		FormulaCompiler::tick();
 		$x = $a[0] ?? NAN;
+		$y = $a[1] ?? NAN;
 		switch ($name) {
 			case 'gcd':
-				foreach ($a as $v) { if (!self::isInt($v)) { return NAN; } }
+				foreach ($a as $v) { if (!is_numeric($v) || !self::isInt((float)$v)) { return NAN; } }
 				$r = gmp_init(0);
-				foreach ($a as $v) { $r = gmp_gcd($r, self::g($v)); }
+				foreach ($a as $v) { $r = gmp_gcd($r, self::g((float)$v)); }
 				return self::f($r);
 			case 'lcm':
-				foreach ($a as $v) { if (!self::isInt($v)) { return NAN; } }
+				foreach ($a as $v) { if (!is_numeric($v) || !self::isInt((float)$v)) { return NAN; } }
 				$r = gmp_init(1);
-				foreach ($a as $v) { $r = ($v == 0) ? gmp_init(0) : gmp_lcm($r, self::g($v)); if (gmp_cmp($r, 0) === 0) { break; } }
+				foreach ($a as $v) { $r = ($v == 0) ? gmp_init(0) : gmp_lcm($r, self::g((float)$v)); if (gmp_cmp($r, 0) === 0) { break; } }
 				return self::f(gmp_abs($r));
 			case 'fact':
 				if (!self::nonNegInt($x)) { return NAN; }
 				return $x > 170 ? INF : self::f(self::bfact((int)$x));
 			case 'binom':
-				if (!self::nonNegInt($x) || !self::isInt($a[1]) || $x > 100000) { return NAN; }
-				return self::f(self::bbinom((int)$x, (int)$a[1]));
+				if (!self::nonNegInt($x) || !self::isInt($y) || $x > 100000) { return NAN; }
+				return self::f(self::bbinom((int)$x, (int)$y));
 			case 'perm':
-				if (!self::nonNegInt($x) || !self::isInt($a[1]) || $x > 100000) { return NAN; }
-				if ($a[1] < 0 || $a[1] > $x) { return 0.0; }
-				return self::f(gmp_div_q(self::bfact((int)$x), self::bfact((int)($x - $a[1]))));
+				if (!self::nonNegInt($x) || !self::isInt($y) || $x > 100000) { return NAN; }
+				if ($y < 0 || $y > $x) { return 0.0; }
+				return self::f(gmp_div_q(self::bfact((int)$x), self::bfact((int)($x - $y))));
 			case 'isprime':
 				if (!self::isInt($x)) { return NAN; }
 				return ($x >= 2 && self::isPrimeG(self::g($x))) ? 1.0 : 0.0;
 			case 'nextprime':
 				if (!self::isInt($x) || $x > self::BIG_LIMIT) { return NAN; }
 				$m = $x < 2 ? gmp_init(2) : gmp_add(self::g($x), 1);
-				while (!self::isPrimeG($m)) { $m = gmp_add($m, 1); }
+				while (!self::isPrimeG($m)) { FormulaCompiler::tick(); $m = gmp_add($m, 1); }
 				return self::f($m);
 			case 'prevprime':
 				if (!self::isInt($x) || $x <= 2 || $x > self::BIG_LIMIT) { return NAN; }
 				$m = gmp_sub(self::g($x), 1);
-				while (gmp_cmp($m, 2) >= 0 && !self::isPrimeG($m)) { $m = gmp_sub($m, 1); }
+				while (gmp_cmp($m, 2) >= 0 && !self::isPrimeG($m)) { FormulaCompiler::tick(); $m = gmp_sub($m, 1); }
 				return gmp_cmp($m, 2) >= 0 ? self::f($m) : NAN;
 			case 'primepi': return self::primepi($x);
 			case 'nthprime': return self::nthprime($x);
@@ -255,6 +263,7 @@ class MathLib {
 				if (!self::nonNegInt($x) || $x > 1000) { return NAN; }
 				$row = [gmp_init(1)];
 				for ($i = 0; $i < (int)$x; $i++) {
+					FormulaCompiler::tick($i + 1);
 					$next = [end($row)];
 					foreach ($row as $v) { $next[] = gmp_add(end($next), $v); }
 					$row = $next;
@@ -277,6 +286,7 @@ class MathLib {
 				if (!self::nonNegInt($n) || !self::nonNegInt($k) || $n > 2000) { return NAN; }
 				$row = [gmp_init(1)];
 				for ($i = 0; $i < (int)$n; $i++) {
+					FormulaCompiler::tick($i + 1);
 					$next = array_fill(0, $i + 2, gmp_init(0));
 					for ($j = 0; $j <= $i; $j++) {
 						$next[$j + 1] = gmp_add($next[$j + 1], $row[$j]);
@@ -289,7 +299,7 @@ class MathLib {
 				if (!self::nonNegInt($x) || $x > 5000) { return NAN; }
 				if ($x == 0) { return 1.0; }
 				[$p, $q] = [gmp_init(1), gmp_init(0)];
-				for ($i = 2; $i <= (int)$x; $i++) { $c = gmp_mul($i - 1, gmp_add($p, $q)); $p = $q; $q = $c; }
+				for ($i = 2; $i <= (int)$x; $i++) { FormulaCompiler::tick(); $c = gmp_mul($i - 1, gmp_add($p, $q)); $p = $q; $q = $c; }
 				return self::f($q);
 			case 'digitsum':
 				$base = $a[1] ?? 10.0;
@@ -317,6 +327,7 @@ class MathLib {
 				$m = self::g($x);
 				$c = 0;
 				while (gmp_cmp($m, 1) !== 0 && $c < 1000000) {
+					FormulaCompiler::tick();
 					$m = gmp_cmp(gmp_mod($m, 2), 1) === 0 ? gmp_add(gmp_mul($m, 3), 1) : gmp_div_q($m, 2);
 					$c++;
 				}
@@ -340,7 +351,7 @@ class MathLib {
 				return self::call('sigma', [$x, 1.0]) == 2 * $x ? 1.0 : 0.0;
 			case 'gamma': return self::gamma($x);
 			case 'lgamma': return self::lgamma($x);
-			case 'beta': return exp(self::lgamma($x) + self::lgamma($a[1]) - self::lgamma($x + $a[1]));
+			case 'beta': return exp(self::lgamma($x) + self::lgamma($y) - self::lgamma($x + $y));
 			case 'erf': return self::erf($x);
 			case 'erfc': return self::erfc($x);
 			case 'normcdf':
@@ -367,7 +378,7 @@ class MathLib {
 				if (!self::nonNegInt($x) || !self::posInt($m) || $x > 1e6) { return NAN; }
 				$M = self::g($m);
 				$r = gmp_mod(gmp_init(1), $M);
-				for ($i = 2; $i <= (int)$x; $i++) { $r = gmp_mod(gmp_mul($r, $i), $M); }
+				for ($i = 2; $i <= (int)$x; $i++) { FormulaCompiler::tick(); $r = gmp_mod(gmp_mul($r, $i), $M); }
 				return self::f($r);
 		}
 		$v = Special::call($name, $a);
@@ -404,6 +415,7 @@ class MathLib {
 			$sp = $small[$p - 1];
 			$p2 = $p * $p;
 			$lim = min($r, intdiv($x, $p2));
+			FormulaCompiler::tick($lim + 1);
 			for ($i = 1; $i <= $lim; $i++) {
 				$d = $i * $p;
 				$large[$i] -= ($d <= $r ? $large[$d] : $small[intdiv($x, $d)]) - $sp;
@@ -424,6 +436,7 @@ class MathLib {
 			if ($sieve[$i] === "\0") {
 				$c++;
 				if ($c === $n) { return (float)$i; }
+				FormulaCompiler::tick(intdiv($lim, $i) + 1);
 				for ($j = $i * $i; $j <= $lim; $j += $i) { $sieve[$j] = "\1"; }
 			}
 		}
@@ -461,11 +474,17 @@ class MathLib {
 		return self::f($A);
 	}
 
+	/** From this n on, p(n) rounds to ∞ as a double (p(n) ≥ 2^1024 − 2^970); the recurrence need not run. */
+	private const PARTITIONS_INF = 79446;
+
 	private static function partitions(float $n): float {
 		if (!self::nonNegInt($n) || $n > 100000) { return NAN; }
 		$n = (int)$n;
+		// partitions(100000) ran the recurrence for 15 s to arrive at ∞ (REVIEW 2026-10-04 高1).
+		if ($n >= self::PARTITIONS_INF) { return INF; }
 		$p = [gmp_init(1)];
 		for ($m = 1; $m <= $n; $m++) {
+			FormulaCompiler::tick();
 			$s = gmp_init(0);
 			for ($k = 1; ; $k++) {
 				$g1 = intdiv($k * (3 * $k - 1), 2);
@@ -504,6 +523,7 @@ class MathLib {
 		$L = self::g($lam);
 		$ps = array_keys(self::factor($L));
 		for ($g = 2; $g < $n; $g++) {
+			FormulaCompiler::tick();
 			if (gmp_cmp(gmp_gcd($g, $M), 1) !== 0) { continue; }
 			$ok = true;
 			foreach ($ps as $p) {
@@ -521,7 +541,7 @@ class MathLib {
 		if (is_nan($x)) { return NAN; }
 		if (floor($x) == $x && $x <= 0) { return NAN; }
 		if (floor($x) == $x && $x <= 171) { return self::call('fact', [$x - 1]); }
-		if ($x < 0.5) { return M_PI / (sin(M_PI * $x) * self::gamma(1 - $x)); }
+		if ($x < 0.5) { return fdiv(M_PI, sin(M_PI * $x) * self::gamma(1 - $x)); }
 		$x -= 1;
 		$a = self::LC[0];
 		$t = $x + self::LG + 0.5;
@@ -531,7 +551,7 @@ class MathLib {
 
 	public static function lgamma(float $x): float {
 		if (is_nan($x) || $x <= 0) { return NAN; }
-		if ($x < 0.5) { return log(M_PI / abs(sin(M_PI * $x))) - self::lgamma(1 - $x); }
+		if ($x < 0.5) { return log(fdiv(M_PI, abs(sin(M_PI * $x)))) - self::lgamma(1 - $x); }
 		$x -= 1;
 		$a = self::LC[0];
 		$t = $x + self::LG + 0.5;
@@ -631,7 +651,8 @@ class MathLib {
 			$e = exp($w);
 			$f = $w * $e - $x;
 			$d = $e * ($w + 1);
-			$nw = $w - $f / ($d - ($w + 2) * $f / (2 * $w + 2));
+			// fdiv: at x = −1/e the Halley step divides by 0 (JavaScript gives ∞ and moves on)
+			$nw = $w - fdiv($f, $d - fdiv(($w + 2) * $f, 2 * $w + 2));
 			if (abs($nw - $w) < 1e-15 * (1 + abs($nw))) { return $nw; }
 			$w = $nw;
 		}

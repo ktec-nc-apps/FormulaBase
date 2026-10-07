@@ -60,15 +60,42 @@ class FormulaCompiler {
 	private const MAX_DEPTH = 300;
 	private const MAX_STEPS = 50000000;
 	private const MAX_SECONDS = 15.0;
-	private int $steps = 0;
-	private float $until = 0.0;
+	// One clock for the whole engine: the evaluator and the long loops in MathLib,
+	// Special and Values all read it (static, so the static libraries can reach it).
+	private static int $steps = 0;
+	private static int $ticks = 0;
+	private static int $nextCheck = 1024;
+	private static float $until = 0.0;
+
+	/** True once the formula has used its time; the clock starts on the first look. */
+	private static function overdue(): bool {
+		if (self::$until === 0.0) {
+			self::$until = microtime(true) + self::MAX_SECONDS;
+		}
+		return microtime(true) > self::$until;
+	}
 
 	private function spend(): void {
-		if ($this->until === 0.0) {
-			$this->until = microtime(true) + self::MAX_SECONDS;
-		}
-		if ($this->steps > self::MAX_STEPS || microtime(true) > $this->until) {
+		if (self::$steps > self::MAX_STEPS || self::overdue()) {
 			throw new \RuntimeException('The calculation is too large to finish.');
+		}
+	}
+
+	/**
+	 * Called once per turn by the long loops of MathLib, Special and Values. The time
+	 * limit used to be checked only between evaluation steps, so a single call --
+	 * primepi(1e11) twenty times over, or partitions(100000) -- held a PHP worker for
+	 * minutes (REVIEW 2026-10-04 高1). The clock is read once per 1024 units of work, so
+	 * the check costs the loops nothing measurable; a turn that itself runs a long inner
+	 * loop passes that loop's length as $work, so the clock is read as often there.
+	 */
+	public static function tick(int $work = 1): void {
+		self::$ticks += $work;
+		if (self::$ticks >= self::$nextCheck) {
+			self::$nextCheck = self::$ticks + 1024;
+			if (self::overdue()) {
+				throw new \RuntimeException('The calculation is too large to finish.');
+			}
 		}
 	}
 
@@ -76,8 +103,10 @@ class FormulaCompiler {
 		if (mb_strlen($src) > self::MAX_EXPR) {
 			throw new \RuntimeException('The formula is too long.');
 		}
-		$this->steps = 0;
-		$this->until = 0.0;
+		self::$steps = 0;
+		self::$ticks = 0;
+		self::$nextCheck = 1024;
+		self::$until = 0.0;
 		$depth = 0;
 		$toks = $this->tokenize($src);
 		$p = 0;
@@ -344,7 +373,7 @@ class FormulaCompiler {
 
 	/** Evaluate a parsed AST against a variable scope (mirrors evalAST in formulabase.js). */
 	public function evaluate(array $n, array $scope): mixed {
-		if ((++$this->steps & 1023) === 0) {
+		if ((++self::$steps & 1023) === 0) {
 			$this->spend();
 		}
 		switch ($n['type']) {
@@ -393,8 +422,24 @@ class FormulaCompiler {
 		throw new \RuntimeException('bad node');
 	}
 
-	/** Call a function by name: aggregates take lists whole; scalar ones are applied item by item. */
+	/**
+	 * Call a function by name: aggregates take lists whole; scalar ones are applied item by item.
+	 *
+	 * Where JavaScript quietly gives ∞ or NaN -- 1/0, a missing argument, a complex
+	 * number where a real one is needed -- PHP 8 throws (DivisionByZeroError, TypeError).
+	 * The browser showed a value for such a formula, so its export must not fail with
+	 * 400 or lose the result row: those errors become NaN here (REVIEW 2026-10-04 5).
+	 * The engine's own RuntimeException (time, unknown function) still passes.
+	 */
 	public function callFn(string $name, array $a): mixed {
+		try {
+			return $this->callFnRaw($name, $a);
+		} catch (\ArithmeticError | \TypeError | \ValueError $e) {
+			return NAN;
+		}
+	}
+
+	private function callFnRaw(string $name, array $a): mixed {
 		if (in_array($name, Values::AGGREGATES, true)) {
 			return Values::call($name, $a);
 		}
@@ -404,7 +449,7 @@ class FormulaCompiler {
 		}
 		foreach ($a as $i => $v) {
 			if (is_array($v)) {
-				return array_map(function ($x) use ($a, $i, $name) { $b = $a; $b[$i] = $x; return $this->callFn($name, $b); }, $v);
+				return array_map(function ($x) use ($a, $i, $name) { self::tick(); $b = $a; $b[$i] = $x; return $this->callFn($name, $b); }, $v);
 			}
 		}
 		foreach ($a as $v) {
@@ -414,6 +459,7 @@ class FormulaCompiler {
 		}
 		$a = array_map('floatval', $a);
 		$x = $a[0] ?? NAN;
+		// fdiv() divides the way JavaScript does: 1/0 is ∞, 0/0 is NaN, never an error.
 		return match ($name) {
 			'sqrt' => $x < 0 ? NAN : sqrt($x), 'cbrt' => ($x >= 0 ? 1 : -1) * (abs($x) ** (1 / 3)),
 			'abs' => abs($x), 'round' => self::jsRound($x), 'floor' => floor($x), 'ceil' => ceil($x),
@@ -424,11 +470,11 @@ class FormulaCompiler {
 			'asin' => asin($x), 'acos' => acos($x), 'atan' => atan($x),
 			'pow' => Values::rpow($x, $a[1] ?? NAN), 'mod' => fmod($x, $a[1] ?? NAN),
 			'hypot' => sqrt(array_sum(array_map(fn ($v) => $v * $v, $a))),
-			'root' => ($x <=> 0) * (abs($x) ** (1 / ($a[1] ?? NAN))),
-			'logb' => log($x) / log($a[1] ?? NAN), 'roundto' => self::jsRound($x * (10 ** ($a[1] ?? 0))) / (10 ** ($a[1] ?? 0)),
+			'root' => ($x <=> 0) * (abs($x) ** fdiv(1, $a[1] ?? NAN)),
+			'logb' => fdiv(log($x), log($a[1] ?? NAN)), 'roundto' => fdiv(self::jsRound($x * (10 ** ($a[1] ?? 0))), 10 ** ($a[1] ?? 0)),
 			'frac' => $x - ($x >= 0 ? floor($x) : ceil($x)), 'clamp' => min(max($x, $a[1] ?? NAN), $a[2] ?? NAN),
 			'deg' => $x * 180 / M_PI, 'rad' => $x * M_PI / 180,
-			'sec' => 1 / cos($x), 'csc' => 1 / sin($x), 'cot' => 1 / tan($x),
+			'sec' => fdiv(1, cos($x)), 'csc' => fdiv(1, sin($x)), 'cot' => fdiv(1, tan($x)),
 			'and' => (float)(self::truthy($x) && self::truthy($a[1] ?? NAN)), 'or' => (float)(self::truthy($x) || self::truthy($a[1] ?? NAN)),
 			'xor' => (float)(self::truthy($x) !== self::truthy($a[1] ?? NAN)), 'not' => (float)!self::truthy($x),
 			default => MathLib::call($name, $a),
@@ -446,7 +492,9 @@ class FormulaCompiler {
 			return is_int($raw) ? (float)$raw : $raw;
 		}
 		$s = trim((string)$raw);
-		if ($s === '') {
+		if ($s === '' || mb_strlen($s) > self::MAX_EXPR) {
+			// a value longer than any formula may be is not a value: it would be split
+			// into millions of items before any of them was looked at (REVIEW 2026-10-04 中2)
 			return NAN;
 		}
 		if (preg_match('/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/', $s)) {

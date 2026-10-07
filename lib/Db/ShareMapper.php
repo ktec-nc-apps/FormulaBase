@@ -64,4 +64,12 @@ class ShareMapper extends QBMapper {
 			->where($qb->expr()->eq('collection_id', $qb->createNamedParameter($collectionId, IQueryBuilder::PARAM_INT)));
 		$qb->executeStatement();
 	}
+
+	/** Every share granted TO a user (for when the account is deleted). */
+	public function deleteForRecipient(string $recipientUid): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->delete($this->getTableName())
+			->where($qb->expr()->eq('recipient_uid', $qb->createNamedParameter($recipientUid)));
+		$qb->executeStatement();
+	}
 }

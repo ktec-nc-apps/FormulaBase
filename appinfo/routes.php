@@ -6,6 +6,12 @@ return [
 	'routes' => [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 
+		// the AI assistant (through AI-Hub): may I, ask this, is the answer there yet; the admin settings
+		['name' => 'ai#status', 'url' => '/api/ai/status', 'verb' => 'GET'],
+		['name' => 'ai#ask', 'url' => '/api/ai/ask', 'verb' => 'POST'],
+		['name' => 'ai#result', 'url' => '/api/ai/result/{id}', 'verb' => 'GET'],
+		['name' => 'ai#saveAdmin', 'url' => '/api/ai/admin', 'verb' => 'POST'],
+
 		// collections
 		['name' => 'api#collections', 'url' => '/api/collections', 'verb' => 'GET'],
 		['name' => 'api#createCollection', 'url' => '/api/collections', 'verb' => 'POST'],

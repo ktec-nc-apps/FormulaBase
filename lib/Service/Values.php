@@ -10,6 +10,13 @@ namespace OCA\FormulaBase\Service;
  * The PHP port of the VAL block in js/formulabase.js; the two must agree.
  */
 class Values {
+	/**
+	 * How many numbers one value may hold. mmul(trans(seq(0, 10000)), list(seq(0, 10000)))
+	 * asked for a hundred million cells and took the worker down with it; beyond this a
+	 * list or matrix is NaN, in the browser alike (REVIEW 2026-10-04 中2).
+	 */
+	public const MAX_ELEMENTS = 1000000;
+
 	public const AGGREGATES = [
 		'sum', 'prod', 'count', 'len', 'mean', 'median', 'mode', 'var', 'stdev', 'varp', 'stdevp', 'gmean', 'hmean', 'wmean',
 		'percentile', 'quantile', 'skew', 'kurt', 'cov', 'corr', 'slope', 'intercept', 'rsq', 'npv', 'irr', 'mirr', 'list', 'seq', 'at',
@@ -32,7 +39,8 @@ class Values {
 	public static function cmul(Cx $a, Cx $b): float|Cx { return self::simp(new Cx($a->re * $b->re - $a->im * $b->im, $a->re * $b->im + $a->im * $b->re)); }
 	public static function cdiv(Cx $a, Cx $b): float|Cx {
 		$d = $b->re * $b->re + $b->im * $b->im;
-		return self::simp(new Cx(($a->re * $b->re + $a->im * $b->im) / $d, ($a->im * $b->re - $a->re * $b->im) / $d));
+		// fdiv: (3+4i)/0 is NaN + NaNi like in the browser, not a DivisionByZeroError
+		return self::simp(new Cx(fdiv($a->re * $b->re + $a->im * $b->im, $d), fdiv($a->im * $b->re - $a->re * $b->im, $d)));
 	}
 	public static function cexp(Cx $a): float|Cx { $r = exp($a->re); return self::simp(new Cx($r * cos($a->im), $r * sin($a->im))); }
 	public static function cln(Cx $a): float|Cx { return self::simp(new Cx(log(self::cabs($a)), self::carg($a))); }
@@ -143,8 +151,28 @@ class Values {
 	private static function mean(array $f): float { return array_sum($f) / count($f); }
 	private static function ss(array $f): float { $m = self::mean($f); $s = 0.0; foreach ($f as $x) { $s += ($x - $m) * ($x - $m); } return $s; }
 	private static function sorted(array $args): ?array { $f = self::nums($args); if ($f === null) { return null; } sort($f); return $f; }
+	/** A list of plain numbers (not nested, not complex) as floats, or null. */
+	private static function reals(mixed $v): ?array {
+		if (!is_array($v)) { return null; }
+		foreach ($v as $x) { if (!is_float($x) && !is_int($x)) { return null; } }
+		return array_map('floatval', array_values($v));
+	}
+	/** True when a value holds more numbers than MAX_ELEMENTS allows. */
+	private static function tooBig(array $v): bool {
+		$n = 0;
+		$walk = function ($x) use (&$walk, &$n) { if (is_array($x)) { foreach ($x as $y) { $walk($y); } } else { $n++; } };
+		$walk($v);
+		return $n > self::MAX_ELEMENTS;
+	}
 
+	/**
+	 * The list functions take plain numbers: a complex number or a nested list where a
+	 * number is needed gives NaN (the browser does the same) instead of a TypeError, and
+	 * divisions that can meet a 0 use fdiv() so they give ∞/NaN like JavaScript
+	 * (REVIEW 2026-10-04 5). The loops over big matrices call FormulaCompiler::tick().
+	 */
 	public static function call(string $name, array $a): mixed {
+		FormulaCompiler::tick();
 		switch ($name) {
 			case 'sum': $acc = 0.0; foreach (self::flat($a) as $x) { $acc = self::scalarBin('+', $acc, $x); } return $acc;
 			case 'prod': $acc = 1.0; foreach (self::flat($a) as $x) { $acc = self::scalarBin('*', $acc, $x); } return $acc;
@@ -181,12 +209,12 @@ class Values {
 				foreach ($f as $x) { if ($x <= 0) { return NAN; } $s += 1 / $x; }
 				return count($f) / $s;
 			case 'wmean':
-				[$x, $w] = [$a[0] ?? null, $a[1] ?? null];
-				if (!is_array($x) || !is_array($w) || count($x) !== count($w) || !$x) { return NAN; }
+				[$x, $w] = [self::reals($a[0] ?? null), self::reals($a[1] ?? null)];
+				if ($x === null || $w === null || count($x) !== count($w) || !$x) { return NAN; }
 				$s = 0.0;
 				$sw = 0.0;
 				foreach ($x as $i => $v) { $s += $v * $w[$i]; $sw += $w[$i]; }
-				return $s / $sw;
+				return fdiv($s, $sw);
 			case 'percentile': case 'quantile':
 				$f = self::sorted([$a[0] ?? []]);
 				$p = (float)($a[1] ?? NAN);
@@ -201,7 +229,7 @@ class Values {
 				$m = self::mean($f);
 				$s = sqrt(self::ss($f) / ($n - 1));
 				$t = 0.0;
-				foreach ($f as $v) { $t += (($v - $m) / $s) ** 3; }
+				foreach ($f as $v) { $t += fdiv($v - $m, $s) ** 3; }
 				return $n / (($n - 1) * ($n - 2)) * $t;
 			case 'kurt':
 				$f = self::nums([$a[0] ?? []]);
@@ -211,42 +239,44 @@ class Values {
 				$s2 = self::ss($f) / ($n - 1);
 				$t = 0.0;
 				foreach ($f as $v) { $t += ($v - $m) ** 4; }
-				$k4 = $t / ($s2 * $s2);
+				$k4 = fdiv($t, $s2 * $s2);
 				return $n * ($n + 1) / (($n - 1) * ($n - 2) * ($n - 3)) * $k4 - 3 * ($n - 1) * ($n - 1) / (($n - 2) * ($n - 3));
 			case 'cov':
-				[$x, $y] = [$a[0] ?? null, $a[1] ?? null];
-				if (!is_array($x) || !is_array($y) || count($x) !== count($y) || count($x) < 2) { return NAN; }
+				[$x, $y] = [self::reals($a[0] ?? null), self::reals($a[1] ?? null)];
+				if ($x === null || $y === null || count($x) !== count($y) || count($x) < 2) { return NAN; }
 				$mx = self::mean($x);
 				$my = self::mean($y);
 				$s = 0.0;
 				foreach ($x as $i => $v) { $s += ($v - $mx) * ($y[$i] - $my); }
 				return $s / (count($x) - 1);
-			case 'corr': return self::call('cov', $a) / (self::call('stdev', [$a[0] ?? []]) * self::call('stdev', [$a[1] ?? []]));
-			case 'slope': return self::call('cov', $a) / self::call('var', [$a[0] ?? []]);
+			case 'corr': return fdiv(self::call('cov', $a), self::call('stdev', [$a[0] ?? []]) * self::call('stdev', [$a[1] ?? []]));
+			case 'slope': return fdiv(self::call('cov', $a), self::call('var', [$a[0] ?? []]));
 			case 'intercept': return self::call('mean', [$a[1] ?? []]) - self::call('slope', $a) * self::call('mean', [$a[0] ?? []]);
 			case 'rsq': $r = self::call('corr', $a); return $r * $r;
 			case 'npv':
-				[$r, $cf] = [(float)($a[0] ?? NAN), $a[1] ?? null];
-				if (!is_array($cf)) { return NAN; }
+				[$r, $cf] = [(float)($a[0] ?? NAN), self::reals($a[1] ?? null)];
+				if ($cf === null) { return NAN; }
 				$s = 0.0;
-				foreach (array_values($cf) as $t => $c) { $s += $c / ((1 + $r) ** $t); }
+				foreach ($cf as $t => $c) { $s += fdiv($c, (1 + $r) ** $t); }
 				return $s;
 			case 'irr':
-				$cf = $a[0] ?? null;
-				if (!is_array($cf) || count($cf) < 2) { return NAN; }
+				$cf = self::reals($a[0] ?? null);
+				if ($cf === null || count($cf) < 2) { return NAN; }
 				$f = fn ($r) => self::call('npv', [$r, $cf]);
 				$r0 = Special::findRoot($f, isset($a[1]) ? (float)$a[1] : 0.1);
 				if (is_finite($r0) && $r0 > -1) { return $r0; }
 				return Special::findRoot($f, -0.9999, 10.0);
 			case 'mirr':
-				[$cf, $fr, $rr] = [$a[0] ?? null, (float)($a[1] ?? NAN), (float)($a[2] ?? NAN)];
-				if (!is_array($cf) || count($cf) < 2) { return NAN; }
+				[$cf, $fr, $rr] = [self::reals($a[0] ?? null), (float)($a[1] ?? NAN), (float)($a[2] ?? NAN)];
+				if ($cf === null || count($cf) < 2) { return NAN; }
 				$n = count($cf) - 1;
 				$pv = 0.0;
 				$fv = 0.0;
-				foreach (array_values($cf) as $t => $c) { if ($c < 0) { $pv += $c / ((1 + $fr) ** $t); } else { $fv += $c * ((1 + $rr) ** ($n - $t)); } }
-				return (-$fv / $pv) ** (1 / $n) - 1;
-			case 'list': return array_values($a);
+				foreach ($cf as $t => $c) { if ($c < 0) { $pv += fdiv($c, (1 + $fr) ** $t); } else { $fv += $c * ((1 + $rr) ** ($n - $t)); } }
+				return fdiv(-$fv, $pv) ** (1 / $n) - 1;
+			case 'list':
+				$out = array_values($a);
+				return self::tooBig($out) ? NAN : $out;
 			case 'seq':
 				[$x0, $x1, $st] = [(float)($a[0] ?? NAN), (float)($a[1] ?? NAN), (float)($a[2] ?? 1.0)];
 				if ($st == 0 || !is_finite($x0) || !is_finite($x1) || abs(($x1 - $x0) / $st) > 1e6) { return NAN; }
@@ -261,18 +291,20 @@ class Values {
 				return isset($a[2]) ? self::call('at', [$r, $a[2]]) : $r;
 			case 'sort': $f = self::sorted([$a[0] ?? []]); return $f ?? NAN;
 			case 'cumsum':
-				if (!is_array($a[0] ?? null)) { return NAN; }
+				$v = self::reals($a[0] ?? null);
+				if ($v === null) { return NAN; }
 				$s = 0.0;
-				return array_map(function ($x) use (&$s) { $s += $x; return $s; }, $a[0]);
+				return array_map(function ($x) use (&$s) { $s += $x; return $s; }, $v);
 			case 'cummax':
 			case 'cummin':
 				// running maximum / minimum (peak so far, for drawdowns)
-				if (!is_array($a[0] ?? null)) { return NAN; }
+				$v = self::reals($a[0] ?? null);
+				if ($v === null) { return NAN; }
 				$m = $name === 'cummax' ? -INF : INF;
-				return array_map(function ($x) use (&$m, $name) { $m = $name === 'cummax' ? max($m, (float)$x) : min($m, (float)$x); return $m; }, $a[0]);
+				return array_map(function ($x) use (&$m, $name) { $m = $name === 'cummax' ? max($m, $x) : min($m, $x); return $m; }, $v);
 			case 'diff':
-				$v = $a[0] ?? null;
-				if (!is_array($v) || count($v) < 2) { return NAN; }
+				$v = self::reals($a[0] ?? null);
+				if ($v === null || count($v) < 2) { return NAN; }
 				$out = [];
 				for ($i = 1; $i < count($v); $i++) { $out[] = $v[$i] - $v[$i - 1]; }
 				return $out;
@@ -283,8 +315,8 @@ class Values {
 				foreach ($u as $i => $x) { $y = $v[$i]; $s = self::scalarBin('+', $s, self::scalarBin('*', $x, $y instanceof Cx ? new Cx($y->re, -$y->im) : $y)); }
 				return $s;
 			case 'cross':
-				[$u, $v] = [$a[0] ?? null, $a[1] ?? null];
-				if (!is_array($u) || !is_array($v) || count($u) !== 3 || count($v) !== 3) { return NAN; }
+				[$u, $v] = [self::reals($a[0] ?? null), self::reals($a[1] ?? null)];
+				if ($u === null || $v === null || count($u) !== 3 || count($v) !== 3) { return NAN; }
 				return [$u[1] * $v[2] - $u[2] * $v[1], $u[2] * $v[0] - $u[0] * $v[2], $u[0] * $v[1] - $u[1] * $v[0]];
 			case 'norm':
 				$v = $a[0] ?? NAN;
@@ -309,12 +341,12 @@ class Values {
 				return self::trans($cols);
 			case 'linsolve':
 				$L = self::lu($a[0] ?? null);
-				$b = $a[1] ?? null;
-				if ($L === null || $L['sign'] === 0 || !is_array($b) || count($b) !== $L['n']) { return NAN; }
+				$b = self::reals($a[1] ?? null);
+				if ($L === null || $L['sign'] === 0 || $b === null || count($b) !== $L['n']) { return NAN; }
 				return self::luSolve($L, $b);
 			case 'trace':
 				$M = $a[0] ?? null;
-				if (!self::isM($M) || count($M) !== count($M[0])) { return NAN; }
+				if (!self::isM($M) || count($M) !== count($M[0]) || self::nums([$M]) === null) { return NAN; }
 				$s = 0.0;
 				for ($i = 0; $i < count($M); $i++) { $s += $M[$i][$i]; }
 				return $s;
@@ -348,16 +380,18 @@ class Values {
 		if ($vec && !is_array($B)) { return NAN; }
 		$Bm = $vec ? array_map(fn ($x) => [$x], $B) : $B;
 		if (count($A[0]) !== count($Bm)) { return NAN; }
+		// the product's size is known before any of it is computed: refuse what would not fit
+		if (count($A) * count($Bm[0]) > self::MAX_ELEMENTS || self::nums([$A, $Bm]) === null) { return NAN; }
 		$out = [];
 		foreach ($A as $r) {
 			$row = [];
-			foreach ($Bm[0] as $j => $_) { $s = 0.0; foreach ($r as $k => $x) { $s += $x * $Bm[$k][$j]; } $row[] = $s; }
+			foreach ($Bm[0] as $j => $_) { FormulaCompiler::tick(); $s = 0.0; foreach ($r as $k => $x) { $s += $x * $Bm[$k][$j]; } $row[] = $s; }
 			$out[] = $row;
 		}
 		return $vec ? array_map(fn ($r) => $r[0], $out) : $out;
 	}
 	private static function lu(mixed $M): ?array {
-		if (!self::isM($M) || count($M) !== count($M[0])) { return null; }
+		if (!self::isM($M) || count($M) !== count($M[0]) || self::nums([$M]) === null) { return null; }
 		$n = count($M);
 		$A = array_map(fn ($r) => array_map('floatval', $r), $M);
 		$perm = range(0, $n - 1);
@@ -368,6 +402,7 @@ class Values {
 			if ($A[$p][$k] == 0) { return ['A' => $A, 'perm' => $perm, 'sign' => 0, 'n' => $n]; }
 			if ($p !== $k) { [$A[$p], $A[$k]] = [$A[$k], $A[$p]]; [$perm[$p], $perm[$k]] = [$perm[$k], $perm[$p]]; $sign = -$sign; }
 			for ($i = $k + 1; $i < $n; $i++) {
+				FormulaCompiler::tick();
 				$A[$i][$k] /= $A[$k][$k];
 				for ($j = $k + 1; $j < $n; $j++) { $A[$i][$j] -= $A[$i][$k] * $A[$k][$j]; }
 			}
@@ -377,9 +412,9 @@ class Values {
 	private static function luSolve(array $L, array $b): array {
 		$n = $L['n'];
 		$y = [];
-		for ($i = 0; $i < $n; $i++) { $s = (float)$b[$L['perm'][$i]]; for ($j = 0; $j < $i; $j++) { $s -= $L['A'][$i][$j] * $y[$j]; } $y[$i] = $s; }
+		for ($i = 0; $i < $n; $i++) { FormulaCompiler::tick(); $s = (float)$b[$L['perm'][$i]]; for ($j = 0; $j < $i; $j++) { $s -= $L['A'][$i][$j] * $y[$j]; } $y[$i] = $s; }
 		$x = array_fill(0, $n, 0.0);
-		for ($i = $n - 1; $i >= 0; $i--) { $s = $y[$i]; for ($j = $i + 1; $j < $n; $j++) { $s -= $L['A'][$i][$j] * $x[$j]; } $x[$i] = $s / $L['A'][$i][$i]; }
+		for ($i = $n - 1; $i >= 0; $i--) { FormulaCompiler::tick(); $s = $y[$i]; for ($j = $i + 1; $j < $n; $j++) { $s -= $L['A'][$i][$j] * $x[$j]; } $x[$i] = fdiv($s, $L['A'][$i][$i]); }
 		return $x;
 	}
 }
