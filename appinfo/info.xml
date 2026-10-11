@@ -3,7 +3,7 @@
 	<id>formulabase</id>
 	<name>FormulaBase</name>
 	<summary>Save your own formulas — plus 5,522 built-in templates — and calculate instantly by typing in numbers</summary>
-	<summary lang="ja">よく使う計算式を保存 ― 5,522件の組み込みテンプレート付き ― 数値を入力するだけで瞬時に計算</summary>
+	<summary lang="ja">自分の計算式を保存して、数値を入力するだけですぐに計算。組み込みテンプレート 5,522 件付き</summary>
 	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
 
 Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
@@ -21,24 +21,24 @@ Features:
 - Same clean, themable design as RegiBase (light / dark)
 
 The 2,400 templates added in 0.7.0 were each checked against an independent calculation. Since 0.8.0 the whole library and every screen are translated into 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
-	<description lang="ja"><![CDATA[FormulaBaseは、値上げ計算・単位換算・ローン返済額・配合比率・工学定数など、よく使う計算式を何度でもすぐに使える軽量な計算アプリです。
+	<description lang="ja"><![CDATA[FormulaBase は、利益率の計算、単位換算、ローンの返済額、配合比、工学の定数など、何度も使う計算式をすぐに呼び出して使える、軽量な個人向け計算アプリです。
 
-計算式をコレクションにまとめて整理し、各式の変数を一度定義しておけば、いつでも開いて数値を入力するだけでその場で結果が表示されます。計算はすべてブラウザ内で完結します（evalやサーバーへの通信は一切なし）。
+計算式をコレクションにまとめ、それぞれの変数を一度定義しておけば、いつでも式を開いて数値を入力するだけで、その場で結果が表示されます。計算はすべてブラウザー内で行われます（eval は使わず、サーバーとの通信もありません）。
 
 主な機能:
-- 13分野・5,522件の組み込み公式テンプレート（数学・統計・確率・AI・コンピュータ・物理・化学・材料・工学・暮らしのお金・投資・会社の会計・医療・生命科学・暮らしなど）― 検索可能で、そのまま自分のコレクションに追加できます
-- テンプレート設定：不要な分野・小分類・テンプレートを非表示にできます
-- よく使う計算式をコレクションで整理
-- ラベル・単位・初期値付きの変数を名前で管理 ― 数値・リスト・行列・複素数
-- 200を超える関数を備えた安全な数式エンジン：四則演算、条件（if・piecewise）、総和・総乗・積分・微分・方程式の解、統計、キャッシュフロー、行列、数論、特殊関数、確率分布、物理定数
-- 入力しながらリアルタイムに結果表示、単位・小数桁数の指定も可能
-- 数式ごとのバージョン履歴 ― 編集の直前の内容を番号付きで保存・復元可能（計算履歴とは別の仕組み）
-- コレクションを他のNextcloudユーザーと3段階の権限（閲覧／編集／削除）で共有
-- AI-Hub アプリを通した AI アシスタント。FormulaBase と式の書き方を知っているチャットが横に出て、答えを言葉で返し、式は打ち込める文字として書き出します。開いているコレクションは管理者が許した範囲でだけ読みます。AI-Hub が無ければ表示されません
-- RegiBaseと同じ、すっきりとしたテーマ対応デザイン（ライト／ダーク）
+- 13 分野・5,522 件の組み込み計算式テンプレート（数学、統計と確率、AI とコンピューター、物理、化学と材料、工学、暮らしのお金、投資、会社の会計と経営、医療と生命科学、暮らしなど）。検索して、そのまま自分のコレクションに追加できます
+- テンプレート設定：不要な分野、小分類、テンプレートを個別に非表示にできます
+- 繰り返し使える計算式をコレクションで管理
+- ラベル、単位、初期値を設定できる名前付きの変数 ― 数値、リスト、行列、複素数に対応
+- 200 を超える関数を備えた安全な数式エンジン：四則演算、条件分岐（if・piecewise）、総和、総乗、積分、微分、方程式の求解、統計、キャッシュフロー、行列、数論、特殊関数、確率分布、物理定数
+- 入力に合わせて結果をリアルタイムに表示。単位と小数点以下の桁数も指定できます
+- 計算式ごとのバージョン履歴 ― 編集するたびに直前の内容を番号付きで保存し、復元できます（計算履歴とは別の機能です）
+- コレクションを他の Nextcloud ユーザーと 3 段階の権限（閲覧／編集／削除）で共有
+- AI-Hub アプリを通じた AI アシスタント：計算式の横にチャットを表示します。FormulaBase と計算式の書き方を理解しており、質問に文章で答え、計算式はそのまま入力できるテキストとして示します。開いているコレクションは管理者が許可した範囲でのみ読み取ります。AI-Hub がない場合は表示されません
+- RegiBase と共通の、すっきりとしたデザイン。テーマ（ライト／ダーク）に対応
 
-0.7.0で追加した2,400件のテンプレートは、すべて別の方法で計算した値と照合しています。0.8.0からは、すべてのテンプレートと画面が13言語（英語・日本語・中国語・スペイン語・フランス語・ドイツ語・イタリア語・ポルトガル語〔ブラジル・ポルトガル〕・ロシア語・アラビア語・ヒンディー語・韓国語）に対応しています。それ以前からの3,122件は、全数を人手で検証できているわけではありません。誤った公式・不適切な初期値・誤訳・単位の誤りなどを見つけた場合は、GitHubでIssueを作成していただけると助かります。]]></description>
-	<version>0.9.0</version>
+0.7.0 で追加した 2,400 件のテンプレートは、すべて別の方法で計算した結果と照合しています。0.8.0 からは、すべてのテンプレートと画面が 13 言語（英語、日本語、中国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語〔ブラジル・ポルトガル〕、ロシア語、アラビア語、ヒンディー語、韓国語）に対応しています。それ以前からある 3,122 件は、すべてを人の手で検証できているわけではありません。計算式の誤り、不適切な初期値、誤訳、単位の抜けなどを見つけた場合は、GitHub で Issue を作成していただけると助かります。]]></description>
+	<version>0.9.1</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>

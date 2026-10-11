@@ -2,32 +2,37 @@
 
 All notable changes to FormulaBase.
 
+## 0.9.1 — 2026-10-11
+
+Only the Japanese text was rewritten — the README, the App Store description and the changelog — to read naturally. No feature was added or changed.
+（README・App Store の説明・変更履歴の日本語の文章を、自然な日本語に差し替えただけです。機能の追加や変更はありません。）
+
 ## 0.9.0 — 2026-10-08
 
 An AI assistant, through the new AI-Hub app, and the fixes from a review of the whole app.
-（新しいアプリ AI-Hub を通した AI アシスタントと、アプリ全体の点検で見つかったものの修正。）
+（新しいアプリ AI-Hub を利用した AI アシスタントを追加し、アプリ全体の見直しで見つかった問題を修正しました。）
 
 ### Added
 
 - **An AI assistant, through the AI-Hub app.** A chat beside the formulas that knows FormulaBase and how its expressions are written. It answers in words and writes a formula out as text you can type in; it changes nothing, and it reads the open collection only as the administrator allows. Administration settings → FormulaBase → AI assistant: on or off, who may use it, what it may read. Shown only when AI-Hub is installed.
-  （**AI-Hub アプリを通した AI アシスタント。** FormulaBase と式の書き方を知っているチャットが横に出る。答えを言葉で返し、式は打ち込める文字として書き出す。何も変更せず、開いているコレクションは管理者が許した範囲でだけ読む。管理者設定 → FormulaBase → AI アシスタントで、使うかどうか・使える人・読める範囲を決める。AI-Hub が入っているときだけ表示される。）
+  （**AI-Hub アプリを利用した AI アシスタントを追加しました。** 計算式の横に、FormulaBase と計算式の書き方を理解したチャットが表示されます。質問には文章で答え、計算式はそのまま入力できるテキストとして示します。データを変更することはなく、開いているコレクションは管理者が許可した範囲でのみ読み取ります。管理者設定 → FormulaBase → AI アシスタントで、有効・無効、利用できるユーザー、読み取れる範囲を設定できます。AI-Hub がインストールされている場合にのみ表示されます。）
 
 ### Fixed
 
 - **A formula that takes too long now stops.** Expressions such as `primepi(1e11)` or `partitions(100000)` could hold a server process for minutes; the calculation now stops after 15 seconds with "The calculation is too large to finish."
-  （**時間のかかりすぎる式は止まる。** `primepi(1e11)` などがサーバーを数分占有できた。15 秒で「計算が大きすぎる」と止める。）
+  （**時間がかかりすぎる計算は、途中で止まるようにしました。** `primepi(1e11)` や `partitions(100000)` などの式が、サーバーのプロセスを数分間占有することがありました。現在は 15 秒で計算を打ち切り、「計算が大きすぎて終わりません。」と表示します。）
 - **Huge matrices no longer use up the server's memory.** A product that would have a hundred million cells now gives NaN; a backup file or its data that is too large is refused.
-  （**巨大な行列でサーバーのメモリを使い切らない。** 1 億セルになる積は NaN に。大きすぎるバックアップは受け付けない。）
+  （**巨大な行列でサーバーのメモリーを使い切らないようにしました。** 結果が 1 億セルになる行列の積は NaN を返します。大きすぎるバックアップファイルやそのデータは受け付けません。）
 - **Dividing by zero and the like no longer breaks an export.** `csc(0)`, `logb(5,1)`, `root(8,0)` and similar gave an ODS export an error, or dropped the result row of an ODT; they now give ∞ or NaN, as on the screen.
-  （**0 での割り算などで書き出しが壊れない。** ODS が失敗し、ODT は結果の行が消えていた。画面と同じ ∞・NaN になる。）
+  （**ゼロ除算などでエクスポートが失敗しないようにしました。** `csc(0)`、`logb(5,1)`、`root(8,0)` などで、ODS のエクスポートがエラーになったり、ODT で結果の行が抜けたりしていました。現在は画面と同じく ∞ または NaN になります。）
 - **Restoring a backup over a collection is checked first and done in one step**, so a broken backup no longer leaves the collection empty.
-  （**バックアップでの置き換え復元は、先に中身を確かめ、一括で行う。** 壊れたバックアップでコレクションが空になることがない。）
+  （**バックアップでコレクションを上書き復元するときは、先に内容を確認してから一括で処理するようにしました。** 壊れたバックアップを使っても、コレクションが空になることはありません。）
 - **Choosing whom to share with follows Nextcloud's sharing settings.** Everybody could be listed, outside the groups the administrator allows.
-  （**共有相手の検索が Nextcloud の共有設定に従う。** 許されていないグループの人まで検索で出ていた。）
+  （**共有相手の選択が、Nextcloud の共有設定に従うようにしました。** これまでは、管理者が許可したグループ以外のユーザーも一覧に表示されていました。）
 - **Names, icons and colours that are too long** are cut or refused instead of causing an error.
-  （長すぎる名前・アイコン・色は、エラーにせず切るか断る。）
+  （**長すぎる名前、アイコン、色は**、エラーにせず、切り詰めるか受け付けないようにしました。）
 - **Deleting a formula, or an account, deletes the history kept for it**; it used to be left behind.
-  （数式やアカウントを消すと、その履歴も消える。これまでは残っていた。）
+  （**計算式やアカウントを削除すると、その履歴も削除されるようにしました。** これまでは残ったままでした。）
 
 ## 0.8.0 — 2026-09-25
 
