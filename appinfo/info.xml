@@ -38,7 +38,7 @@ The 2,400 templates added in 0.7.0 were each checked against an independent calc
 - RegiBase と共通の、すっきりとしたデザイン。テーマ（ライト／ダーク）に対応
 
 0.7.0 で追加した 2,400 件のテンプレートは、すべて別の方法で計算した結果と照合しています。0.8.0 からは、すべてのテンプレートと画面が 13 言語（英語、日本語、中国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語〔ブラジル・ポルトガル〕、ロシア語、アラビア語、ヒンディー語、韓国語）に対応しています。それ以前からある 3,122 件は、すべてを人の手で検証できているわけではありません。計算式の誤り、不適切な初期値、誤訳、単位の抜けなどを見つけた場合は、GitHub で Issue を作成していただけると助かります。]]></description>
-	<version>0.9.1</version>
+	<version>0.9.2</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>

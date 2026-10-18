@@ -20624,7 +20624,7 @@ OC.L10N.register(
     "Units in service": "Unidades em serviço",
     "FMEA Risk Priority Number": "Número de Prioridade de Risco FMEA",
     "Ranks failure modes in a failure mode and effects analysis by severity × occurrence × detection.": "Classifica os modos de falha em uma análise de modos de falha e efeitos por severidade × ocorrência × detecção.",
-    "Newer standards (AIAG–VDA) prefer action-priority tables, but RPN remains common.": "As normas mais recentes (AIAG–VDA) preferem tabelas de prioridade de ação, mas o RPN continua a ser comum.",
+    "Newer standards (AIAG–VDA) prefer action-priority tables, but RPN remains common.": "As normas mais recentes (AIAG–VDA) preferem tabelas de prioridade de ação, mas o RPN continua sendo comum.",
     "Severity (1–10)": "Severidade (1–10)",
     "Occurrence (1–10)": "Ocorrência (1–10)",
     "Detection (1–10)": "Detecção (1–10)",

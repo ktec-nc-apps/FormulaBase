@@ -2,6 +2,11 @@
 
 All notable changes to FormulaBase.
 
+## 0.9.2 — 2026-10-18
+
+One Brazilian Portuguese sentence written the European way ("continua a ser") now reads as it does in Brazil. No feature was added or changed.
+（ブラジル向けポルトガル語で、ポルトガルの言い方になっていた 1 か所（「continua a ser」）を、ブラジルの言い方に直しました。機能の追加や変更はありません。）
+
 ## 0.9.1 — 2026-10-11
 
 Only the Japanese text was rewritten — the README, the App Store description and the changelog — to read naturally. No feature was added or changed.
