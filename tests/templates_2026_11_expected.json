@@ -1,0 +1,598 @@
+{
+ "Average Speed over Two Legs": {
+  "cat": "Travel and driving",
+  "expected": 76.92307692307692
+ },
+ "Time Saved by Driving Faster": {
+  "cat": "Travel and driving",
+  "expected": 12.121212121212125
+ },
+ "Fuel Cost per Passenger": {
+  "cat": "Travel and driving",
+  "expected": 1133.3333333333333
+ },
+ "Electric Car Energy Cost for a Trip": {
+  "cat": "Travel and driving",
+  "expected": 1488.0
+ },
+ "Annual Fuel Saving from a More Efficient Car": {
+  "cat": "Travel and driving",
+  "expected": 70833.33333333331
+ },
+ "Break-even Distance: Electric versus Petrol Car": {
+  "cat": "Travel and driving",
+  "expected": 78451.88284518827
+ },
+ "Trip Time with Breaks": {
+  "cat": "Travel and driving",
+  "expected": 7.666666666666667
+ },
+ "Following Distance from a Time Gap": {
+  "cat": "Travel and driving",
+  "expected": 55.55555555555556
+ },
+ "Naismith's Rule (Walking Time)": {
+  "cat": "Travel and driving",
+  "expected": 3.9
+ },
+ "Tobler's Hiking Function": {
+  "cat": "Travel and driving",
+  "expected": 3.54933218620089
+ },
+ "Taxi Fare (Flag Fall plus Distance)": {
+  "cat": "Travel and driving",
+  "expected": 2100.0
+ },
+ "Speed from Timing over a Known Distance": {
+  "cat": "Travel and driving",
+  "expected": 80.0
+ },
+ "Road Gradient as an Angle": {
+  "cat": "Travel and driving",
+  "expected": 5.710593137499642
+ },
+ "Bicycle Gear Development": {
+  "cat": "Travel and driving",
+  "expected": 6.1911764705882355
+ },
+ "Cycling Speed from Cadence and Gear": {
+  "cat": "Travel and driving",
+  "expected": 33.432352941176475
+ },
+ "Baker's Percentage": {
+  "cat": "Cooking and food",
+  "expected": 70.0
+ },
+ "Brine Concentration": {
+  "cat": "Cooking and food",
+  "expected": 4.761904761904762
+ },
+ "Salt for a Target Brine Strength": {
+  "cat": "Cooking and food",
+  "expected": 52.631578947368425
+ },
+ "Raw Weight Needed for a Cooked Portion": {
+  "cat": "Cooking and food",
+  "expected": 200.0
+ },
+ "Menu Price from a Target Food Cost": {
+  "cat": "Cooking and food",
+  "expected": 11.428571428571429
+ },
+ "Share of Energy from Protein": {
+  "cat": "Cooking and food",
+  "expected": 21.05263157894737
+ },
+ "Coffee Extraction Yield": {
+  "cat": "Cooking and food",
+  "expected": 20.700000000000003
+ },
+ "Alcohol by Volume from Gravity Readings": {
+  "cat": "Cooking and food",
+  "expected": 5.25
+ },
+ "Recipe Scaling for a Round Pan Size": {
+  "cat": "Cooking and food",
+  "expected": 288.0
+ },
+ "Recipe Scaling from a Rectangular to a Round Pan": {
+  "cat": "Cooking and food",
+  "expected": 150.79644737231007
+ },
+ "US Standard Drinks": {
+  "cat": "Cooking and food",
+  "expected": 1.0003392857142859
+ },
+ "Water Temperature for a Target Dough Temperature": {
+  "cat": "Cooking and food",
+  "expected": 18.0
+ },
+ "Sugar Concentration after Dilution": {
+  "cat": "Cooking and food",
+  "expected": 50.0
+ },
+ "Pearson Square: Amount of the Richer Ingredient": {
+  "cat": "Cooking and food",
+  "expected": 206.34920634920636
+ },
+ "Sourdough Hydration Including the Starter": {
+  "cat": "Cooking and food",
+  "expected": 72.72727272727273
+ },
+ "Alcohol Content of a Mixed Drink": {
+  "cat": "Cooking and food",
+  "expected": 12.8
+ },
+ "Number of Stair Risers": {
+  "cat": "Home, building and DIY",
+  "expected": 15.0
+ },
+ "Stair Riser Height": {
+  "cat": "Home, building and DIY",
+  "expected": 180.0
+ },
+ "Blondel's Stair Formula (Step Length)": {
+  "cat": "Home, building and DIY",
+  "expected": 620.0
+ },
+ "Energy to Heat Water": {
+  "cat": "Home, building and DIY",
+  "expected": 10.465
+ },
+ "Water Heater Heating Time": {
+  "cat": "Home, building and DIY",
+  "expected": 3.6719298245614036
+ },
+ "Gravel or Sand by Weight": {
+  "cat": "Home, building and DIY",
+  "expected": 2.4000000000000004
+ },
+ "Bricks Needed for a Wall": {
+  "cat": "Home, building and DIY",
+  "expected": 592.5925925925926
+ },
+ "Fence Posts Needed": {
+  "cat": "Home, building and DIY",
+  "expected": 12.0
+ },
+ "Deck Boards Needed": {
+  "cat": "Home, building and DIY",
+  "expected": 25.0
+ },
+ "Rainwater Harvest from a Roof": {
+  "cat": "Home, building and DIY",
+  "expected": 96000.0
+ },
+ "Ladder Base Distance (1-in-4 Rule)": {
+  "cat": "Home, building and DIY",
+  "expected": 1.5
+ },
+ "Board Feet of Lumber": {
+  "cat": "Home, building and DIY",
+  "expected": 10.0
+ },
+ "Maximum Total Floor Area from a Floor Area Ratio": {
+  "cat": "Home, building and DIY",
+  "expected": 300.0
+ },
+ "Insulation Thickness for a Target U-Value": {
+  "cat": "Home, building and DIY",
+  "expected": 0.15750000000000003
+ },
+ "Swimming Pool Volume": {
+  "cat": "Home, building and DIY",
+  "expected": 75000.0
+ },
+ "Bags of Premixed Concrete": {
+  "cat": "Home, building and DIY",
+  "expected": 50.0
+ },
+ "Roof Pitch Angle": {
+  "cat": "Home, building and DIY",
+  "expected": 21.80140948635181
+ },
+ "Ebbinghaus Forgetting Curve": {
+  "cat": "Psychology and learning",
+  "expected": 67.03200460356393
+ },
+ "Hick's Law (Choice Reaction Time)": {
+  "cat": "Psychology and learning",
+  "expected": 0.6499999999999999
+ },
+ "Fitts's Law (Movement Time)": {
+  "cat": "Psychology and learning",
+  "expected": 0.5754887502163468
+ },
+ "Fitts's Throughput": {
+  "cat": "Psychology and learning",
+  "expected": 5.2832083357371875
+ },
+ "Signal Detection Sensitivity (d′)": {
+  "cat": "Psychology and learning",
+  "expected": 1.6832424671458286
+ },
+ "Signal Detection Criterion (c)": {
+  "cat": "Psychology and learning",
+  "expected": -0.1586103604324367
+ },
+ "Deviation IQ from a Raw Score": {
+  "cat": "Psychology and learning",
+  "expected": 122.5
+ },
+ "Net Typing Speed (WPM)": {
+  "cat": "Psychology and learning",
+  "expected": 58.8
+ },
+ "Test Score Corrected for Guessing": {
+  "cat": "Psychology and learning",
+  "expected": 36.0
+ },
+ "Reliable Change Index": {
+  "cat": "Psychology and learning",
+  "expected": -1.9474579822405902
+ },
+ "Ebbinghaus Savings Score": {
+  "cat": "Psychology and learning",
+  "expected": 60.0
+ },
+ "Kuder–Richardson 21 Reliability": {
+  "cat": "Psychology and learning",
+  "expected": 0.7863247863247863
+ },
+ "Item Difficulty Index": {
+  "cat": "Psychology and learning",
+  "expected": 0.75
+ },
+ "Net Effective Rent": {
+  "cat": "Property and rent",
+  "expected": 1833.3333333333333
+ },
+ "Prorated Rent for a Part Month": {
+  "cat": "Property and rent",
+  "expected": 600.0
+ },
+ "Service Charge Share by Floor Area": {
+  "cat": "Property and rent",
+  "expected": 3000.0
+ },
+ "Rent-to-Income Ratio": {
+  "cat": "Property and rent",
+  "expected": 24.0
+ },
+ "Break-even Rent with Vacancy": {
+  "cat": "Property and rent",
+  "expected": 1842.1052631578946
+ },
+ "Rent Increase Capped by an Index": {
+  "cat": "Property and rent",
+  "expected": 1545.0
+ },
+ "Annual User Cost of Owning a Home": {
+  "cat": "Property and rent",
+  "expected": 13500.0
+ },
+ "Monthly Rent for a Target Gross Yield": {
+  "cat": "Property and rent",
+  "expected": 1500.0
+ },
+ "Monthly Repair Reserve": {
+  "cat": "Property and rent",
+  "expected": 200.0
+ },
+ "Capital Needed to Fill a Retirement Income Gap": {
+  "cat": "Retirement and pensions",
+  "expected": 325000.0
+ },
+ "Inflation-Protected Perpetual Withdrawal": {
+  "cat": "Retirement and pensions",
+  "expected": 29411.764705882357
+ },
+ "Pension with a Linear Deferral Credit": {
+  "cat": "Retirement and pensions",
+  "expected": 1752.0
+ },
+ "Years a Portfolio Lasts with Inflation-Rising Withdrawals": {
+  "cat": "Retirement and pensions",
+  "expected": 23.911903366978855
+ },
+ "Total Pension Contributions with Salary Growth": {
+  "cat": "Retirement and pensions",
+  "expected": 190301.66282528813
+ },
+ "Future Value of Growing Contributions": {
+  "cat": "Retirement and pensions",
+  "expected": 378935.9807922007
+ },
+ "Present Value of Future Earnings (Human Capital)": {
+  "cat": "Retirement and pensions",
+  "expected": 968152.9634615536
+ },
+ "Real Value of a Partly Indexed Pension": {
+  "cat": "Retirement and pensions",
+  "expected": 17271.027317808763
+ },
+ "SaaS Quick Ratio": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 3.5
+ },
+ "SaaS Magic Number": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 1.3333333333333333
+ },
+ "Gross Revenue Retention": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 92.0
+ },
+ "Customer Retention Rate": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 90.0
+ },
+ "Sales Velocity": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 4000.0
+ },
+ "Sales Volume Increase Needed after a Price Cut": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 33.33333333333333
+ },
+ "Sales Volume Loss Allowed after a Price Rise": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 19.999999999999996
+ },
+ "Viral Coefficient (K-Factor)": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 1.0
+ },
+ "Average Customer Lifetime from Churn": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 25.0
+ },
+ "Email List Growth Rate": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 2.5
+ },
+ "Leads Needed for a Revenue Target": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 1000.0
+ },
+ "Revenue per Visitor": {
+  "cat": "Sales, marketing and SaaS metrics",
+  "expected": 2.0
+ },
+ "Unexpected Loss of a Single Exposure": {
+  "cat": "Banking and credit risk",
+  "expected": 72242.64668462804
+ },
+ "Total Capital Ratio": {
+  "cat": "Banking and credit risk",
+  "expected": 15.0
+ },
+ "Texas Ratio": {
+  "cat": "Banking and credit risk",
+  "expected": 50.0
+ },
+ "Lifetime Expected Credit Loss from Marginal PDs": {
+  "cat": "Banking and credit risk",
+  "expected": 2705.539358600583
+ },
+ "Conditional (Forward) Default Probability": {
+  "cat": "Banking and credit risk",
+  "expected": 0.042105263157894646
+ },
+ "Constant Hazard Rate from a Cumulative PD": {
+  "cat": "Banking and credit risk",
+  "expected": 0.02107210313156527
+ },
+ "Loss Given Default from Collateral": {
+  "cat": "Banking and credit risk",
+  "expected": 40.0
+ },
+ "Net Charge-off Rate": {
+  "cat": "Banking and credit risk",
+  "expected": 1.125
+ },
+ "Distributions to Paid-In (DPI)": {
+  "cat": "Funds and venture capital",
+  "expected": 1.2
+ },
+ "Price per Share in a Priced Round": {
+  "cat": "Funds and venture capital",
+  "expected": 0.8
+ },
+ "Shares Issued in a Priced Round": {
+  "cat": "Funds and venture capital",
+  "expected": 2500000.0
+ },
+ "Post-Money SAFE Ownership": {
+  "cat": "Funds and venture capital",
+  "expected": 5.0
+ },
+ "Convertible Note Conversion Price": {
+  "cat": "Funds and venture capital",
+  "expected": 0.8
+ },
+ "Effective Pre-Money after an Option Pool Increase": {
+  "cat": "Funds and venture capital",
+  "expected": 7000000.0
+ },
+ "Net Asset Value per Unit": {
+  "cat": "Funds and venture capital",
+  "expected": 12.5
+ },
+ "Amount Invested after a Front-End Load": {
+  "cat": "Funds and venture capital",
+  "expected": 9700.0
+ },
+ "Pro Rata Investment to Keep Ownership": {
+  "cat": "Funds and venture capital",
+  "expected": 500000.0
+ },
+ "Carried Interest with a Hurdle and Full Catch-Up": {
+  "cat": "Funds and venture capital",
+  "expected": 6000000.0
+ },
+ "Participating Preferred Payout": {
+  "cat": "Funds and venture capital",
+  "expected": 14000000.0
+ },
+ "Palma Ratio": {
+  "cat": "Inequality, poverty and population",
+  "expected": 2.0
+ },
+ "S80/S20 Income Quintile Share Ratio": {
+  "cat": "Inequality, poverty and population",
+  "expected": 5.0
+ },
+ "Mean Log Deviation (Theil L Index)": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.2901665764514923
+ },
+ "Generalised Entropy Index GE(α)": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.3125
+ },
+ "Hoover Index": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.2
+ },
+ "Sen Poverty Index": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.095
+ },
+ "Income-Gap Ratio": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.255813953488372
+ },
+ "Old-Age Dependency Ratio": {
+  "cat": "Inequality, poverty and population",
+  "expected": 48.648648648648646
+ },
+ "Gross Reproduction Rate": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.687798
+ },
+ "Net Reproduction Rate": {
+  "cat": "Inequality, poverty and population",
+  "expected": 0.67418838
+ },
+ "Tsubo → m²": {
+  "cat": "Unit conversion",
+  "expected": 99.17355371900825
+ },
+ "m² → Tsubo": {
+  "cat": "Unit conversion",
+  "expected": 30.250000000000004
+ },
+ "Tatami Mats (Jō) → m²": {
+  "cat": "Unit conversion",
+  "expected": 9.72
+ },
+ "m² → Tatami Mats (Jō)": {
+  "cat": "Unit conversion",
+  "expected": 12.345679012345679
+ },
+ "Shaku and Sun → cm": {
+  "cat": "Unit conversion",
+  "expected": 160.6060606060606
+ },
+ "cm → Shaku": {
+  "cat": "Unit conversion",
+  "expected": 6.006
+ },
+ "Bu → mm": {
+  "cat": "Unit conversion",
+  "expected": 15.151515151515152
+ },
+ "Ken → m": {
+  "cat": "Unit conversion",
+  "expected": 1.8181818181818181
+ },
+ "Chō (Length) → m": {
+  "cat": "Unit conversion",
+  "expected": 109.0909090909091
+ },
+ "Ri → km": {
+  "cat": "Unit conversion",
+  "expected": 3.9272727272727277
+ },
+ "Kujirajaku Shaku → cm": {
+  "cat": "Unit conversion",
+  "expected": 37.878787878787875
+ },
+ "Gō → mL": {
+  "cat": "Unit conversion",
+  "expected": 180.39068369646884
+ },
+ "Shō → L": {
+  "cat": "Unit conversion",
+  "expected": 1.8039068369646885
+ },
+ "L → Gō": {
+  "cat": "Unit conversion",
+  "expected": 5.543523531861723
+ },
+ "To → L": {
+  "cat": "Unit conversion",
+  "expected": 18.039068369646884
+ },
+ "Koku → m³": {
+  "cat": "Unit conversion",
+  "expected": 0.18039068369646882
+ },
+ "Timber Koku → m³": {
+  "cat": "Unit conversion",
+  "expected": 0.2782647410746585
+ },
+ "Kan → kg": {
+  "cat": "Unit conversion",
+  "expected": 3.75
+ },
+ "kg → Kan": {
+  "cat": "Unit conversion",
+  "expected": 4.0
+ },
+ "Monme → g": {
+  "cat": "Unit conversion",
+  "expected": 37.5
+ },
+ "Kin → g": {
+  "cat": "Unit conversion",
+  "expected": 1200.0
+ },
+ "Se → m²": {
+  "cat": "Unit conversion",
+  "expected": 99.17355371900825
+ },
+ "Tan → m²": {
+  "cat": "Unit conversion",
+  "expected": 991.7355371900826
+ },
+ "Chōbu → Hectares": {
+  "cat": "Unit conversion",
+  "expected": 0.9917355371900825
+ },
+ "km/L → L/100 km": {
+  "cat": "Unit conversion",
+  "expected": 6.666666666666667
+ },
+ "Wood Moisture Content (Oven-Dry Basis)": {
+  "cat": "Home, building and DIY",
+  "expected": 20.0
+ },
+ "Collateral Coverage Ratio": {
+  "cat": "Banking and credit risk",
+  "expected": 60.0
+ },
+ "Average Fuel Economy over Several Fill-ups": {
+  "cat": "Travel and driving",
+  "expected": 14.636363636363637
+ },
+ "Driving Range on the Fuel Left": {
+  "cat": "Travel and driving",
+  "expected": 168.0
+ },
+ "SuperMemo SM-2 Easiness Factor Update": {
+  "cat": "Psychology and learning",
+  "expected": 2.36
+ }
+}

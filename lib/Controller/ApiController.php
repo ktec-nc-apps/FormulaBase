@@ -115,6 +115,8 @@ class ApiController extends Controller {
 			'en' => 'English', 'ja' => '日本語', 'zh_CN' => '简体中文', 'es' => 'Español',
 			'fr' => 'Français', 'de' => 'Deutsch', 'ru' => 'Русский', 'pt_PT' => 'Português (Portugal)', 'pt_BR' => 'Português (Brasil)',
 			'ar' => 'العربية', 'hi' => 'हिन्दी', 'ko' => '한국어', 'it' => 'Italiano',
+			'uk' => 'Українська', 'pl' => 'Polski', 'cs' => 'Čeština', 'tr' => 'Türkçe', 'fa' => 'فارسی',
+			'id' => 'Bahasa Indonesia', 'th' => 'ไทย', 'vi' => 'Tiếng Việt',
 		];
 		// The 'auto' option is rendered explicitly in the template (matches RegiBase),
 		// so this list contains only the shipped concrete languages.
@@ -578,13 +580,14 @@ class ApiController extends Controller {
 					if ($existing === null) {
 						throw new \RuntimeException('File not found');
 					}
-					$data = $this->odsCalcData($f, $values, $this->odsFirstVarRow($image !== '', $imgW, $imgH));
+					// The rows go below what the sheet already holds, so the cell references
+					// and the image's position start there, not at the top of the sheet.
 					$bytes = $this->appendIntoOdf(
 						$existing,
-						'</table:table>',
-						function (string $imgHref) use ($f, $data, $steps, $imgW, $imgH): string {
-							$r = $this->odsRowsXml($f, $data, $imgHref, $imgHref !== '', $steps, $imgW, $imgH);
-							return $r['shapes'] . $r['rows'];
+						'ods',
+						function (string $imgHref, array $layout) use ($f, $values, $image, $steps, $imgW, $imgH): array {
+							$data = $this->odsCalcData($f, $values, $layout['rows'] + $this->odsFirstVarRow($image !== '', $imgW, $imgH));
+							return $this->odsRowsXml($f, $data, $imgHref, $imgHref !== '', $steps, $imgW, $imgH, $layout['heightCm'] + 0.1);
 						},
 						$image
 					);
@@ -599,8 +602,8 @@ class ApiController extends Controller {
 					}
 					$bytes = $this->appendIntoOdf(
 						$existing,
-						'</office:text>',
-						fn (string $imgHref) => $this->odtBodyXml($f, $values, $imgHref, $imgHref !== '', $steps, $imgW, $imgH),
+						'odt',
+						fn (string $imgHref, array $layout) => $this->odtBodyXml($f, $values, $imgHref, $imgHref !== '', $steps, $imgW, $imgH),
 						$image
 					);
 				} else {
@@ -653,7 +656,7 @@ class ApiController extends Controller {
 	private function odsNumberCell(float $value): string {
 		$v = $this->odsNumFmt($value);
 		return '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($v) . '">'
-			. '<text:p>' . $this->mlEsc($v) . '</text:p></table:table-cell>';
+			. '<text:p>' . $this->mlEsc($this->odsNumText($value)) . '</text:p></table:table-cell>';
 	}
 
 	/** Render a formula's variable list as human-readable lines. */
@@ -789,7 +792,7 @@ class ApiController extends Controller {
 	 * Resolve a formula's variables/cell-map/scope/compiled-formula/cached-value, shared by
 	 * both the fresh-document and append-into-existing-document ODS builders.
 	 * @param array<string,mixed> $values variable key => current numeric value (from the app)
-	 * @return array{vars:array,cellMap:array<string,string>,scope:array<string,mixed>,formulaOdf:string,cachedValue:mixed}
+	 * @return array{vars:array,cellMap:array<string,string>,scope:array<string,mixed>,formulaOdf:string,cachedValue:mixed,fixed:bool}
 	 * @throws \RuntimeException on a malformed expression
 	 */
 	/**
@@ -833,12 +836,17 @@ class ApiController extends Controller {
 
 		$cellMap = [];
 		$defaults = [];
-		foreach ($vars as $i => $v) {
+		// Count the rows odsRowsXml() actually writes (one per variable with a key), not
+		// the position in the list: a variable with no key gets no row, and counting it
+		// sent every later variable's reference one row too far down.
+		$row = 0;
+		foreach ($vars as $v) {
 			$key = trim((string)($v['key'] ?? ''));
 			if ($key === '') {
 				continue;
 			}
-			$cellMap[$key] = 'B' . ($firstRow + $i);
+			$cellMap[$key] = 'B' . ($firstRow + $row);
+			$row++;
 			$defaults[$key] = $v;
 		}
 
@@ -849,6 +857,7 @@ class ApiController extends Controller {
 		}
 		// the scope lets calls with no spreadsheet function (isprime, Σ, …) be written as their value
 		$formulaOdf = $this->compiler->toOdf($ast, $cellMap, $scope);
+		$fixed = $this->compiler->odfHasFixedValue();
 		$cachedValue = 0.0;
 		try {
 			$cachedValue = $this->compiler->evaluate($ast, $scope);
@@ -858,7 +867,7 @@ class ApiController extends Controller {
 		} catch (\Throwable $e) {
 			// leave the cached value at 0; the real table:formula will still recompute on open
 		}
-		return ['vars' => $vars, 'cellMap' => $cellMap, 'scope' => $scope, 'formulaOdf' => $formulaOdf, 'cachedValue' => $cachedValue];
+		return ['vars' => $vars, 'cellMap' => $cellMap, 'scope' => $scope, 'formulaOdf' => $formulaOdf, 'cachedValue' => $cachedValue, 'fixed' => $fixed];
 	}
 
 	/**
@@ -892,7 +901,7 @@ class ApiController extends Controller {
 	 * @return array{rows: string, shapes: string} $shapes is a <table:shapes> fragment (possibly
 	 *  empty) that the caller must place as a direct child of <table:table>, alongside the rows.
 	 */
-	private function odsRowsXml(FormulaEntity $f, array $data, string $imgHref, bool $hasImage, array $steps, int $imgW = 0, int $imgH = 0): array {
+	private function odsRowsXml(FormulaEntity $f, array $data, string $imgHref, bool $hasImage, array $steps, int $imgW = 0, int $imgH = 0, float $imgYcm = 0.1): array {
 		['cellMap' => $cellMap, 'scope' => $scope, 'formulaOdf' => $formulaOdf, 'cachedValue' => $cachedValue] = $data;
 		$vars = $data['vars'];
 
@@ -911,7 +920,7 @@ class ApiController extends Controller {
 				$rows .= '<table:table-row><table:table-cell table:number-columns-spanned="3" office:value-type="string"><text:p/></table:table-cell>'
 					. '<table:covered-table-cell/><table:covered-table-cell/></table:table-row>';
 			}
-			$shapes = '<table:shapes><draw:frame draw:name="FormulaImage" svg:x="0.1cm" svg:y="0.1cm" svg:width="' . $frameW . '" svg:height="' . $frameH . '">'
+			$shapes = '<table:shapes><draw:frame draw:name="FormulaImage" svg:x="0.1cm" svg:y="' . sprintf('%.3Fcm', $imgYcm) . '" svg:width="' . $frameW . '" svg:height="' . $frameH . '">'
 				. '<draw:image xlink:href="' . $this->mlEsc($imgHref) . '" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
 				. '</draw:frame></table:shapes>';
 		} else {
@@ -951,11 +960,15 @@ class ApiController extends Controller {
 		}
 
 		// Result row: a real, recalculating spreadsheet formula (a list or complex result is shown as text).
+		// When part of it had to be written as its value (isprime, Σ, a list input, …), a changed input
+		// does not reach that part: the cell beside the unit says so, or the sheet would look live and be wrong.
+		$note = empty($data['fixed']) ? '' : $this->odsTextCell([$this->l->t('This value is calculated by FormulaBase and does not recalculate in the spreadsheet.')]);
 		if (!is_float($cachedValue)) {
 			$rows .= '<table:table-row>'
 				. $this->odsTextCell([$this->l->t('Result')])
 				. $this->odsTextCell([$this->compiler->formatValue($cachedValue)])
 				. $this->odsTextCell([(string)$f->getResultUnit()])
+				. $note
 				. '</table:table-row>';
 		} else {
 			$vStr = $this->odsNumFmt($cachedValue);
@@ -963,8 +976,9 @@ class ApiController extends Controller {
 				. $this->odsTextCell([$this->l->t('Result')])
 				. '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($vStr) . '"'
 				. ' table:formula="=' . $this->mlEsc($formulaOdf) . '">'
-				. '<text:p>' . $this->mlEsc($vStr) . '</text:p></table:table-cell>'
+				. '<text:p>' . $this->mlEsc($this->odsNumText($cachedValue)) . '</text:p></table:table-cell>'
 				. $this->odsTextCell([(string)$f->getResultUnit()])
+				. $note
 				. '</table:table-row>';
 		}
 
@@ -1076,11 +1090,28 @@ class ApiController extends Controller {
 
 	/** Format a float the same way odsNumberCell does, without wrapping it in a cell. */
 	private function odsNumFmt(float $value): string {
-		// very small or very large numbers (Planck's constant, Avogadro's number) keep their digits
-		if ($value != 0 && is_finite($value) && (abs($value) < 1e-6 || abs($value) >= 1e15)) {
-			return FormulaCompiler::exactNumber($value);
+		// every digit the number has: it used to be cut to 10 decimals, which left 6 significant digits
+		// of 1.2345678901e-5 in the file (and in whatever the spreadsheet then calculated from it)
+		if (!is_finite($value)) {
+			return '0';
 		}
-		return rtrim(rtrim(sprintf('%.10F', $value), '0'), '.');
+		return FormulaCompiler::exactNumber($value);
+	}
+
+	/** A number as text for a reader (15 significant digits, so 0.1 + 0.2 reads 0.3 and nothing real is cut off). */
+	private function odsNumText(float $value): string {
+		if (!is_finite($value)) {
+			return $this->compiler->formatValue($value);
+		}
+		if ($value == 0) {
+			return '0';
+		}
+		$s = sprintf('%.15G', $value);
+		if (str_contains($s, 'E')) {
+			[$m, $e] = explode('E', $s);
+			return (str_contains($m, '.') ? rtrim(rtrim($m, '0'), '.') : $m) . 'E' . (int)$e;
+		}
+		return str_contains($s, '.') ? rtrim(rtrim($s, '0'), '.') : $s;
 	}
 
 	/**
@@ -1142,11 +1173,12 @@ class ApiController extends Controller {
 				$unit = (string)($v['unit'] ?? '');
 				$sv = $scope[$key] ?? 0.0;
 				$val = is_float($sv) ? $this->odsNumFmt($sv) : $this->compiler->formatValue($sv);
+				$shown = is_float($sv) ? $this->odsNumText($sv) : $val;
 				$out .= '<table:table-row>'
 					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($label) . '</text:p></table:table-cell>'
 					. (is_float($sv)
-						? '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($val) . '"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>'
-						: '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($val) . '</text:p></table:table-cell>')
+						? '<table:table-cell office:value-type="float" office:value="' . $this->mlEsc($val) . '"><text:p>' . $this->mlEsc($shown) . '</text:p></table:table-cell>'
+						: '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($shown) . '</text:p></table:table-cell>')
 					. '<table:table-cell office:value-type="string"><text:p>' . $this->mlEsc($unit) . '</text:p></table:table-cell>'
 					. '</table:table-row>';
 			}
@@ -1155,7 +1187,7 @@ class ApiController extends Controller {
 
 		if ($cachedValue !== null) {
 			$out .= '<text:p><text:span text:style-name="Bold">' . $this->mlEsc($this->l->t('Result')) . ':</text:span> '
-				. $this->mlEsc(is_float($cachedValue) ? $this->odsNumFmt($cachedValue) : $this->compiler->formatValue($cachedValue)) . ($f->getResultUnit() ? ' ' . $this->mlEsc((string)$f->getResultUnit()) : '') . '</text:p>';
+				. $this->mlEsc(is_float($cachedValue) ? $this->odsNumText($cachedValue) : $this->compiler->formatValue($cachedValue)) . ($f->getResultUnit() ? ' ' . $this->mlEsc((string)$f->getResultUnit()) : '') . '</text:p>';
 		}
 
 		if ($steps) {
@@ -1250,10 +1282,18 @@ class ApiController extends Controller {
 	 * entry byte-for-byte, and embed a uniquely-named image if provided. Best-effort — this is
 	 * string surgery, not a full ODF merge — but Nextcloud Office is available to fix up any
 	 * edge case it doesn't handle (multiple sheets/sections, unusual existing styles).
-	 * @param callable(string $imgHref): string $buildFragment
-	 * @throws \RuntimeException if the existing file isn't a readable ODF document
+	 *
+	 * The new parts are put in as XML nodes, not spliced in as text: the old splice wrote
+	 * draw:/svg:/xlink: elements into documents that never declared those prefixes (the
+	 * collection export is one), and the file it overwrote no longer opened. Anything that
+	 * cannot be put in safely is refused before the file is touched.
+	 *
+	 * @param 'ods'|'odt' $kind
+	 * @param callable(string $imgHref, array{rows:int,heightCm:float} $layout): (string|array{rows:string,shapes:string}) $buildFragment
+	 *        for 'ods' it returns odsRowsXml()'s ['rows','shapes']; $layout tells where the new rows begin
+	 * @throws \RuntimeException if the existing file isn't a readable ODF document or can't take the addition
 	 */
-	private function appendIntoOdf(string $existingBytes, string $closeTag, callable $buildFragment, string $imageBase64): string {
+	private function appendIntoOdf(string $existingBytes, string $kind, callable $buildFragment, string $imageBase64): string {
 		$tmpIn = $this->tempManager->getTemporaryFile('.odf-in');
 		file_put_contents($tmpIn, $existingBytes);
 		$zipIn = new \ZipArchive();
@@ -1271,15 +1311,13 @@ class ApiController extends Controller {
 
 		$hasImage = $imageBase64 !== '';
 		$imgHref = 'Pictures/formula_' . substr(md5(uniqid('', true)), 0, 10) . '.png';
-		$fragment = $buildFragment($hasImage ? $imgHref : '');
-
-		$pos = strrpos($content, $closeTag);
-		if ($pos === false) {
+		try {
+			$content = $this->odfInsert((string)$content, $kind, $buildFragment, $hasImage ? $imgHref : '');
+		} catch (\RuntimeException $e) {
 			$zipIn->close();
 			@unlink($tmpIn);
-			throw new \RuntimeException('The existing file is not a valid ODF document');
+			throw $e;
 		}
-		$content = substr($content, 0, $pos) . $fragment . substr($content, $pos);
 
 		$imgBytes = '';
 		if ($hasImage) {
@@ -1290,11 +1328,19 @@ class ApiController extends Controller {
 				@unlink($tmpIn);
 				throw new \RuntimeException('Invalid image data');
 			}
+			$count = 0;
 			$manifest = str_replace(
 				'</manifest:manifest>',
 				'<manifest:file-entry manifest:full-path="' . $imgHref . '" manifest:media-type="image/png"/></manifest:manifest>',
-				(string)$manifest
+				(string)$manifest,
+				$count
 			);
+			if ($count !== 1) {
+				// a picture missing from the manifest makes the office suite call the file broken
+				$zipIn->close();
+				@unlink($tmpIn);
+				throw new \RuntimeException('The existing file is not a valid ODF document');
+			}
 		}
 
 		$tmpOut = $this->tempManager->getTemporaryFile('.odf-out');
@@ -1322,6 +1368,270 @@ class ApiController extends Controller {
 		@unlink($tmpIn);
 		@unlink($tmpOut);
 		return $bytes;
+	}
+
+	private const ODF_NS = [
+		'office' => 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
+		'table' => 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
+		'text' => 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
+		'style' => 'urn:oasis:names:tc:opendocument:xmlns:style:1.0',
+		'fo' => 'urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0',
+		'draw' => 'urn:oasis:names:tc:opendocument:xmlns:drawing:1.0',
+		'xlink' => 'http://www.w3.org/1999/xlink',
+		'svg' => 'urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0',
+	];
+
+	/** The most rows a sheet can have (LibreOffice and Excel alike). */
+	private const MAX_SHEET_ROWS = 1048576;
+
+	/** A Calc row's height when its style does not say (0.178in). */
+	private const DEFAULT_ROW_CM = 0.452;
+
+	/**
+	 * Put the fragment $buildFragment makes into content.xml: for 'odt' at the end of the
+	 * text, for 'ods' below the last sheet's content (its picture into that sheet's shapes).
+	 * The result is checked to read back as XML before it is used.
+	 */
+	private function odfInsert(string $content, string $kind, callable $buildFragment, string $imgHref): string {
+		$bad = fn () => new \RuntimeException('The existing file is not a valid ODF document');
+		$dom = new \DOMDocument();
+		$dom->preserveWhiteSpace = true;
+		if (trim($content) === '' || !@$dom->loadXML($content, LIBXML_NONET | LIBXML_PARSEHUGE)) {
+			throw $bad();
+		}
+		$xp = new \DOMXPath($dom);
+		foreach (self::ODF_NS as $p => $uri) {
+			$xp->registerNamespace($p, $uri);
+		}
+
+		if ($kind === 'odt') {
+			$body = $xp->query('/office:document-content/office:body/office:text');
+			if (!$body || $body->length === 0) {
+				throw $bad();
+			}
+			$target = $body->item($body->length - 1);
+			$frag = $this->odfFragmentNodes($dom, (string)$buildFragment($imgHref, ['rows' => 0, 'heightCm' => 0.0]));
+			foreach ($frag as $node) {
+				$target->appendChild($node);
+			}
+		} else {
+			$sheets = $xp->query('/office:document-content/office:body/office:spreadsheet/table:table');
+			if (!$sheets || $sheets->length === 0) {
+				throw $bad();
+			}
+			/** @var \DOMElement $sheet */
+			$sheet = $sheets->item($sheets->length - 1);
+			$layout = $this->sheetLayout($xp, $sheet);
+			$built = $buildFragment($imgHref, ['rows' => $layout['rows'], 'heightCm' => $layout['heightCm']]);
+			$rows = $this->odfFragmentNodes($dom, (string)($built['rows'] ?? ''));
+			$newRows = 0;
+			foreach ($rows as $node) {
+				if ($node instanceof \DOMElement) {
+					$newRows += $this->rowRepeat($node);
+				}
+			}
+			// trailing empty rows (a sheet formatted down to its last row has them) give way
+			// to the new ones; past that, a full sheet cannot take them
+			$over = $layout['rows'] + $newRows + $layout['trailingRows'] - self::MAX_SHEET_ROWS;
+			for ($i = count($layout['trailing']) - 1; $over > 0 && $i >= 0; $i--) {
+				$tr = $layout['trailing'][$i];
+				$rep = $this->rowRepeat($tr);
+				if ($rep <= $over) {
+					$over -= $rep;
+					if ($layout['before'] === $tr) {
+						$layout['before'] = $tr->nextSibling;
+					}
+					$tr->parentNode->removeChild($tr);
+				} else {
+					$tr->setAttributeNS(self::ODF_NS['table'], 'table:number-rows-repeated', (string)($rep - $over));
+					$over = 0;
+				}
+			}
+			if ($over > 0) {
+				throw new \RuntimeException('The sheet has no room left below its last row');
+			}
+			foreach ($rows as $node) {
+				$sheet->insertBefore($node, $layout['before']);
+			}
+
+			$shapes = $this->odfFragmentNodes($dom, (string)($built['shapes'] ?? ''));
+			if ($shapes) {
+				$existing = null;
+				foreach ($sheet->childNodes as $c) {
+					if ($c instanceof \DOMElement && $c->namespaceURI === self::ODF_NS['table'] && $c->localName === 'shapes') {
+						$existing = $c;
+						break;
+					}
+				}
+				if ($existing !== null) {
+					foreach ($shapes as $s) {
+						foreach (iterator_to_array($s->childNodes) as $frame) {
+							$existing->appendChild($frame);
+						}
+					}
+				} else {
+					// table:shapes comes before the columns and rows of a sheet
+					$first = null;
+					foreach ($sheet->childNodes as $c) {
+						if ($c instanceof \DOMElement && $c->namespaceURI === self::ODF_NS['table']
+							&& in_array($c->localName, ['table-column', 'table-columns', 'table-column-group', 'table-header-columns', 'table-row', 'table-rows', 'table-row-group', 'table-header-rows'], true)) {
+							$first = $c;
+							break;
+						}
+					}
+					foreach ($shapes as $s) {
+						$sheet->insertBefore($s, $first);
+					}
+				}
+			}
+		}
+
+		$out = $dom->saveXML();
+		// read it back strictly: to libxml an undeclared prefix is only a warning
+		$prev = libxml_use_internal_errors(true);
+		libxml_clear_errors();
+		$check = new \DOMDocument();
+		$ok = $out !== false && $check->loadXML($out, LIBXML_NONET | LIBXML_PARSEHUGE) && libxml_get_errors() === [];
+		libxml_clear_errors();
+		libxml_use_internal_errors($prev);
+		if (!$ok) {
+			throw $bad();
+		}
+		return $out;
+	}
+
+	/**
+	 * Parse a fragment written with the usual ODF prefixes and bring its top-level nodes into
+	 * $dom. The prefixes are declared on a wrapper here, so the nodes carry their namespaces
+	 * and the document gets the declarations it lacks when they are inserted.
+	 * @return list<\DOMNode>
+	 */
+	private function odfFragmentNodes(\DOMDocument $dom, string $xml): array {
+		if (trim($xml) === '') {
+			return [];
+		}
+		$decl = '';
+		foreach (self::ODF_NS as $p => $uri) {
+			$decl .= ' xmlns:' . $p . '="' . $uri . '"';
+		}
+		$frag = new \DOMDocument();
+		if (!@$frag->loadXML('<w' . $decl . '>' . $xml . '</w>', LIBXML_NONET)) {
+			throw new \RuntimeException('The formula could not be written into the file');
+		}
+		$out = [];
+		foreach ($frag->documentElement->childNodes as $c) {
+			$out[] = $dom->importNode($c, true);
+		}
+		return $out;
+	}
+
+	private function rowRepeat(\DOMElement $row): int {
+		$n = (int)$row->getAttributeNS(self::ODF_NS['table'], 'number-rows-repeated');
+		return $n > 0 ? $n : 1;
+	}
+
+	/** A length such as "0.452cm", "0.178in", "12pt" in centimetres; null when unreadable. */
+	private function lengthCm(string $len): ?float {
+		if (!preg_match('/^\s*([0-9]*\.?[0-9]+)\s*(cm|mm|in|pt|pc|px)\s*$/', $len, $m)) {
+			return null;
+		}
+		$k = ['cm' => 1.0, 'mm' => 0.1, 'in' => 2.54, 'pt' => 2.54 / 72, 'pc' => 2.54 / 6, 'px' => 2.54 / 96][$m[2]];
+		return (float)$m[1] * $k;
+	}
+
+	/**
+	 * Where a sheet's content ends: how many rows (and how tall) come before the place new
+	 * rows go, that place, and the empty rows trailing after it.
+	 * @return array{rows:int,heightCm:float,before:?\DOMNode,trailing:list<\DOMElement>,trailingRows:int}
+	 */
+	private function sheetLayout(\DOMXPath $xp, \DOMElement $sheet): array {
+		$heights = [];
+		foreach ($xp->query('//style:style[@style:family="table-row"]') ?: [] as $st) {
+			/** @var \DOMElement $st */
+			$p = $xp->query('style:table-row-properties', $st)->item(0);
+			$h = $p instanceof \DOMElement ? $this->lengthCm($p->getAttributeNS(self::ODF_NS['style'], 'row-height')) : null;
+			if ($h !== null) {
+				$heights[$st->getAttributeNS(self::ODF_NS['style'], 'name')] = $h;
+			}
+		}
+		$tableNs = self::ODF_NS['table'];
+		$isRowBox = fn ($n) => $n instanceof \DOMElement && $n->namespaceURI === $tableNs
+			&& in_array($n->localName, ['table-row', 'table-rows', 'table-row-group', 'table-header-rows'], true);
+
+		// empty rows at the very end of the sheet (directly under it)
+		$trailing = [];
+		$lastBox = null;
+		for ($n = $sheet->lastChild; $n !== null; $n = $n->previousSibling) {
+			if (!$isRowBox($n)) {
+				continue;
+			}
+			if ($n->localName === 'table-row' && $this->rowIsEmpty($n)) {
+				array_unshift($trailing, $n);
+				continue;
+			}
+			$lastBox = $n;
+			break;
+		}
+		if ($trailing) {
+			$before = $trailing[0];
+		} elseif ($lastBox !== null) {
+			$before = $lastBox->nextSibling;
+		} else {
+			// no rows at all: before the named expressions, if any, else at the end
+			$before = null;
+			foreach ($sheet->childNodes as $c) {
+				if ($c instanceof \DOMElement && $c->namespaceURI === $tableNs && $c->localName === 'named-expressions') {
+					$before = $c;
+					break;
+				}
+			}
+		}
+
+		$rows = 0;
+		$height = 0.0;
+		$trailingRows = 0;
+		foreach ($sheet->getElementsByTagNameNS($tableNs, 'table-row') as $row) {
+			// rows of a table inside a cell belong to that table, not the sheet
+			$owner = $row->parentNode;
+			while ($owner !== null && !($owner instanceof \DOMElement && $owner->namespaceURI === $tableNs && $owner->localName === 'table')) {
+				$owner = $owner->parentNode;
+			}
+			if ($owner !== $sheet) {
+				continue;
+			}
+			$rep = $this->rowRepeat($row);
+			if (in_array($row, $trailing, true)) {
+				$trailingRows += $rep;
+				continue;
+			}
+			$rows += $rep;
+			$hidden = in_array($row->getAttributeNS($tableNs, 'visibility'), ['collapse', 'filter'], true);
+			$height += $hidden ? 0.0 : $rep * ($heights[$row->getAttributeNS($tableNs, 'style-name')] ?? self::DEFAULT_ROW_CM);
+		}
+		return ['rows' => $rows, 'heightCm' => $height, 'before' => $before, 'trailing' => $trailing, 'trailingRows' => $trailingRows];
+	}
+
+	/** A row with nothing in it: only bare cells, no value, formula, text, picture or note. */
+	private function rowIsEmpty(\DOMElement $row): bool {
+		$tableNs = self::ODF_NS['table'];
+		foreach ($row->childNodes as $cell) {
+			if (!($cell instanceof \DOMElement)) {
+				continue;
+			}
+			if ($cell->namespaceURI !== $tableNs || !in_array($cell->localName, ['table-cell', 'covered-table-cell'], true)) {
+				return false;
+			}
+			if ($cell->hasAttributeNS(self::ODF_NS['office'], 'value-type') || $cell->hasAttributeNS($tableNs, 'formula')
+				|| $cell->hasAttributeNS($tableNs, 'number-columns-spanned') || $cell->hasAttributeNS($tableNs, 'number-rows-spanned')) {
+				return false;
+			}
+			foreach ($cell->childNodes as $c) {
+				if ($c instanceof \DOMElement || trim((string)$c->textContent) !== '') {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	#[NoAdminRequired]

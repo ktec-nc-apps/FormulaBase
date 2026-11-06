@@ -2,14 +2,14 @@
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
 	<id>formulabase</id>
 	<name>FormulaBase</name>
-	<summary>Save your own formulas — plus 5,522 built-in templates — and calculate instantly by typing in numbers</summary>
-	<summary lang="ja">自分の計算式を保存して、数値を入力するだけですぐに計算。組み込みテンプレート 5,522 件付き</summary>
+	<summary>Save your own formulas — plus 5,671 built-in templates — and calculate instantly by typing in numbers</summary>
+	<summary lang="ja">自分の計算式を保存して、数値を入力するだけですぐに計算。組み込みテンプレート 5,671 件付き</summary>
 	<description><![CDATA[FormulaBase is a lightweight personal calculator for the formulas you use again and again — markups, unit conversions, loan payments, mixing ratios, engineering constants, anything.
 
 Organise your formulas into collections, define each formula's variables once, then open it any time, type in numbers, and read the result live. The math runs entirely in your browser (no eval, no server round-trip).
 
 Features:
-- 5,522 built-in formula templates in 13 fields (mathematics, statistics and probability, AI and computing, physics, chemistry and materials, engineering, personal money, investing, business and accounting, health and life sciences, everyday life, and more) — searchable, and ready to drop into your own collections
+- 5,671 built-in formula templates in 13 fields (mathematics, statistics and probability, AI and computing, physics, chemistry and materials, engineering, personal money, investing, business and accounting, health and life sciences, everyday life, and more) — searchable, and ready to drop into your own collections
 - Template settings: hide whole fields, subcategories or single templates you do not need
 - Collections of reusable formulas
 - Named variables with labels, units and default values — numbers, lists, matrices or complex numbers
@@ -20,13 +20,13 @@ Features:
 - An AI assistant, through the AI-Hub app: a chat beside the formulas that knows FormulaBase and how its expressions are written, answers in words and writes a formula out as text you can type in, and reads the open collection only as the administrator allows. Without AI-Hub it is simply not shown
 - Same clean, themable design as RegiBase (light / dark)
 
-The 2,400 templates added in 0.7.0 were each checked against an independent calculation. Since 0.8.0 the whole library and every screen are translated into 13 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi and Korean. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
+The 2,400 templates added in 0.7.0 were each checked against an independent calculation. The whole library and every screen are translated into 21 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi, Korean, Indonesian, Vietnamese, Turkish, Thai, Persian, Polish, Ukrainian and Czech. The older part of the library (3,122 formulas) has not all been hand-verified. If you spot a wrong formula, bad default, mistranslation, or missing unit, please open an issue on GitHub — reports are welcome.]]></description>
 	<description lang="ja"><![CDATA[FormulaBase は、利益率の計算、単位換算、ローンの返済額、配合比、工学の定数など、何度も使う計算式をすぐに呼び出して使える、軽量な個人向け計算アプリです。
 
 計算式をコレクションにまとめ、それぞれの変数を一度定義しておけば、いつでも式を開いて数値を入力するだけで、その場で結果が表示されます。計算はすべてブラウザー内で行われます（eval は使わず、サーバーとの通信もありません）。
 
 主な機能:
-- 13 分野・5,522 件の組み込み計算式テンプレート（数学、統計と確率、AI とコンピューター、物理、化学と材料、工学、暮らしのお金、投資、会社の会計と経営、医療と生命科学、暮らしなど）。検索して、そのまま自分のコレクションに追加できます
+- 13 分野・5,671 件の組み込み計算式テンプレート（数学、統計と確率、AI とコンピューター、物理、化学と材料、工学、暮らしのお金、投資、会社の会計と経営、医療と生命科学、暮らしなど）。検索して、そのまま自分のコレクションに追加できます
 - テンプレート設定：不要な分野、小分類、テンプレートを個別に非表示にできます
 - 繰り返し使える計算式をコレクションで管理
 - ラベル、単位、初期値を設定できる名前付きの変数 ― 数値、リスト、行列、複素数に対応
@@ -37,13 +37,14 @@ The 2,400 templates added in 0.7.0 were each checked against an independent calc
 - AI-Hub アプリを通じた AI アシスタント：計算式の横にチャットを表示します。FormulaBase と計算式の書き方を理解しており、質問に文章で答え、計算式はそのまま入力できるテキストとして示します。開いているコレクションは管理者が許可した範囲でのみ読み取ります。AI-Hub がない場合は表示されません
 - RegiBase と共通の、すっきりとしたデザイン。テーマ（ライト／ダーク）に対応
 
-0.7.0 で追加した 2,400 件のテンプレートは、すべて別の方法で計算した結果と照合しています。0.8.0 からは、すべてのテンプレートと画面が 13 言語（英語、日本語、中国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語〔ブラジル・ポルトガル〕、ロシア語、アラビア語、ヒンディー語、韓国語）に対応しています。それ以前からある 3,122 件は、すべてを人の手で検証できているわけではありません。計算式の誤り、不適切な初期値、誤訳、単位の抜けなどを見つけた場合は、GitHub で Issue を作成していただけると助かります。]]></description>
-	<version>0.9.2</version>
+0.7.0 で追加した 2,400 件のテンプレートは、すべて別の方法で計算した結果と照合しています。すべてのテンプレートと画面が 21 言語（英語、日本語、中国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語〔ブラジル・ポルトガル〕、ロシア語、アラビア語、ヒンディー語、韓国語、インドネシア語、ベトナム語、トルコ語、タイ語、ペルシア語、ポーランド語、ウクライナ語、チェコ語）に対応しています。それ以前からある 3,122 件は、すべてを人の手で検証できているわけではありません。計算式の誤り、不適切な初期値、誤訳、単位の抜けなどを見つけた場合は、GitHub で Issue を作成していただけると助かります。]]></description>
+	<version>0.10.0</version>
 	<licence>agpl</licence>
 	<author>KTEC</author>
 	<namespace>FormulaBase</namespace>
 	<category>tools</category>
 	<category>office</category>
+	<category>ai</category>
 	<website>https://github.com/ktec-nc-apps/FormulaBase</website>
 	<bugs>https://github.com/ktec-nc-apps/FormulaBase/issues</bugs>
 	<repository>https://github.com/ktec-nc-apps/FormulaBase</repository>

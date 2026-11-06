@@ -2,6 +2,106 @@
 
 All notable changes to FormulaBase.
 
+## 0.10.0 — 2026-11-07
+
+I am sorry. FormulaBase gave wrong results for some calculations, and some exported files were wrong or damaged. This version fixes them. It also adds 151 templates and eight languages, and changes two functions to work as they do in spreadsheets and in mathematics; a formula you saved with one of them gives a different result (see "Changed").
+（申し訳ありません。FormulaBase が一部の計算で誤った結果を出し、書き出したファイルの一部が誤っていたり壊れたりしていました。この版で修正しました。あわせて、テンプレート 151 件と 8 言語を追加し、2 つの関数を表計算と数学の定義に合わせました。この 2 つの関数を使って保存した計算式は、結果が変わります（「変更」を参照）。）
+
+### Added
+
+- **151 templates (5,671 in all):** everyday life 92 (unit conversions 25, 24 of them Japanese traditional units; home, building and DIY 20, travel and driving 17, cooking and food 16, psychology and learning 14), business and accounting 21, personal money 17, investing and markets 11, economics 10.
+  （**テンプレート 151 件（合計 5,671 件）：** 暮らし 92 件（単位換算 25（うち日本の伝統的な単位 24）、住まい・建築・DIY 20、旅行と運転 17、料理と食品 16、心理と学習 14）、会社の会計・経営 21 件、暮らしのお金 17 件、投資・市場 11 件、経済学 10 件。）
+- **Eight more languages (21 in all):** Indonesian, Vietnamese, Turkish, Thai, Persian, Polish, Ukrainian and Czech. Terms that were still in English in the other languages are now translated. The translations were made with the help of AI and have not all been checked by native speakers; corrections are welcome on GitHub.
+  （**8 言語を追加（合計 21 言語）：** インドネシア語、ベトナム語、トルコ語、タイ語、ペルシア語、ポーランド語、ウクライナ語、チェコ語。ほかの言語で英語のまま残っていた用語も訳しました。翻訳は AI を使って作成しており、すべてをその言語を母語とする人が確かめたわけではありません。誤りは GitHub でお知らせください。）
+
+### Changed: results differ
+
+- **`npv(r, cf)` now works as NPV() in a spreadsheet:** the first value is one period away (before, it was at time 0). `npv(0.1, list(-100, 60, 60))` was 4.13 and is now 3.76, the same as NPV(0.1; -100; 60; 60) in LibreOffice Calc and Excel.
+  If you saved a formula with `npv` whose first value is at time 0 (an initial investment), change it to `npv(r, cf) * (1 + r)`, or add the first value separately. The template "Net Present Value of a Cash-Flow List" is changed this way. `irr` is not affected.
+  （**`npv(r, cf)` を、表計算の NPV() と同じ計算にしました。** 最初の値を 1 期後とします（これまでは時点 0 でした）。`npv(0.1, list(-100, 60, 60))` は 4.13 でしたが、3.76 になります。LibreOffice Calc と Excel の NPV(0.1; -100; 60; 60) と同じです。
+  最初の値が時点 0（初期投資など）のつもりで `npv` を使って保存した計算式は、`npv(r, cf) * (1 + r)` に書き換えるか、最初の値を別に足してください。テンプレート「キャッシュフローの並びの正味現在価値」は、この形に変えました。`irr` は変わりません。）
+- **`stirling1(n, k)` is now signed,** as in mathematics: s(n, k) = (−1)^(n−k) × c(n, k). `stirling1(5, 2)` was 50 and is now −50. For the number of permutations with k cycles, use `abs(stirling1(n, k))`; the template "Stirling Numbers of the First Kind c(n, k)" is changed this way.
+  （**`stirling1(n, k)` を、数学の定義どおり符号付きにしました。** s(n, k) = (−1)^(n−k) × c(n, k) です。`stirling1(5, 2)` は 50 でしたが、−50 になります。巡回が k 個の並べ替えの数を求めるときは、`abs(stirling1(n, k))` を使ってください。テンプレート「第1種スターリング数 c(n, k)」は、この形に変えました。）
+
+### Wrong results in the app
+
+- **`root(x, n)` returned a number where no real root exists.** It worked out the sign of x and the root of |x| separately, so `root(-2.5, 2)` gave −1.58, `root(-2.5, 3.5)` gave −1.30 and `root(-1, -2)` gave −1. `root(x, 0)` gave ±∞ or 1 on the server and NaN on the screen.
+  Fix: a negative x has a real root only when n is an odd whole number (`root(-8, 3)` = −2). Every other negative x, and n = 0, now gives NaN, on the server, on the screen and in exported spreadsheets.
+  （**`root(x, n)` が、実数の解が無い場合にも数を返していました。** x の符号と |x| の根を別々に計算していたため、`root(-2.5, 2)` は −1.58、`root(-2.5, 3.5)` は −1.30、`root(-1, -2)` は −1 を返していました。`root(x, 0)` は、サーバーで ±∞ または 1、画面で NaN でした。
+  対応：負の x に実数の根があるのは、n が奇数の整数の時だけです（`root(-8, 3)` = −2）。それ以外の負の x と n = 0 は、サーバー・画面・書き出した表計算のすべてで NaN を返します。）
+- **The remainder had the wrong sign.** `%` and `mod()` kept the sign of the number divided (`-7 % 3` = −1, `mod(-2.5, 2)` = −0.5), while an exported spreadsheet gave 2 and 1.5.
+  Fix: the remainder now has the sign of the divisor everywhere: `-7 % 3` = 2, `7 % -3` = −2. A divisor of 0 gives NaN. When the quotient is within 1e-12 of a whole number, the remainder is 0 (`mod(3.5, 0.7)` = 0).
+  （**剰余の符号が誤っていました。** `%` と `mod()` は割られる数の符号を使っていたため（`-7 % 3` = −1、`mod(-2.5, 2)` = −0.5）、書き出した表計算の 2、1.5 と食い違っていました。
+  対応：剰余は、すべての場所で割る数と同じ符号になります。`-7 % 3` = 2、`7 % -3` = −2 です。割る数が 0 なら NaN です。商が整数から 1e-12 以内なら剰余は 0 です（`mod(3.5, 0.7)` = 0）。）
+- **Numbers that are equal compared as unequal.** `0.1 + 0.2 == 0.3`, `0.1 * 3 == 0.3` and `sqrt(2)^2 == 2` gave 0 because of binary rounding.
+  Fix: two numbers within 1e-12 of each other (relative) are equal for `==` and `!=`; `<` and `>` mean "smaller/larger and not equal"; `<=` and `>=` mean "smaller/larger or equal".
+  （**等しい数を「等しくない」と判定していました。** 2 進数の丸めのため、`0.1 + 0.2 == 0.3`、`0.1 * 3 == 0.3`、`sqrt(2)^2 == 2` が 0 でした。
+  対応：相対 1e-12 以内の 2 つの数は、`==` と `!=` で等しいとみなします。`<` と `>` は「小さい／大きい、かつ等しくない」、`<=` と `>=` は「小さい／大きい、または等しい」です。）
+- **Powers of a negative number.** `(-8)^(1/3)` gave NaN in the app and −2 in an exported spreadsheet.
+  Fix: a negative base gives a real result for a whole-number exponent and for 1/n with an odd whole n (`(-8)^(1/3)` = −2, as `cbrt(-8)` already did). Other exponents give NaN (`(-8)^0.5`, `(-8)^(2/3)`).
+  （**負の数のべき乗が食い違っていました。** `(-8)^(1/3)` は、アプリで NaN、書き出した表計算で −2 でした。
+  対応：負の底は、指数が整数の時と、1/n（n は奇数の整数）の時に実数を返します（`(-8)^(1/3)` = −2。`cbrt(-8)` は前から −2 でした）。それ以外の指数は NaN です（`(-8)^0.5`、`(-8)^(2/3)`）。）
+- **Values that exist came out as NaN:** Bessel functions (`besselj`, `bessely`, `besseli`, `besselk`) of a non-integer order (`besselj(0.5, 1)` is 0.671); `lgamma` of a negative non-integer (`lgamma(-0.5)` is 1.2655); `polylog(1, -1)` (−ln 2); `lambertw(-1/e)` (−1); `ellipf(φ, 1)` near φ = 0; `betapdf` at x = 0 and x = 1; `nbinpdf(0, r, 1)` (1); `logninv(0, …)` (0). `lgamma(1)` gave −8.9e-16 instead of 0.
+  Fix: each now returns the correct value. Bessel functions of order above 1000, and J, Y, I of a negative x (not real), still give NaN.
+  （**値が存在するのに NaN になっていました：** 非整数次数のベッセル関数（`besselj`、`bessely`、`besseli`、`besselk`。`besselj(0.5, 1)` は 0.671）、負の非整数の `lgamma`（`lgamma(-0.5)` は 1.2655）、`polylog(1, -1)`（−ln 2）、`lambertw(-1/e)`（−1）、φ が 0 付近の `ellipf(φ, 1)`、x = 0 と x = 1 の `betapdf`、`nbinpdf(0, r, 1)`（1）、`logninv(0, …)`（0）。また `lgamma(1)` が 0 でなく −8.9e-16 でした。
+  対応：いずれも正しい値を返します。次数が 1000 を超えるベッセル関数と、負の x の J・Y・I（実数にならない）は、引き続き NaN です。）
+- **Rounding was not the rounding of a spreadsheet.** `round` sent halves up (`round(-2.5)` gave −2, a spreadsheet's ROUND gives −3); `round(2.675, 2)` dropped the 2 and gave 3; `roundto(1.005, 2)` gave 1.00 and `roundto(0.285, 2)` 0.28, because the binary value of 1.005 is a little below it. Results shown with a set number of decimals had the same fault (1.005 shown as 1.00).
+  Fix: `round(x)`, `round(x, d)` and `roundto(x, d)` round as ROUND does in LibreOffice Calc and Excel: halves away from zero, on the digits as written (`round(-2.5)` = −3, `round(1.005, 2)` = 1.01, `round(1255, -1)` = 1260). Exported spreadsheets use ROUND. Checked against LibreOffice Calc on 620 values: all the same. Results on the screen are rounded the same way.
+  （**丸めが、表計算の四捨五入と違っていました。** `round` は 0.5 をいつも大きい方へ丸めていたため、`round(-2.5)` が −2 でした（表計算の ROUND は −3）。`round(2.675, 2)` は 2 を無視して 3 を返していました。`roundto(1.005, 2)` は 1.00、`roundto(0.285, 2)` は 0.28 でした。1.005 のコンピューターの中の値が、わずかに小さいためです。小数の桁数を決めて表示する結果も、同じ誤りがありました（1.005 を 1.00 と表示）。
+  対応：`round(x)`、`round(x, d)`、`roundto(x, d)` は、LibreOffice Calc と Excel の ROUND と同じ四捨五入をします。0.5 は 0 から遠い方へ丸め、書いたとおりの数字で丸めます（`round(-2.5)` = −3、`round(1.005, 2)` = 1.01、`round(1255, -1)` = 1260）。書き出した表計算には ROUND を使います。LibreOffice Calc と 620 通りで突き合わせ、すべて一致しました。画面の結果の表示も、同じ丸め方にしました。）
+- **An extra value was dropped without a word.** `sqrt(4, 5)`, `log(8, 2)` and the like used the first value and ignored the rest. They are now refused with "wrong number of values"; `logb(x, b)` is the logarithm to base b.
+  （**余分な値を、黙って無視していました。** `sqrt(4, 5)` や `log(8, 2)` などは、最初の値だけを使い、残りを無視していました。今は「値の数が違う」として断ります。底を決めた対数は `logb(x, b)` です。）
+- **`logb(x, 1)` gave ±∞.** A logarithm to base 1 is undefined; it now gives NaN.
+  （**`logb(x, 1)` が ±∞ を返していました。** 底 1 の対数は定義されないため、NaN を返します。）
+- **The server and the screen disagreed.** `round(0.49999999999999994)` gave 1 on the server and 0 on the screen (0 is right); `root(1, 0)` gave 1 and NaN; `1.5.2` was read as 1.5 on the screen and refused on the server; `1^∞` differed. They now agree: 0, NaN, refused, 1. The screen's quick calculation of `%`, `^` and comparisons had its own shortcuts, which are removed.
+  （**サーバーと画面の結果が食い違っていました。** `round(0.49999999999999994)` はサーバーで 1、画面で 0（正しいのは 0）、`root(1, 0)` は 1 と NaN、`1.5.2` は画面で 1.5 と読まれサーバーでは拒否、`1^∞` も違っていました。現在はそれぞれ 0、NaN、拒否、1 で一致します。画面の即時計算にあった `%`・`^`・比較の独自の近道は除きました。）
+- **Chained comparisons.** `3 > 2 > 1` was read as `(3 > 2) > 1`, that is `1 > 1`, and gave 0.
+  Fix: a chain of comparisons means each pair holds: `3 > 2 > 1` is `3 > 2 and 2 > 1` and gives 1; `0 < x <= 10` checks that x is in the range.
+  （**比較を続けて書いた式が誤っていました。** `3 > 2 > 1` は `(3 > 2) > 1`、つまり `1 > 1` と読まれ、0 でした。
+  対応：比較を続けて書くと、隣り合うすべての組が成り立つかを調べます。`3 > 2 > 1` は `3 > 2 and 2 > 1` で 1 です。`0 < x <= 10` で x が範囲内かを調べられます。）
+- **Distributions gave wrong values for large parameters.** `poisscdf(1e6, 1e6)` gave 0.6586 (right: 0.500266), `gammacdf(520000, 520000, 1)` gave 0.4175 (right: 0.500184), and the inverse functions (`tinv`, `chi2inv`, `gammainv`, `betainv`, `finv`) gave wrong values far in the tails. Densities, `lgamma` near 1 and 2, `norminv` near 1, and `expcdf`, `weibcdf`, `geomcdf` for very small values lost digits.
+  Fix: the probability, cumulative and inverse functions of every distribution, and `gammainc`, `betainc`, `lgamma`, are computed by methods that keep full accuracy. Checked on about 7,400 values against SciPy and 40-digit references: all within 1e-12 (relative). No template result changes in the digits shown.
+  （**分布の関数が、大きなパラメーターで誤った値を返していました。** `poisscdf(1e6, 1e6)` は 0.6586（正しくは 0.500266）、`gammacdf(520000, 520000, 1)` は 0.4175（正しくは 0.500184）でした。逆関数（`tinv`、`chi2inv`、`gammainv`、`betainv`、`finv`）は、裾の遠い所で誤った値でした。確率密度、1 と 2 の近くの `lgamma`、1 に近い所の `norminv`、ごく小さい値の `expcdf`・`weibcdf`・`geomcdf` も、桁が落ちていました。
+  対応：すべての分布の確率・累積・逆関数と、`gammainc`、`betainc`、`lgamma` を、精度を落とさない方法で計算します。約 7,400 通りを SciPy と 40 桁の検算値で確かめ、すべて相対 1e-12 以内でした。表示する桁でテンプレートの結果が変わるものはありません。）
+- **In right-to-left languages, numbers were reversed.** In Arabic and Persian, "-2.00" was shown as "2.00-", and a list typed as "1, 2; 3, 4" read back as "4 ,3 ;2 ,1". Values, the boxes they are typed into and the worked steps are now shown left to right.
+  （**右から左へ書く言語で、数値が逆に表示されていました。** アラビア語とペルシア語で「-2.00」が「2.00-」と表示され、「1, 2; 3, 4」と入力した並びが「4 ,3 ;2 ,1」と読み返されていました。値、値を入力する欄、計算の手順は、左から右に表示するようにしました。）
+- **Texts and translations.** English texts that had Japanese mixed into them (105 places) are corrected, and one Brazilian Portuguese sentence written the European way now reads as it does in Brazil.
+  （**文章と翻訳。** 英語の原文に日本語が混ざっていた 105 か所を直しました。また、ブラジル向けポルトガル語で、ポルトガルの言い方になっていた 1 か所を、ブラジルの言い方に直しました。）
+
+### Wrong or damaged exported files (.ods / .odt)
+
+- **Numbers were cut to 10 decimal places.** A variable of 1.2345678901e-5 was saved as 0.0000123457, the spreadsheet recalculated from the cut value, and the report (.odt) showed the cut result.
+  Fix: variables are saved with every digit; the report shows 15 significant digits.
+  （**数値が小数 10 桁に切り捨てられていました。** 変数 1.2345678901e-5 は 0.0000123457 として保存され、表計算はその値から再計算し、レポート（.odt）も切り捨てた結果を表示していました。
+  対応：変数はすべての桁を保存します。レポートは有効数字 15 桁で表示します。）
+- **Whole-number functions in exported spreadsheets.** The spreadsheet worked out `fact(2.5)` as 2 (the app gives NaN), and gave errors for `gcd`/`lcm` of negative numbers and for `binom(5, 7)`, `perm(3, 5)` (the app gives the correct values).
+  Fix: the formulas written to the spreadsheet now give the same results as the app.
+  （**書き出した表計算の整数の関数が誤っていました。** 表計算では `fact(2.5)` が 2（アプリは NaN）、負の数の `gcd`/`lcm` と `binom(5, 7)`、`perm(3, 5)` がエラー（アプリは正しい値）でした。
+  対応：表計算に書く式を、アプリと同じ結果になる形にしました。）
+- **Adding to an existing spreadsheet pointed the result at the wrong rows.** The variable rows were counted as in a new file, so the result cell referred to rows at the top of the sheet; a second addition used the first one's variables, and a picture was placed over the first table.
+  Fix: new rows and pictures are placed below the last row of the sheet, and the result refers to them. If the sheet has no room left, the addition is refused and the file is not changed.
+  （**既存の表計算への追記で、結果が誤った行を参照していました。** 変数の行を新しいファイルと同じ位置として数えていたため、結果のセルがシートの先頭の行を参照していました。2 回目の追記は 1 回目の変数を使い、画像は先頭の表に重なっていました。
+  対応：新しい行と画像はシートの最後の行の下に置き、結果はその行を参照します。シートに余地が無い場合は追記を断り、ファイルは変更しません。）
+- **Adding a picture to a spreadsheet exported by FormulaBase damaged it.** Elements were inserted without the declarations they need, and the file was overwritten with the damaged content.
+  Fix: elements are inserted as XML with the declarations they need; the result is checked before writing; a file that cannot be read or updated is refused and left as it was.
+  （**FormulaBase で書き出した表計算に画像付きで追記すると、ファイルが壊れていました。** 必要な宣言の無いまま要素を差し込み、壊れた内容で元のファイルを上書きしていました。
+  対応：要素を、必要な宣言と一緒に XML として入れます。書き込む前に結果を確かめ、読めない・更新できないファイルは断って元のまま残します。）
+- **A variable without a key shifted the rows.** Only possible through the API or an edited backup: every later variable referred to the wrong cell.
+  Fix: such rows no longer shift the references.
+  （**key の無い変数があると、行がずれていました。** API または手を加えたバックアップの場合だけですが、以降の変数がすべて誤ったセルを参照していました。
+  対応：そのような行で参照がずれなくなりました。）
+- **Many functions were written to the spreadsheet as fixed values.** 17 more are now written as formulas that recalculate: `clamp`, `logb`, `sec`, `csc`, `cot`, `normpdf`, `normcdf`, `lognpdf`, `logncdf`, `exppdf`, `expcdf`, `expinv`, `weibpdf`, `weibcdf`, `weibinv`, `geompdf`, `geomcdf`. Checked against LibreOffice Calc: within 1e-12.
+  Where a result still cannot be written as a formula, a note beside it says: "This value is calculated by FormulaBase and does not recalculate in the spreadsheet."
+  （**多くの関数が、表計算に固定の値として書かれていました。** 次の 17 関数を、再計算する式として書くようにしました：`clamp`、`logb`、`sec`、`csc`、`cot`、`normpdf`、`normcdf`、`lognpdf`、`logncdf`、`exppdf`、`expcdf`、`expinv`、`weibpdf`、`weibcdf`、`weibinv`、`geompdf`、`geomcdf`。LibreOffice Calc と突き合わせ、差は 1e-12 以内です。
+  式にできない結果には、横に「この値は FormulaBase で計算したもので、表計算ソフトでは再計算されません。」と注記します。）
+- A formula too long for a spreadsheet cell (over 4,000 characters) is written as its value instead of a formula.
+  （表計算のセルに入らないほど長い式（4,000 文字超）は、式ではなく値として書きます。）
+
+### Files exported before this version
+
+A spreadsheet or report exported earlier may contain a wrong value if it used one of the calculations above, a variable with more than 10 decimal places, or was added to an existing spreadsheet. Please export it again. Nothing stored in FormulaBase needs to change: the results shown on the screen are corrected as they are. The calculation history keeps the results as they were recorded.
+（以前に書き出した表計算やレポートは、上の計算を使ったもの、小数 10 桁より細かい変数を使ったもの、既存の表計算に追記したものに、誤った値が含まれることがあります。再度書き出してください。FormulaBase の中のデータを直す必要はなく、画面の結果は自動的に正しくなります。計算履歴は、記録した時点の結果のままです。）
+
 ## 0.9.2 — 2026-10-18
 
 One Brazilian Portuguese sentence written the European way ("continua a ser") now reads as it does in Brazil. No feature was added or changed.

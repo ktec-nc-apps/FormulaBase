@@ -71,7 +71,7 @@ TXT;
 
 	private const GUIDE = <<<'TXT'
 What FormulaBase is (use this to answer questions about how to do things in it; name the buttons and menus as they are written here):
-- Formulas are kept in collections, listed in the left sidebar ("＋ New collection"; a collection has a name, an icon and a colour). The open collection's formulas are shown as cards; "＋ New formula" at the top right makes one, "＋ Templates" adds one of the 5,522 built-in templates in 13 fields (mathematics, statistics and probability, AI and computing, physics, space and Earth, chemistry and materials, engineering, personal money, investing and markets, business and accounting, economics, health and life sciences, everyday life), searchable by name. "⚙️ Collection settings" (name, icon, description, "Share settings", "Export to ODS (spreadsheet)", Delete). "⚙️ Settings" at the bottom left: theme, language, the width of the calculation-steps panel and of the AI assistant, formula versions, the save folder, "Template settings" (hide fields, subcategories or single templates), "Backup / Restore".
+- Formulas are kept in collections, listed in the left sidebar ("+ New collection"; a collection has a name, an icon and a colour). The open collection's formulas are shown as cards; "＋ New formula" at the top right makes one, "＋ Templates" adds one of the 5,522 built-in templates in 13 fields (mathematics, statistics and probability, AI and computing, physics, space and Earth, chemistry and materials, engineering, personal money, investing and markets, business and accounting, economics, health and life sciences, everyday life), searchable by name. "⚙️ Collection settings" (name, icon, description, "Share settings", "Export to ODS (spreadsheet)", Delete). "⚙️ Settings" at the bottom left: theme, language, the width of the calculation-steps panel and of the AI assistant, formula versions, the save folder, "Template settings" (hide fields, subcategories or single templates), "Backup / Restore".
 - A formula card shows the formula's name, its description, the expression, one input box per variable (label and unit), and the result as you type: "= value unit", with "Copy" and "Record" (records the values and the result in the history). The card's buttons: copy the expression (⧉), "Edit", "📤 Output" (Markdown, a calculable ODS spreadsheet or an ODT report, copied or saved to Files), "Delete".
 - Click a card and the panel on the right opens: "Calculation steps" (the expression worked out step by step to the result) and "History" (the recorded calculations; a line can be restored, copied or deleted; "Clear"). Its width can be dragged.
 - "Edit" / "New formula" opens the editor: "Title", "Description" (Markdown), "Expression" (with buttons for operators and a "Functions you can use" list), "Variables" with "Detect from expression", and for each variable its key (the name used in the expression), label, unit, kind (Number, List, Matrix, Complex) and default value; "Result unit"; "Decimals"; "Notes"; "Versions" (the version before each edit is kept, numbered #01 newest, and can be restored). "Save".
@@ -85,7 +85,7 @@ What FormulaBase is (use this to answer questions about how to do things in it; 
   - Calculus: sum, prod, integral, deriv, solve
   - Lists: list, seq(a, b, step), count, at(v, i), sort, cumsum, cummax, cummin, diff
   - Statistics: sum(v), prod(v), mean, median, mode, var, stdev, varp, stdevp, gmean, hmean, wmean(x, w), percentile(v, p), skew, kurt, cov, corr, slope, intercept, rsq
-  - Cash flows: npv(r, cf), irr(cf), mirr(cf, fr, rr)
+  - Cash flows: npv(r, cf) (as spreadsheet NPV(): the first value is one period away), irr(cf) (cf[1] at time 0), mirr(cf, fr, rr)
   - Vectors and matrices: dot, cross, norm, det, trace, inv, trans, mmul, linsolve(A, b), eye(n)
   - Complex numbers: re, im, abs, arg, conj, polar(r, θ), csqrt, cln, cpow
   - Number theory: gcd, lcm, fact, binom, perm, isprime, nextprime, prevprime, primepi, nthprime, phi, sigma, tau, mu, omega, bigomega, radical, lpf, gpf, carmichael, powmod, modinv, crt, factmod, fib, lucas, catalan, bell, partitions, stirling1, stirling2, derange, digitsum, digitalroot, numdigits, reversenum, collatz, legendre, jacobi, ord, primroot, isqrt, issquare, isperfect
@@ -100,7 +100,7 @@ You cannot change anything in FormulaBase: you cannot make, edit or delete a for
 TXT;
 
 	/** The buttons and fields named in the guide, as the writer's screen shows them. */
-	private const NAMES = ['＋ New collection', '＋ New formula', 'New formula', 'Edit formula', 'Templates', 'Browse templates', 'Formula templates',
+	private const NAMES = ['+ New collection', '＋ New formula', 'New formula', 'Edit formula', 'Templates', 'Browse templates', 'Formula templates',
 		'⚙️ Collection settings', '⚙️ Settings', 'Share settings', 'Export to ODS (spreadsheet)', 'Template settings', 'Backup / Restore',
 		'Edit', 'Output', 'Delete', 'Copy', 'Record', 'Calculation steps', 'History', 'Clear', 'Restore these values',
 		'Title', 'Description', 'Expression', 'Variables', 'Detect from expression', 'Add variable', 'Functions you can use',

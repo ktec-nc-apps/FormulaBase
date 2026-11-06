@@ -1174,3 +1174,14 @@ html.fb-col-resizing, html.fb-col-resizing * { cursor: col-resize !important; -w
 #formulabase-root .theme-pick .swatch.auto { background: linear-gradient(105deg, #f4f6fb 0 50%, #0b1220 50% 100%); }
 #formulabase-root .theme-pick .swatch.auto i.bar { background: linear-gradient(105deg, #2563eb 0 50%, #4f8cff 50% 100%); }
 #formulabase-root .theme-pick .swatch.auto i.line { background: linear-gradient(105deg, #cbd5e1 0 50%, #334565 50% 100%); }
+
+/* In a right-to-left language a number is still written left to right:
+   "-2.00" showed as "2.00-", and a list typed as "1, 2; 3, 4" read back as
+   "4 ,3 ;2 ,1". Values, the inputs that take them and the worked steps are
+   kept left to right; a message in the result box stays in the page's own
+   direction. */
+#formulabase-root .fb-result.ok .fb-rvalue,
+#formulabase-root .fb-vinput input,
+#formulabase-root .fb-solve-input,
+#formulabase-root .fb-hist-out,
+#formulabase-root .fb-steps li { unicode-bidi: isolate; direction: ltr; }

@@ -93,9 +93,11 @@ class Values {
 			return match ($op) {
 				'+' => $a + $b, '-' => $a - $b, '*' => $a * $b,
 				'/' => $b == 0 ? ($a == 0 || is_nan($a) ? NAN : ($a > 0 ? INF : -INF)) : $a / $b,
-				'%' => fmod($a, $b), '^' => self::rpow($a, $b),
-				'<' => (float)($a < $b), '<=' => (float)($a <= $b), '>' => (float)($a > $b), '>=' => (float)($a >= $b),
-				'==' => (float)($a === $b), '!=' => (float)($a !== $b), default => NAN,
+				'%' => self::modFloor($a, $b), '^' => self::rpow($a, $b),
+				// a comparison tolerates the rounding of the arithmetic before it: 0.1 + 0.2 == 0.3
+				'<' => (float)($a < $b && !self::close($a, $b)), '<=' => (float)($a < $b || self::close($a, $b)),
+				'>' => (float)($a > $b && !self::close($a, $b)), '>=' => (float)($a > $b || self::close($a, $b)),
+				'==' => (float)self::close($a, $b), '!=' => (float)(is_nan($a) || is_nan($b) || !self::close($a, $b)), default => NAN,
 			};
 		}
 		$A = self::C($a);
@@ -104,14 +106,86 @@ class Values {
 			'+' => self::simp(new Cx($A->re + $B->re, $A->im + $B->im)),
 			'-' => self::simp(new Cx($A->re - $B->re, $A->im - $B->im)),
 			'*' => self::cmul($A, $B), '/' => self::cdiv($A, $B), '^' => self::cpow($A, $B),
-			'==' => (float)($A->re == $B->re && $A->im == $B->im), '!=' => (float)($A->re != $B->re || $A->im != $B->im),
+			'==' => (float)(self::close($A->re, $B->re) && self::close($A->im, $B->im)), '!=' => (float)(!self::close($A->re, $B->re) || !self::close($A->im, $B->im)),
 			default => NAN,
 		};
 	}
 
-	/** Math.pow semantics (NaN for a negative base with a fractional exponent, like JS). */
+	/** Equal for comparisons: the same number, or within 1e-12 of each other relative to their size. */
+	public static function close(float $a, float $b): bool {
+		if ($a === $b) { return true; }
+		if (!is_finite($a) || !is_finite($b)) { return false; }
+		return abs($a - $b) <= 1e-12 * max(abs($a), abs($b));
+	}
+
+	/**
+	 * The remainder of the division, as in mathematics: it has the sign of the divisor, so with a
+	 * positive divisor it is never negative (-7 mod 3 = 2, 7 mod -3 = -2). A divisor of 0 has none.
+	 * A quotient within 1e-12 of a whole number counts as whole (3.5 mod 0.7 = 0).
+	 */
+	public static function modFloor(float $a, float $b): float {
+		if (is_nan($a) || is_nan($b) || $b == 0 || !is_finite($a) || !is_finite($b)) { return NAN; }
+		$r = fmod($a, $b);
+		if ($r == 0) { return 0.0; }
+		$q = $a / $b;
+		$n = round($q);
+		if ($n != 0 && abs($q) < 1e9 && abs($q - $n) <= 1e-12 * abs($n)) { return 0.0; }
+		return (($r < 0) !== ($b < 0)) ? $r + $b : $r;
+	}
+
+	/** n-th root of x on the real numbers: none for n = 0, nor for a negative x unless n is an odd whole number. */
+	public static function root(float $x, float $n): float {
+		if (is_nan($x) || is_nan($n) || $n == 0) { return NAN; }
+		if ($x >= 0) { return $x == 0 && $n < 0 ? INF : $x ** fdiv(1, $n); }
+		if (is_finite($n) && floor($n) == $n && fmod($n, 2) != 0) { return -((-$x) ** fdiv(1, $n)); }
+		return NAN;
+	}
+
+	/**
+	 * Round half away from zero to d decimal places (d < 0: to tens, hundreds…), as ROUND does in
+	 * spreadsheets: −2.5 → −3, and 1.005 → 1.01 to 2 places. The digits rounded are those of the
+	 * shortest decimal that reads back as x, not of its binary value (1.00499999999999989…), so a
+	 * number rounds the way it is written. d is cut to a whole number toward zero. Mirrors VAL.roundDec.
+	 */
+	public static function roundDec(float $x, float $d = 0.0): float {
+		if (is_nan($x) || is_nan($d) || is_infinite($d)) { return NAN; }
+		if (is_infinite($x) || $x == 0.0) { return $x; }
+		$d = (int)max(-400, min(400, $d < 0 ? ceil($d) : floor($d)));
+		$a = abs($x);
+		for ($p = 1; $p <= 17; $p++) {   // the shortest of "%.{p-1}e" that reads back as a
+			$s = sprintf('%.' . ($p - 1) . 'e', $a);
+			if ((float)$s === $a) { break; }
+		}
+		[$m, $e] = explode('e', $s);
+		$digits = str_replace('.', '', $m);
+		$point = (int)$e + 1;              // digits before the decimal point
+		$keep = $point + $d;
+		if ($keep >= strlen($digits)) { return $x; }
+		if ($keep < 0) { return $x < 0 ? -0.0 : 0.0; }
+		$kept = $keep === 0 ? '0' : substr($digits, 0, $keep);
+		if ($digits[$keep] >= '5') {        // add one to the decimal string kept
+			$i = strlen($kept) - 1;
+			while ($i >= 0 && $kept[$i] === '9') { $kept[$i] = '0'; $i--; }
+			$kept = $i < 0 ? '1' . $kept : substr_replace($kept, (string)((int)$kept[$i] + 1), $i, 1);
+		}
+		$r = (float)($kept . 'e' . ($point - $keep));
+		return $x < 0 ? -$r : $r;
+	}
+
+	/**
+	 * Math.pow, with a real result where mathematics has one: a negative base to a whole power, and
+	 * to 1/n for an odd whole n ((-8)^(1/3) = -2, the same as cbrt(-8) and root(-8, 3)); NaN for the
+	 * rest ((-8)^0.5 is not real). 1 to any power is 1.
+	 */
 	public static function rpow(float $a, float $b): float {
-		if ($a < 0 && floor($b) != $b) { return NAN; }
+		if ($a == 1.0) { return 1.0; }
+		if ($a < 0 && floor($b) != $b) {
+			if (is_nan($b) || !is_finite($b)) { return NAN; }
+			$n = 1 / $b;
+			$r = round($n);
+			if ($r != 0 && fmod($r, 2) != 0 && abs($n - $r) <= 1e-9 * abs($r)) { return -((-$a) ** $b); }
+			return NAN;
+		}
 		if ($a == 0 && $b < 0) { return INF; }
 		return $a ** $b;
 	}
@@ -257,12 +331,13 @@ class Values {
 				[$r, $cf] = [(float)($a[0] ?? NAN), self::reals($a[1] ?? null)];
 				if ($cf === null) { return NAN; }
 				$s = 0.0;
-				foreach ($cf as $t => $c) { $s += fdiv($c, (1 + $r) ** $t); }
+				// As NPV() in a spreadsheet: the first value is one period away.
+				foreach ($cf as $t => $c) { $s += fdiv($c, (1 + $r) ** ($t + 1)); }
 				return $s;
 			case 'irr':
 				$cf = self::reals($a[0] ?? null);
 				if ($cf === null || count($cf) < 2) { return NAN; }
-				$f = fn ($r) => self::call('npv', [$r, $cf]);
+				$f = function ($r) use ($cf) { $s = 0.0; foreach ($cf as $t => $c) { $s += fdiv($c, (1 + $r) ** $t); } return $s; };
 				$r0 = Special::findRoot($f, isset($a[1]) ? (float)$a[1] : 0.1);
 				if (is_finite($r0) && $r0 > -1) { return $r0; }
 				return Special::findRoot($f, -0.9999, 10.0);

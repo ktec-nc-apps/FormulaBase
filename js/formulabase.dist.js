@@ -298,7 +298,10 @@
       if (!nonNegInt(n) || !nonNegInt(k) || n > 2000) return NaN;
       let row = [1n];
       for (let i = 0; i < n; i++) { tick(i + 1); const next = new Array(i + 2).fill(0n); for (let j = 0; j <= i; j++) { next[j + 1] += row[j]; next[j] += B(i) * row[j]; } row = next; }
-      return k <= n ? N(row[k]) : 0;
+      // Signed, as in mathematics: s(n, k) = (-1)^(n-k) × (number of permutations with k cycles).
+      if (k > n) return 0;
+      const c = N(row[k]);
+      return (n - k) % 2 ? -c : c;
     }
     function derange(n) { if (!nonNegInt(n) || n > 5000) return NaN; let a = 1n, b = 0n; if (n === 0) return 1; for (let i = 2n; i <= B(n); i++) { tick(); const c = (i - 1n) * (a + b); a = b; b = c; } return N(b); }
     function digitsum(n, base) {
@@ -359,21 +362,100 @@
       for (let i = 1; i < LG + 2; i++) a += LC[i] / (x + i);
       return Math.sqrt(2 * Math.PI) * Math.pow(t, x + 0.5) * Math.exp(-t) * a;
     }
-    function lgamma(x) {
-      if (typeof x !== 'number' || Number.isNaN(x) || x <= 0) return NaN;
-      if (x < 0.5) return Math.log(Math.PI / Math.abs(Math.sin(Math.PI * x))) - lgamma(1 - x);
-      x -= 1; let a = LC[0]; const t = x + LG + 0.5;
-      for (let i = 1; i < LG + 2; i++) a += LC[i] / (x + i);
-      return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+    // ---- log-gamma and the pieces every distribution below is built from ----
+    // The same algorithms as lib/Service/Special.php and MathLib.php; both engines must give the same numbers.
+    const LN_SQRT_2PI = 0.9189385332046728; // ln √(2π)
+    const LN_2PI = 1.8378770664093453;
+    // ln Γ(2 + z) = z · Σ LG2[j] z^j  (|z| ≤ 0.5): LG2[0] = 1 − γ, LG2[j] = (−1)^(j+1) (ζ(j+1) − 1)/(j+1)
+    const LG2 = [0.42278433509846713, 0.3224670334241132, -0.0673523010531981, 0.020580808427784546, -0.007385551028673986, 0.0028905103307415234,
+      -0.001192753911703261, 0.0005096695247430425, -0.00022315475845357939, 9.945751278180853e-05, -4.492623673813314e-05, 2.050721277567069e-05,
+      -9.439488275268397e-06, 4.374866789907488e-06, -2.039215753801366e-06, 9.55141213040742e-07, -4.492469198764566e-07, 2.1207184805554665e-07,
+      -1.0043224823968099e-07, 4.7698101693639804e-08, -2.2711094608943164e-08, 1.0838659214896955e-08, -5.183475041970047e-09, 2.4836745438024785e-09,
+      -1.1921401405860912e-09, 5.731367241678862e-10, -2.7595228851242334e-10, 1.330476437424449e-10, -6.4229645638381e-11, 3.1044247747322276e-11];
+    function lg2p(z) { let s = 0; for (let j = LG2.length - 1; j >= 0; j--) s = s * z + LG2[j]; return s * z; }
+    // ln Γ(1 + a) for −0.5 ≤ a ≤ 1, without forming 1 + a
+    function lgamma1p(a) { return a <= 0.5 ? lg2p(a) - Math.log1p(a) : lg2p(a - 1); }
+    // ln Γ(x) − ((x − ½) ln x − x + ln √(2π)) for x ≥ 10: the Stirling series (the error is below 1e-19)
+    function lgcorBig(x) {
+      const t = 1 / (x * x);
+      return (0.08333333333333333 + t * (-0.002777777777777778 + t * (0.0007936507936507937 + t * (-0.0005952380952380953 + t * (0.0008417508417508417
+        + t * (-0.0019175269175269176 + t * (0.00641025641025641 + t * (-0.029550653594771242 + t * 0.17964437236883057)))))))) / x;
     }
-    function betafn(a, b) { return Math.exp(lgamma(a) + lgamma(b) - lgamma(a + b)); }
-    // erf/erfc to double precision: Taylor series near 0, Lentz continued fraction in the tail.
+    // |sin(πx)| with the argument reduced exactly first
+    function sinpiAbs(x) { let r = Math.abs(x) % 2; if (r > 1) r -= 1; if (r > 0.5) r = 1 - r; return Math.sin(Math.PI * r); }
+    function lgamma(x) {
+      // log|Γ(x)|: defined for every x but the poles 0, −1, −2, …
+      if (typeof x !== 'number' || Number.isNaN(x) || (x <= 0 && Math.floor(x) === x)) return NaN;
+      if (x === Infinity) return Infinity;
+      if (x < 0.5) {
+        if (x > 0) return lgamma1p(x) - Math.log(x);
+        return Math.log(Math.PI / sinpiAbs(x)) - lgamma(1 - x);
+      }
+      if (x < 1.5) return lgamma1p(x - 1);
+      if (x < 2.5) return lg2p(x - 2);
+      if (x < 10) { let p = 1; while (x >= 2.5) { x -= 1; p *= x; } return Math.log(p) + lg2p(x - 2); }
+      return (x - 0.5) * Math.log(x) - x + LN_SQRT_2PI + lgcorBig(x);
+    }
+    // the remainder of Stirling's formula, ln Γ(x) − (x − ½) ln x + x − ln √(2π) (Loader's stirlerr), x > 0
+    function lgcor(x) { return x >= 10 ? lgcorBig(x) : lgamma(x) - (x - 0.5) * Math.log(x) + x - LN_SQRT_2PI; }
+    // ln B(a, b), a, b > 0, without the cancellation of three log-gammas when one is large
+    function lbeta(a, b) {
+      const p = Math.min(a, b), q = Math.max(a, b), r = 1 / (1 + q / p);   // p/(p + q) without overflow
+      if (p >= 10) return -0.5 * Math.log(q) + LN_SQRT_2PI + lgcorBig(p) + lgcorBig(q) - lgcorBig(p + q) + (p - 0.5) * Math.log(r) + q * Math.log1p(-r);
+      if (q >= 10) return lgamma(p) + lgcorBig(q) - lgcorBig(p + q) + p - p * (Math.log(q) + Math.log1p(p / q)) + (q - 0.5) * Math.log1p(-r);
+      return lgamma(p) + lgamma(q) - lgamma(p + q);
+    }
+    function betafn(a, b) { return a > 0 && b > 0 ? Math.exp(lbeta(a, b)) : Math.exp(lgamma(a) + lgamma(b) - lgamma(a + b)); }
+    // x ln(x/M) + M − x, without cancellation when x ≈ M (Loader 2000)
+    function bd0(x, M) {
+      if (x === 0) return M;
+      const hs = 0.5 * x + 0.5 * M;   // (x + M)/2 without overflow
+      if (Math.abs(x - M) < 0.2 * hs) {
+        let v = (0.5 * x - 0.5 * M) / hs, s = (x - M) * v, ej = x * v * 2;
+        v *= v;
+        for (let j = 1; j < 1000; j++) { ej *= v; const s1 = s + ej / (2 * j + 1); if (s1 === s) return s1; s = s1; }
+        return s;
+      }
+      const r = x / M;
+      return x * (r > 0 && r < Infinity ? Math.log(r) : Math.log(x) - Math.log(M)) + M - x;
+    }
+    // a·b − p exactly, p being the rounded product a·b (Dekker); 0 where the parts would overflow
+    function prodErr(a, b, p) {
+      if (!(Math.abs(p) < 1e290 && Math.abs(p) > 1e-290 && Math.abs(a) < 1e290 && Math.abs(b) < 1e290)) return 0;
+      let t = 134217729 * a; const ah = t - (t - a), al = a - ah;
+      t = 134217729 * b; const bh = t - (t - b), bl = b - bh;
+      return ((ah * bh - p) + ah * bl + al * bh) + al * bl;
+    }
+    // the change of bd0(x, M) when M moves by e (first order)
+    function roundFix(e, x, M) { return e === 0 ? 0 : e * (1 - x / M); }
+    // ln( Γ(n+1)/(Γ(x+1)Γ(y+1)) p^x q^y ), n = x + y, x, y ≥ 0 (real): Loader's saddle-point form.
+    // q is 1 − p; the smaller of the two is taken as exact and the rounding of the other is allowed for.
+    function lbinomRaw(x, y, p, q) {
+      if (p === 0) return x === 0 ? 0 : -Infinity;
+      if (q === 0) return y === 0 ? 0 : -Infinity;
+      const n = x + y;
+      if (x === 0) return n === 0 ? 0 : n * (p < 0.5 ? Math.log1p(-p) : Math.log(q));
+      if (y === 0) return n * (q < 0.5 ? Math.log1p(-q) : Math.log(p));
+      const np = n * p, nq = n * q;
+      // the rounding of n·p and n·q, taken back to first order (Dekker's exact product)
+      const lc = lgcor(n) - lgcor(x) - lgcor(y) - bd0(x, np) - bd0(y, nq) - roundFix(prodErr(n, p, np), x, np) - roundFix(prodErr(n, q, nq), y, nq);
+      const corr = p <= q ? (p - (1 - q)) * (x - y * p / q) : (q - (1 - p)) * (y - x * q / p);
+      return lc + corr - 0.5 * (LN_2PI + Math.log(x) + Math.log(y / n));
+    }
+    // ln( λ^x e^−λ / Γ(x+1) ), x ≥ 0 (real)
+    function lpoisRaw(x, lam) {
+      if (lam === 0) return x === 0 ? 0 : -Infinity;
+      if (!Number.isFinite(lam)) return -Infinity;
+      if (x === 0) return -lam;
+      return -lgcor(x) - bd0(x, lam) - 0.5 * (LN_2PI + Math.log(x));
+    }
+    // erf/erfc to double precision: Taylor series near 0, the continued fraction from 1 on.
     function erfc(x) {
       if (typeof x !== 'number' || Number.isNaN(x)) return NaN;
       if (x < 0) return 2 - erfc(-x);
-      if (x < 2.5) return 1 - erf(x);
+      if (x < 1) return 1 - erf(x);
       // continued fraction erfc(x) = exp(-x²)/√π · 1/(x + 1/2/(x + 1/(x + 3/2/(x + …))))
-      let f = 0; for (let n = 60; n >= 1; n--) f = (n / 2) / (x + f);
+      let f = 0; for (let n = x < 2.5 ? 200 : 60; n >= 1; n--) f = (n / 2) / (x + f);
       return Math.exp(-x * x) / Math.sqrt(Math.PI) / (x + f);
     }
     function erf(x) {
@@ -385,21 +467,39 @@
     }
     function normcdf(x, m, s) { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; return 0.5 * erfc(-(x - m) / (s * Math.SQRT2)); }
     function normpdf(x, m, s) { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; const z = (x - m) / s; return Math.exp(-0.5 * z * z) / (s * Math.sqrt(2 * Math.PI)); }
-    // Acklam's rational approximation, then one Halley step against erfc (≈1e-15).
+    // Acklam's rational approximation, then Halley steps. Between ¼ and ¾ the residual is
+    // ½·erf(x/√2) − (p − ½) (both exact to the last digit near ½); in the tails it is the tail itself,
+    // ½·erfc(|x|/√2) − min(p, 1 − p), so 1 − 1e-12 keeps its digits.
     function norminv(p, m, s) {
       if (m === undefined) m = 0; if (s === undefined) s = 1;
       if (!(p > 0 && p < 1) || !(s > 0)) return NaN;
-      const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239];
-      const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
-      const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
-      const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
-      const pl = 0.02425; let q, r, x;
-      if (p < pl) { q = Math.sqrt(-2 * Math.log(p)); x = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
-      else if (p <= 1 - pl) { q = p - 0.5; r = q * q; x = (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1); }
-      else { q = Math.sqrt(-2 * Math.log(1 - p)); x = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1); }
-      const e = 0.5 * erfc(-x / Math.SQRT2) - p; const u = e * Math.sqrt(2 * Math.PI) * Math.exp(x * x / 2);
-      x = x - u / (1 + x * u / 2);
-      return m + s * x;
+      let x, q, r;
+      if (p >= 0.25 && p <= 0.75) {
+        q = p - 0.5; r = q * q;
+        x = (((((-3.969683028665376e1 * r + 2.209460984245205e2) * r - 2.759285104469687e2) * r + 1.383577518672690e2) * r - 3.066479806614716e1) * r + 2.506628277459239) * q / (((((-5.447609879822406e1 * r + 1.615858368580409e2) * r - 1.556989798598866e2) * r + 6.680131188771972e1) * r - 1.328068155288572e1) * r + 1);
+        for (let i = 0; i < 2 && x !== 0; i++) {
+          const e = 0.5 * erf(x / Math.SQRT2) - q;
+          if (e === 0) break;
+          const u = e * Math.sqrt(2 * Math.PI) * Math.exp(x * x / 2);
+          x -= u / (1 + x * u / 2);
+        }
+        return m + s * x;
+      }
+      const pp = p < 0.5 ? p : 1 - p;
+      if (pp < 0.02425) {
+        q = Math.sqrt(-2 * Math.log(pp));
+        x = (((((-7.784894002430293e-3 * q - 3.223964580411365e-1) * q - 2.400758277161838) * q - 2.549732539343734) * q + 4.374664141464968) * q + 2.938163982698783) / ((((7.784695709041462e-3 * q + 3.224671290700398e-1) * q + 2.445134137142996) * q + 3.754408661907416) * q + 1);
+      } else {
+        q = pp - 0.5; r = q * q;
+        x = (((((-3.969683028665376e1 * r + 2.209460984245205e2) * r - 2.759285104469687e2) * r + 1.383577518672690e2) * r - 3.066479806614716e1) * r + 2.506628277459239) * q / (((((-5.447609879822406e1 * r + 1.615858368580409e2) * r - 1.556989798598866e2) * r + 6.680131188771972e1) * r - 1.328068155288572e1) * r + 1);
+      }
+      for (let i = 0; i < 2; i++) {
+        const e = 0.5 * erfc(-x / Math.SQRT2) - pp;
+        if (e === 0) break;
+        const u = (e / pp) * Math.exp(Math.log(pp) + LN_SQRT_2PI + x * x / 2);
+        x -= u / (1 + x * u / 2);
+      }
+      return p < 0.5 ? m + s * x : m - s * x;
     }
     // Riemann ζ(s) for real s > 0, s ≠ 1 (Borwein's algorithm on the alternating η series);
     // for s < 0 by the functional equation.
@@ -430,6 +530,7 @@
     function lambertw(x) {
       if (typeof x !== 'number' || !(x >= -1 / Math.E)) return NaN;
       if (x === 0) return 0;
+      if (x <= -1 / Math.E) return -1;   // the branch point: W(−1/e) = −1
       let w = x < 1 ? (x > -0.3 ? x : -1 + Math.sqrt(2 * (1 + Math.E * x))) : Math.log(x) - Math.log(Math.log(x) + 1);
       for (let i = 0; i < 60; i++) {
         const e = Math.exp(w); const f = w * e - x; const d = e * (w + 1);
@@ -451,84 +552,322 @@
       const f = 1 / (x * x);
       return r + Math.log(x) - 0.5 / x - f * (1 / 12 - f * (1 / 120 - f * (1 / 252 - f * (1 / 240 - f / 132))));
     }
-    // Regularised incomplete gamma P(a, x) and Q = 1 − P (Numerical Recipes: series / Lentz CF).
-    function gammainc(a, x) {
-      if (!(a > 0) || !(x >= 0)) return NaN; if (x === 0) return 0;
-      if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 1000; n++) { ap += 1; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-16) break; } return sum * Math.exp(-x + a * Math.log(x) - lgamma(a)); }
-      return 1 - gammaincc(a, x);
-    }
-    function gammaincc(a, x) {
-      if (!(a > 0) || !(x >= 0)) return NaN; if (x < a + 1) return 1 - gammainc(a, x);
-      let b = x + 1 - a, c = 1 / 1e-300, d = 1 / b, h = d;
-      for (let i = 1; i < 1000; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-16) break; }
-      return Math.exp(-x + a * Math.log(x) - lgamma(a)) * h;
-    }
-    // Regularised incomplete beta I_x(a, b).
-    function betacf(x, a, b) {
-      const qab = a + b, qap = a + 1, qam = a - 1; let c = 1, d = 1 - qab * x / qap; if (Math.abs(d) < 1e-300) d = 1e-300; d = 1 / d; let h = d;
-      for (let m = 1; m <= 1000; m++) {
-        const m2 = 2 * m; let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
-        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; h *= d * c;
-        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
-        d = 1 + aa * d; if (Math.abs(d) < 1e-300) d = 1e-300; c = 1 + aa / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del;
-        if (Math.abs(del - 1) < 1e-16) break;
+    // Regularised incomplete gamma: [P(a, x), Q(a, x)], each computed directly where it is the small one.
+    // Small a: P = x^a/Γ(a+1)·(1 + a Σ (−x)^n/((a+n) n!)), Q from it with expm1. Otherwise the series for P
+    // (x < a + 1) or the continued fraction for Q (modified Lentz), with the factor x^a e^−x/Γ(a+1)
+    // from Loader's saddle-point form (no cancellation between ln Γ(a) and a ln x for large a).
+    const IT_MAX = 100000;   // far more than any convergent case needs (Temme takes the large-a centre)
+    // Taylor coefficients in η of Temme's c_0 … c_3 (DLMF 8.12.8–11; DiDonato & Morris's d_kn)
+    const TEMME = [
+      [-0.3333333333333333, 0.08333333333333333, -0.014814814814814815, 0.0011574074074074073, 0.0003527336860670194, -0.0001787551440329218, 3.919263178522438e-05, -2.185448510679992e-06, -1.85406221071516e-06, 8.296711340953087e-07, -1.7665952736826078e-07, 6.707853543401498e-09, 1.0261809784240309e-08, -4.382036018453353e-09, 9.14769958223679e-10, -2.5514193994946248e-11],
+      [-0.001851851851851852, -0.003472222222222222, 0.0026455026455026454, -0.0009902263374485596, 0.00020576131687242798, -4.018775720164609e-07, -1.8098550334489977e-05, 7.64916091608111e-06, -1.6120900894563446e-06, 4.647127802807434e-09, 1.378633446915721e-07, -5.752545603517705e-08, 1.1951628599778148e-08, -1.7543241719747647e-11],
+      [0.004133597883597883, -0.0026813271604938273, 0.0007716049382716049, 2.0093878600823047e-06, -0.0001073665322636516, 5.2923448829120125e-05, -1.2760635188618728e-05, 3.423578734096138e-08, 1.3721957309062934e-06, -6.298992138380055e-07, 1.4280614206064242e-07, -2.0477098421990866e-10],
+      [0.0006494341563786008, 0.00022947209362139917, -0.0004691894943952557, 0.00026772063206283885, -7.561801671883977e-05, -2.396505113867297e-07, 1.1082654115347302e-05, -5.6749528269915965e-06, 1.4230900732435883e-06, -2.7861080291528143e-11]];
+    // [P, Q] for large a and x within 10 % of a: Temme's uniform asymptotic expansion
+    // Q = ½ erfc(η√(a/2)) + e^(−aη²/2)/√(2πa) Σ c_k(η) a^−k, η²/2 = μ − ln(1 + μ), μ = x/a − 1
+    function gammaTemme(a, x) {
+      const mu = (x - a) / a;
+      let h = 0, pw = mu * mu;
+      for (let n = 2; n < 60; n++) { const t = pw / n; h += n % 2 ? -t : t; pw *= mu; if (Math.abs(pw) < 1e-18 * h) break; }
+      const eta = mu < 0 ? -Math.sqrt(2 * h) : Math.sqrt(2 * h);
+      let R = 0, ak = 1;
+      for (let k = 0; k < TEMME.length; k++) {
+        const c = TEMME[k]; let v = 0;
+        for (let j = c.length - 1; j >= 0; j--) v = v * eta + c[j];
+        R += v * ak; ak /= a;
       }
-      return h;
+      R *= Math.exp(-a * h) / Math.sqrt(2 * Math.PI * a);
+      const z = eta * Math.sqrt(a / 2);
+      return [0.5 * erfc(-z) - R, 0.5 * erfc(z) + R];
+    }
+    function gammaPQ(a, x) {
+      if (Number.isNaN(x) || Number.isNaN(a)) return [NaN, NaN];
+      if (x === 0) return [0, 1];
+      if (x === Infinity) return [1, 0];
+      if (a > 1e5 && Math.abs(x - a) < 0.1 * a) return gammaTemme(a, x);
+      if (a < 1 && x < 1.5) {
+        let T = 0, term = 1;
+        for (let n = 1; n < 200; n++) { term *= -x / n; const add = term / (a + n); T += add; if (Math.abs(add) <= 1e-17 * Math.abs(T)) break; }
+        const lxa = a * Math.log(x) - lgamma1p(a), e = Math.exp(lxa);
+        return [e * (1 + a * T), -Math.expm1(lxa) - e * a * T];
+      }
+      const lpre = lpoisRaw(a, x);
+      if (x < a + 1) {
+        let sum = 1, del = 1, ap = a;
+        for (let n = 1; n < IT_MAX; n++) { ap += 1; del *= x / ap; sum += del; if (del < 1e-17 * sum) break; if ((n & 1023) === 0) tick(1024); }
+        const P = Math.exp(lpre) * sum;
+        return [P, 1 - P];
+      }
+      let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+      for (let i = 1; i < IT_MAX; i++) {
+        const an = -i * (i - a); b += 2;
+        d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300;
+        c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300;
+        d = 1 / d; const del = d * c; h *= del;
+        if (Math.abs(del - 1) < 3e-16) break;
+        if ((i & 1023) === 0) tick(1024);
+      }
+      const Q = Math.exp(lpre + Math.log(a)) * h;
+      return [1 - Q, Q];
+    }
+    function gammainc(a, x) { if (!(a > 0) || !(x >= 0)) return NaN; return gammaPQ(a, x)[0]; }
+    function gammaincc(a, x) { if (!(a > 0) || !(x >= 0)) return NaN; return gammaPQ(a, x)[1]; }
+    // I_x(a, b) / (x^a y^b / B(a, b)) by the continued fraction of DiDonato & Morris (TOMS 708, BFRAC),
+    // written with λ = a − (a + b)x and y = 1 − x so that no step cancels; for x below the mean (λ ≥ 0).
+    function bfrac(a, b, x, y, lam) {
+      const c = 1 + lam, c0 = b / a, c1 = 1 + 1 / a, yp1 = y + 1;
+      let n = 0, p = 1, s = a + 1, an = 0, bn = 1, anp1 = 1, bnp1 = c / c1, r = c1 / c;
+      for (let it = 1; it < IT_MAX; it++) {
+        n += 1;
+        let t = n / a; const w = n * (b - n) * x; let e = a / s;
+        const alpha = p * (p + c0) * e * e * (w * x);
+        e = (1 + t) / (c1 + t + t);
+        const beta = n + w / s + e * (c + n * yp1);
+        p = 1 + t; s += 2;
+        t = alpha * an + beta * anp1; an = anp1; anp1 = t;
+        t = alpha * bn + beta * bnp1; bn = bnp1; bnp1 = t;
+        const r0 = r; r = anp1 / bnp1;
+        if (!(Math.abs(r - r0) > 4e-16 * r)) break;
+        an /= bnp1; bn /= bnp1; anp1 = r; bnp1 = 1;
+        if ((it & 1023) === 0) tick(1024);
+      }
+      return r;
+    }
+    // [I_x(a, b), 1 − I_x(a, b)] with y = 1 − x passed in (the smaller of x, y exact); the factor
+    // x^a y^b / B(a, b) comes from the saddle-point form, so large a and b lose nothing.
+    function betaPair(x, y, a, b) {
+      if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(a) || Number.isNaN(b)) return [NaN, NaN];
+      if (x <= 0) return [0, 1];
+      if (y <= 0) return [1, 0];
+      // a shape below 1e-300: all the mass sits at that end, to double precision
+      if (a < 1e-300 || b < 1e-300) return [b / (a + b), a / (a + b)];
+      let lam = a > b ? (a + b) * y - b : a - (a + b) * x;
+      const swap = lam < 0;
+      if (swap) { let t = a; a = b; b = t; t = x; x = y; y = t; lam = -lam; }
+      const w = Math.exp(lbinomRaw(a, b, x, y) + Math.log(a * (b / (a + b)))) * bfrac(a, b, x, y, lam);
+      return swap ? [1 - w, w] : [w, 1 - w];
     }
     function betainc(x, a, b) {
       if (!(a > 0) || !(b > 0) || !(x >= 0 && x <= 1)) return NaN; if (x === 0 || x === 1) return x;
-      const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
-      return x < (a + 1) / (a + b + 2) ? bt * betacf(x, a, b) / a : 1 - bt * betacf(1 - x, b, a) / b;
+      return betaPair(x, 1 - x, a, b)[0];
     }
-    // Monotone inverse by bracketing + bisection/Newton-free safeguarded secant (robust for CDFs).
-    function invert(cdf, p, lo, hi) {
-      if (!(p >= 0 && p <= 1)) return NaN; if (p === 0) return lo; if (p === 1) return hi;
-      let a = lo, b = hi;
-      if (!Number.isFinite(b)) { b = 1; while (cdf(b) < p && b < 1e300) b *= 2; }
-      if (!Number.isFinite(a)) { a = -1; while (cdf(a) > p && a > -1e300) a *= 2; }
-      let fa = cdf(a) - p, fb = cdf(b) - p;
-      for (let i = 0; i < 300; i++) {
-        let m = b - fb * (b - a) / (fb - fa); if (!(m > Math.min(a, b) && m < Math.max(a, b))) m = (a + b) / 2;
-        if (i % 3 === 2) m = (a + b) / 2;
-        const fm = cdf(m) - p;
-        if (fm === 0 || Math.abs(b - a) < 1e-15 * Math.max(1, Math.abs(m))) return m;
-        if ((fm < 0) === (fa < 0)) { a = m; fa = fm; } else { b = m; fb = fm; }
+    // The root of g on (lo, hi), g increasing; f(x) gives [g(x), g′(x)]. Newton steps, a Newton step in
+    // ln x when the plain one leaves the bracket, and bisection (geometric across orders of magnitude) last.
+    function newtonRoot(f, x, lo, hi) {
+      let near = 0;   // steps already down at the noise of g: a few of those and x is as good as it gets
+      for (let i = 0; i < 400; i++) {
+        tick();
+        const r = f(x), g = r[0];
+        if (g === 0) return x;
+        if (g < 0 || Number.isNaN(g)) lo = x; else hi = x;
+        if (!(hi > lo)) return x;
+        let xn = x - g / r[1];
+        if (Math.abs(xn - x) <= 1e-14 * Math.abs(x) || (Math.abs(xn - x) <= 1e-11 * Math.abs(x) && ++near >= 4)) return xn > lo && xn < hi ? xn : x;
+        if (!(xn > lo && xn < hi)) {
+          xn = x * Math.exp(-g / (x * r[1]));
+          if (!(xn > lo && xn < hi)) {
+            if (lo > 0 && hi === Infinity) xn = 8 * lo;
+            else if (lo <= 0 && hi < Infinity) xn = lo < 0 ? 0.5 * (lo + hi) : hi / 8;
+            else xn = lo > 0 && hi > 4 * lo ? Math.sqrt(lo) * Math.sqrt(hi) : 0.5 * (lo + hi);
+          }
+        }
+        if (hi - lo <= 4.5e-16 * Math.abs(xn)) return xn;
+        x = xn;
       }
-      return (a + b) / 2;
+      return x;
     }
-    const gammacdf = (x, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; return x <= 0 ? 0 : gammainc(k, x / th); };
-    const gammapdf = (x, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; if (x < 0) return 0; if (x === 0) return k === 1 ? 1 / th : (k < 1 ? Infinity : 0); return Math.exp((k - 1) * Math.log(x) - x / th - lgamma(k) - k * Math.log(th)); };
-    const gammainv = (p, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; return invert((x) => gammacdf(x, k, th), p, 0, Infinity); };
-    const betapdf = (x, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; if (x < 0 || x > 1) return 0; return Math.exp((a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x) - lgamma(a) - lgamma(b) + lgamma(a + b)); };
-    const betacdf = (x, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; return x <= 0 ? 0 : x >= 1 ? 1 : betainc(x, a, b); };
-    const betainv = (p, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; return invert((x) => betacdf(x, a, b), p, 0, 1); };
+    // ln of the gamma density x^(k−1) e^−x / Γ(k) (scale 1), x > 0
+    function lgammaPdf(x, k) { return k < 1 ? lpoisRaw(k, x) + Math.log(k / x) : lpoisRaw(k - 1, x); }
+    // ln of the beta density, 0 < x < 1 (y = 1 − x)
+    function lbetaPdf(x, y, a, b) {
+      if (a <= 2 || b <= 2) return (a - 1) * Math.log(x) + (b - 1) * (y < 0.5 ? Math.log(y) : Math.log1p(-x)) - lbeta(a, b);
+      return Math.log(a + b - 1) + lbinomRaw(a - 1, b - 1, x, y);
+    }
+    const gammacdf = (x, k, th) => { if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; return x <= 0 ? 0 : gammaPQ(k, x / th)[0]; };
+    const gammapdf = (x, k, th) => {
+      if (th === undefined) th = 1; if (!(k > 0) || !(th > 0)) return NaN; if (x < 0) return 0; if (x === 0) return k === 1 ? 1 / th : (k < 1 ? Infinity : 0);
+      const lam = x / th;
+      return k < 1 ? Math.exp(lpoisRaw(k, lam)) * k / x : Math.exp(lpoisRaw(k - 1, lam)) / th;
+    };
+    // the quantile of the gamma distribution (scale 1): Newton on ln P (or ln Q in the upper half)
+    function gammaQuantile(p, k) {
+      const lower = p <= 0.5, pp = lower ? p : 1 - p;
+      const z = -norminv(pp);                       // > 0 for the tail probability pp
+      const sk = Math.sqrt(k), c = 1 - 1 / (9 * k) + (lower ? -z : z) / (3 * sk);
+      let x = k * c * c * c;                        // Wilson–Hilferty
+      if (lower) {
+        const pl = Math.exp((Math.log(pp) + lgamma1pAny(k)) / k);   // P(x) ≤ x^k/Γ(k+1): a lower bound
+        if (pl < 1e-300) return pl;                                     // P(x) = x^k/Γ(k+1)·(1 + O(x)) there
+        if (pl < Infinity && !(x > pl)) x = pl;
+      } else if (!(x > 0)) {
+        x = Math.max(-Math.log(pp) + (k - 1) * Math.log(Math.max(1, -Math.log(pp))) - lgamma(k), 1e-3);
+      }
+      const lpp = Math.log(pp);
+      return newtonRoot((t) => {
+        const pq = gammaPQ(k, t), v = lower ? pq[0] : pq[1], lf = lgammaPdf(t, k);
+        const g = lower ? Math.log(v) - lpp : lpp - Math.log(v);
+        return [g, Math.exp(lf - Math.log(v))];
+      }, x, 0, Infinity);
+    }
+    function lgamma1pAny(k) { return k <= 1 ? lgamma1p(k) : lgamma(k + 1); }
+    const gammainv = (p, k, th) => {
+      if (th === undefined) th = 1; if (!(k > 0) || !(th > 0) || !(p >= 0 && p <= 1)) return NaN;
+      if (p === 0) return 0; if (p === 1) return Infinity;
+      return th * gammaQuantile(p, k);
+    };
+    const betapdf = (x, a, b) => {
+      if (!(a > 0) || !(b > 0)) return NaN; if (x < 0 || x > 1) return 0;
+      if (x === 0) return a < 1 ? Infinity : (a === 1 ? b : 0); if (x === 1) return b < 1 ? Infinity : (b === 1 ? a : 0);
+      return Math.exp(lbetaPdf(x, 1 - x, a, b));
+    };
+    const betacdf = (x, a, b) => { if (!(a > 0) || !(b > 0)) return NaN; return x <= 0 ? 0 : x >= 1 ? 1 : betaPair(x, 1 - x, a, b)[0]; };
+    // the quantile of the beta distribution as [x, 1 − x], the smaller of the two solved for directly
+    function betaQuantile(p, q, a, b) {
+      if (p <= 0) return [0, 1];
+      if (q <= 0) return [1, 0];
+      // which side of ½ the root lies on: solve for the smaller of x and 1 − x
+      const mid = betaPair(0.5, 0.5, a, b);
+      if (Number.isNaN(mid[0])) return [NaN, NaN];
+      const swap = p > mid[0];
+      const A = swap ? b : a, Bp = swap ? a : b, P = swap ? q : p, Q = swap ? p : q;
+      // AS 109's starting value for I_x(A, B) = P
+      const lowT = P <= 0.5, tp = lowT ? P : Q, aa = lowT ? A : Bp, bb = lowT ? Bp : A;
+      const y = -norminv(tp), lb = lbeta(aa, bb);
+      let x0;
+      if (aa > 1 && bb > 1) {
+        const r = (y * y - 3) / 6, s = 1 / (2 * aa - 1), t = 1 / (2 * bb - 1), h = 2 / (s + t);
+        const w = y * Math.sqrt(h + r) / h - (t - s) * (r + 5 / 6 - 2 / (3 * h));
+        x0 = aa / (aa + bb * Math.exp(2 * w));
+      } else {
+        const r = 2 * bb, t0 = 1 / (9 * bb), t = r * Math.pow(1 - t0 + y * Math.sqrt(t0), 3);
+        if (t <= 0) x0 = 1 - Math.exp((Math.log1p(-tp) + Math.log(bb) + lb) / bb);
+        else { const t2 = (4 * aa + r - 2) / t; x0 = t2 <= 1 ? Math.exp((Math.log(tp * aa) + lb) / aa) : 1 - 2 / (t2 + 1); }
+      }
+      if (!lowT) x0 = 1 - x0;
+      const lowR = P <= Q, lr = Math.log(lowR ? P : Q);
+      // I_x(A, B) = x^A/(A B(A, B))·(1 + O(x)): far below the smallest normal double that is the answer
+      const xpl = Math.exp((Math.log(P) + Math.log(A) + lbeta(A, Bp)) / A);
+      if (lowR && xpl < 1e-300) return swap ? [1 - xpl, xpl] : [xpl, 1 - xpl];
+      if (!(x0 > 0 && x0 < 0.5)) x0 = Math.min(0.25, Math.max(xpl, 1e-300));
+      const x = newtonRoot((t) => {
+        const pr = betaPair(t, 1 - t, A, Bp), v = lowR ? pr[0] : pr[1], lf = lbetaPdf(t, 1 - t, A, Bp);
+        return [lowR ? Math.log(v) - lr : lr - Math.log(v), Math.exp(lf - Math.log(v))];
+      }, x0, 0, 0.5 + 1e-9);
+      return swap ? [1 - x, x] : [x, 1 - x];
+    }
+    const betainv = (p, a, b) => { if (!(a > 0) || !(b > 0) || !(p >= 0 && p <= 1)) return NaN; return betaQuantile(p, 1 - p, a, b)[0]; };
     const chi2pdf = (x, k) => gammapdf(x, k / 2, 2);
     const chi2cdf = (x, k) => gammacdf(x, k / 2, 2);
     const chi2inv = (p, k) => gammainv(p, k / 2, 2);
-    const tpdf = (x, v) => { if (!(v > 0)) return NaN; return Math.exp(lgamma((v + 1) / 2) - lgamma(v / 2) - 0.5 * Math.log(v * Math.PI) - (v + 1) / 2 * Math.log(1 + x * x / v)); };
-    const tcdf = (x, v) => { if (!(v > 0)) return NaN; const ib = betainc(v / (v + x * x), v / 2, 0.5); return x >= 0 ? 1 - 0.5 * ib : 0.5 * ib; };
-    const tinv = (p, v) => { if (!(v > 0) || !(p > 0 && p < 1)) return NaN; return invert((x) => tcdf(x, v), p, -Infinity, Infinity); };
-    const fpdf = (x, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; if (x < 0) return 0; if (x === 0) return d1 === 2 ? 1 : (d1 < 2 ? Infinity : 0); return Math.exp(0.5 * (d1 * Math.log(d1 * x) + d2 * Math.log(d2) - (d1 + d2) * Math.log(d1 * x + d2)) - Math.log(x) - (lgamma(d1 / 2) + lgamma(d2 / 2) - lgamma((d1 + d2) / 2))); };
-    const fcdf = (x, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; return x <= 0 ? 0 : betainc(d1 * x / (d1 * x + d2), d1 / 2, d2 / 2); };
-    const finv = (p, d1, d2) => { if (!(d1 > 0) || !(d2 > 0)) return NaN; return invert((x) => fcdf(x, d1, d2), p, 0, Infinity); };
-    const binompdf = (k, n, p) => { if (!nonNegInt(n) || !isInt(k) || !(p >= 0 && p <= 1)) return NaN; if (k < 0 || k > n) return 0; if (p === 0) return k === 0 ? 1 : 0; if (p === 1) return k === n ? 1 : 0; return Math.exp(lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + k * Math.log(p) + (n - k) * Math.log(1 - p)); };
-    const binomcdf = (k, n, p) => { if (!nonNegInt(n) || !(p >= 0 && p <= 1) || typeof k !== 'number') return NaN; k = Math.floor(k); if (k < 0) return 0; if (k >= n) return 1; return betainc(1 - p, n - k, k + 1); };
-    const poisspdf = (k, l) => { if (!isInt(k) || !(l >= 0)) return NaN; if (k < 0) return 0; if (l === 0) return k === 0 ? 1 : 0; return Math.exp(k * Math.log(l) - l - lgamma(k + 1)); };
-    const poisscdf = (k, l) => { if (typeof k !== 'number' || !(l >= 0)) return NaN; k = Math.floor(k); if (k < 0) return 0; if (l === 0) return 1; return gammaincc(k + 1, l); };
+    // ln of Student's t density (Loader's form, as R's dt)
+    function ltpdf(x, v) {
+      const t = -bd0(v / 2, (v + 1) / 2) + lgcor((v + 1) / 2) - lgcor(v / 2), x2n = x * x / v;
+      let lx2n, u;
+      if (!(x2n <= 1 / 2.220446049250313e-16)) { lx2n = Math.log(Math.abs(x)) - Math.log(v) / 2; u = v * lx2n; }
+      else if (x2n > 0.2) { lx2n = Math.log(1 + x2n) / 2; u = v * lx2n; }
+      else { lx2n = Math.log1p(x2n) / 2; u = -bd0(v / 2, (v + x * x) / 2) + x * x / 2; }
+      return t - u - LN_SQRT_2PI - lx2n;
+    }
+    const tpdf = (x, v) => { if (!(v > 0) || Number.isNaN(x)) return NaN; if (!Number.isFinite(x)) return 0; return Math.exp(ltpdf(x, v)); };
+    // [P(T ≤ −|x|), P(|T| ≤ |x|)]: the one-sided tail and the central part, each direct
+    function tParts(x, v) {
+      const t2 = x * x;
+      let xc, yt;
+      if (t2 < v) { xc = t2 / (v + t2); yt = 1 - xc; } else { yt = t2 === Infinity ? v / x / x : v / (v + t2); xc = 1 - yt; }
+      const pr = betaPair(xc, yt, 0.5, v / 2);
+      return [0.5 * pr[1], pr[0]];
+    }
+    // ln P(T ≤ −|x|); far out, where ν/x² is below 1e-280, I_y(ν/2, ½) = y^(ν/2)/((ν/2) B(ν/2, ½)) to double precision
+    function tLogTail(x, v) {
+      const ly = Math.log(v) - 2 * Math.log(Math.abs(x));
+      if (ly < -644) return v / 2 * ly - Math.log(v / 2) - lbeta(v / 2, 0.5) - Math.LN2;
+      return Math.log(tParts(x, v)[0]);
+    }
+    const tcdf = (x, v) => {
+      if (!(v > 0) || Number.isNaN(x)) return NaN; if (x === Infinity) return 1; if (x === -Infinity) return 0;
+      if (v > 1e20) return normcdf(x, 0, 1);   // the normal distribution to double precision
+      const pt = tParts(x, v);
+      return x > 0 ? (pt[0] < 0.25 ? 1 - pt[0] : 0.5 + 0.5 * pt[1]) : pt[0];
+    };
+    const tinv = (p, v) => {
+      if (!(v > 0) || !(p > 0 && p < 1)) return NaN;
+      if (p === 0.5) return 0;
+      if (v > 1e20) return norminv(p, 0, 1);
+      const tail = p < 0.5 ? p : 1 - p, sign = p < 0.5 ? -1 : 1;
+      const useTail = tail <= 0.25, target = useTail ? tail : 0.5 - tail, lt = Math.log(target);   // 0.5 − tail is exact here
+      // start: Cornish–Fisher from the normal quantile, capped by the power-law tail (an upper bound)
+      const z = -norminv(tail), z3 = z * z * z;
+      let t0 = z + (z3 + z) / (4 * v) + (5 * z3 * z * z + 16 * z3 + 3 * z) / (96 * v * v);
+      const tpl = Math.exp(((v - 1) / 2 * Math.log(v) - Math.log(tail) - lbeta(v / 2, 0.5)) / v);
+      if (!(t0 > 0) || tpl < t0) t0 = tpl;
+      if (useTail && !(tLogTail(Number.MAX_VALUE, v) < lt)) return sign * Infinity;
+      if (!(t0 < Number.MAX_VALUE)) t0 = Number.MAX_VALUE;
+      const t = newtonRoot((u) => {
+        const lf = ltpdf(u, v);
+        if (useTail) { const l = tLogTail(u, v); return [lt - l, Math.exp(lf - l)]; }
+        const c = 0.5 * tParts(u, v)[1];
+        return [Math.log(c) - lt, Math.exp(lf) / c];
+      }, t0, 0, Infinity);
+      return sign * t;
+    };
+    // F density (as R's df, through the binomial saddle-point form)
+    const fpdf = (x, m, n) => {
+      if (!(m > 0) || !(n > 0)) return NaN; if (x < 0) return 0; if (x === 0) return m === 2 ? 1 : (m < 2 ? Infinity : 0);
+      const xm = x * m; if (!Number.isFinite(xm)) return 0;
+      let p, q; if (xm < n) { p = xm / (n + xm); q = 1 - p; } else { q = n / (n + xm); p = 1 - q; }
+      if (m >= 2) return m * q / 2 * Math.exp(lbinomRaw((m - 2) / 2, n / 2, p, q));
+      return m * m * q / (2 * p * (m + n)) * Math.exp(lbinomRaw(m / 2, n / 2, p, q));
+    };
+    const fcdf = (x, d1, d2) => {
+      if (!(d1 > 0) || !(d2 > 0)) return NaN; if (Number.isNaN(x)) return NaN; if (x <= 0) return 0;
+      // a degree of freedom beyond 1e20 is infinite to double precision (as R's pf)
+      if (d1 > 1e20 || d2 > 1e20) {
+        if (d1 > 1e20 && d2 > 1e20) return x < 1 ? 0 : 1;
+        return d2 > 1e20 ? gammaPQ(d1 / 2, d1 * x / 2)[0] : gammaPQ(d2 / 2, d2 / x / 2)[1];
+      }
+      const u = d1 * x; if (!Number.isFinite(u)) return 1;
+      let px, qx; if (u < d2) { px = u / (d2 + u); qx = 1 - px; } else { qx = d2 / (d2 + u); px = 1 - qx; }
+      return betaPair(px, qx, d1 / 2, d2 / 2)[0];
+    };
+    const finv = (p, d1, d2) => {
+      if (!(d1 > 0) || !(d2 > 0) || !(p >= 0 && p <= 1)) return NaN; if (p === 0) return 0; if (p === 1) return Infinity;
+      const xy = betaQuantile(p, 1 - p, d1 / 2, d2 / 2);
+      return (d2 / d1) * (xy[0] / xy[1]);
+    };
+    const binompdf = (k, n, p) => { if (!nonNegInt(n) || !isInt(k) || !(p >= 0 && p <= 1)) return NaN; if (k < 0 || k > n) return 0; if (p === 0) return k === 0 ? 1 : 0; if (p === 1) return k === n ? 1 : 0; return Math.exp(lbinomRaw(k, n - k, p, 1 - p)); };
+    const binomcdf = (k, n, p) => { if (!nonNegInt(n) || !(p >= 0 && p <= 1) || typeof k !== 'number' || Number.isNaN(k)) return NaN; k = Math.floor(k); if (k < 0) return 0; if (k >= n) return 1; if (p === 0) return 1; if (p === 1) return 0; return betaPair(1 - p, p, n - k, k + 1)[0]; };
+    const poisspdf = (k, l) => { if (!isInt(k) || !(l >= 0)) return NaN; if (k < 0) return 0; if (l === 0) return k === 0 ? 1 : 0; return Math.exp(lpoisRaw(k, l)); };
+    const poisscdf = (k, l) => { if (typeof k !== 'number' || Number.isNaN(k) || !(l >= 0)) return NaN; k = Math.floor(k); if (k < 0) return 0; if (l === 0) return 1; return gammaPQ(k + 1, l)[1]; };
     const exppdf = (x, l) => (l > 0 ? (x < 0 ? 0 : l * Math.exp(-l * x)) : NaN);
-    const expcdf = (x, l) => (l > 0 ? (x < 0 ? 0 : 1 - Math.exp(-l * x)) : NaN);
-    const expinv = (p, l) => (l > 0 && p >= 0 && p < 1 ? -Math.log(1 - p) / l : NaN);
+    const expcdf = (x, l) => (l > 0 ? (x < 0 ? 0 : -Math.expm1(-l * x)) : NaN);
+    const expinv = (p, l) => (l > 0 && p >= 0 && p < 1 ? -Math.log1p(-p) / l : NaN);
     const lognpdf = (x, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; if (x <= 0) return 0; const z = (Math.log(x) - m) / s; return Math.exp(-0.5 * z * z) / (x * s * Math.sqrt(2 * Math.PI)); };
     const logncdf = (x, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; if (!(s > 0)) return NaN; return x <= 0 ? 0 : normcdf(Math.log(x), m, s); };
-    const logninv = (p, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; const z = norminv(p, m, s); return Number.isNaN(z) ? NaN : Math.exp(z); };
+    const logninv = (p, m, s) => { if (m === undefined) m = 0; if (s === undefined) s = 1; if (p === 0 && s > 0) return 0; const z = norminv(p, m, s); return Number.isNaN(z) ? NaN : Math.exp(z); };
     const weibpdf = (x, k, l) => (k > 0 && l > 0 ? (x < 0 ? 0 : (k / l) * Math.pow(x / l, k - 1) * Math.exp(-Math.pow(x / l, k))) : NaN);
-    const weibcdf = (x, k, l) => (k > 0 && l > 0 ? (x < 0 ? 0 : 1 - Math.exp(-Math.pow(x / l, k))) : NaN);
-    const weibinv = (p, k, l) => (k > 0 && l > 0 && p >= 0 && p < 1 ? l * Math.pow(-Math.log(1 - p), 1 / k) : NaN);
-    const geompdf = (k, p) => (isInt(k) && p > 0 && p <= 1 ? (k < 1 ? 0 : Math.pow(1 - p, k - 1) * p) : NaN);
-    const geomcdf = (k, p) => (typeof k === 'number' && p > 0 && p <= 1 ? (k < 1 ? 0 : 1 - Math.pow(1 - p, Math.floor(k))) : NaN);
-    const hygepdf = (k, NN, K, n) => { if (![k, NN, K, n].every(nonNegInt) || K > NN || n > NN) return NaN; if (k > K || k > n || n - k > NN - K) return 0; const lb = (a, b) => lgamma(a + 1) - lgamma(b + 1) - lgamma(a - b + 1); return Math.exp(lb(K, k) + lb(NN - K, n - k) - lb(NN, n)); };
-    const nbinpdf = (k, r, p) => (nonNegInt(k) && r > 0 && p > 0 && p <= 1 ? Math.exp(lgamma(k + r) - lgamma(k + 1) - lgamma(r) + r * Math.log(p) + k * Math.log(1 - p)) : NaN);
-    const erfinv = (y) => (y > -1 && y < 1 ? norminv((y + 1) / 2) / Math.SQRT2 : (y === 1 ? Infinity : y === -1 ? -Infinity : NaN));
+    const weibcdf = (x, k, l) => (k > 0 && l > 0 ? (x < 0 ? 0 : -Math.expm1(-Math.pow(x / l, k))) : NaN);
+    const weibinv = (p, k, l) => (k > 0 && l > 0 && p >= 0 && p < 1 ? l * Math.pow(-Math.log1p(-p), 1 / k) : NaN);
+    const geompdf = (k, p) => (isInt(k) && p > 0 && p <= 1 ? (k < 1 ? 0 : p === 1 ? (k === 1 ? 1 : 0) : Math.exp((k - 1) * Math.log1p(-p)) * p) : NaN);
+    const geomcdf = (k, p) => (typeof k === 'number' && p > 0 && p <= 1 ? (k < 1 ? 0 : p === 1 ? 1 : -Math.expm1(Math.floor(k) * Math.log1p(-p))) : NaN);
+    // hypergeometric through three binomial terms with the same p (as R's dhyper)
+    const hygepdf = (k, NN, K, n) => {
+      if (![k, NN, K, n].every(nonNegInt) || K > NN || n > NN) return NaN; if (k > K || k > n || n - k > NN - K) return 0;
+      const p = n / NN, q = (NN - n) / NN;
+      return Math.exp(lbinomRaw(k, K - k, p, q) + lbinomRaw(n - k, NN - K - n + k, p, q) - lbinomRaw(n, NN - n, p, q));
+    };
+    const nbinpdf = (k, r, p) => (nonNegInt(k) && r > 0 && p === 1 ? (k === 0 ? 1 : 0) : nonNegInt(k) && r > 0 && p > 0 && p <= 1 ? r / (r + k) * Math.exp(lbinomRaw(r, k, p, 1 - p)) : NaN);
+    // erf⁻¹: from the normal quantile, then Newton steps on erf (or on erfc beyond ½, where 1 − y is exact)
+    const erfinv = (y) => {
+      if (!(y > -1 && y < 1)) return y === 1 ? Infinity : y === -1 ? -Infinity : NaN;
+      if (y === 0) return y;
+      const ay = Math.abs(y);
+      let z = ay < 1e-8 ? ay * 0.886226925452758 : -norminv((1 - ay) / 2) / Math.SQRT2;
+      for (let i = 0; i < 2; i++) {
+        const e = ay <= 0.5 ? erf(z) - ay : (1 - ay) - erfc(z);
+        z -= e / (1.1283791670955126 * Math.exp(-z * z));
+      }
+      return y < 0 ? -z : z;
+    };
     // Exponential integrals E1(x) and Ei(x).
     function expint(x) {
       if (!(x > 0)) return NaN;
@@ -568,10 +907,27 @@
       const eR = Math.cos(x), eI = -Math.sin(x);
       return [hR * eR - hI * eI, hR * eI + hI * eR];
     }
-    // Bessel functions of integer order, from their integral representations (trapezoid rule on a
-    // periodic integrand is spectrally accurate; the tails of Y and K decay double-exponentially).
+    // Bessel functions, from their integral representations (trapezoid rule on a periodic integrand is
+    // spectrally accurate for whole orders; the tails of Y and K decay double-exponentially). Other real
+    // orders use the integral forms with the extra tail term (x > 0; a negative x is complex there).
+    const BESSEL_MAX_ORDER = 1000;
+    // Σ (±1)^k (x/2)^(2k+ν) / (k! Γ(k+ν+1)): J for sign −1, I for +1 (exact to rounding for small x, where the
+    // integral forms lose everything to cancellation).
+    function besselSeries(n, x, sign) {
+      const h = x / 2; let t = Math.pow(h, n) / gamma(n + 1), sum = t;
+      for (let k = 0; k < 400; k++) { t *= sign * h * h / ((k + 1) * (k + 1 + n)); sum += t; if (Math.abs(t) <= 1e-17 * Math.abs(sum) && k > x) break; }
+      return sum;
+    }
     function besselj(n, x) {
-      if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (typeof n !== 'number' || typeof x !== 'number' || Number.isNaN(x) || Number.isNaN(n)) return NaN;
+      if (!isInt(n)) {
+        if ((!(x > 0) && !(x === 0 && n > 0)) || Math.abs(n) > BESSEL_MAX_ORDER) return NaN;
+        if (x === 0) return 0;
+        if (x <= 8) return besselSeries(n, x, -1);
+        const a = integrate((t) => Math.cos(n * t - x * Math.sin(t)), 0, Math.PI) / Math.PI;
+        const tail = Math.sin(n * Math.PI) / Math.PI * integrate((t) => Math.exp(-x * Math.sinh(t) - n * t), 0, Math.asinh(Math.max(1, (800 + Math.abs(n) * 20) / x)));
+        return a - tail;
+      }
       if (n < 0) return (n % 2 ? -1 : 1) * besselj(-n, x);
       const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
       // A limit on the work: besselj(0, 1e12) was 2×10¹² turns of this loop (REVIEW P1/C2).
@@ -580,23 +936,35 @@
       return s / M;
     }
     function besseli(n, x) {
-      if (!isInt(n) || typeof x !== 'number' || Number.isNaN(x)) return NaN;
+      if (typeof n !== 'number' || typeof x !== 'number' || Number.isNaN(x) || Number.isNaN(n)) return NaN;
+      if (!isInt(n)) {
+        if ((!(x > 0) && !(x === 0 && n > 0)) || Math.abs(n) > BESSEL_MAX_ORDER) return NaN;
+        if (x === 0) return 0;
+        if (x <= 30) return besselSeries(n, x, 1);
+        const a = integrate((t) => Math.exp(x * Math.cos(t)) * Math.cos(n * t), 0, Math.PI) / Math.PI;
+        const tail = Math.sin(n * Math.PI) / Math.PI * integrate((t) => Math.exp(-x * Math.cosh(t) - n * t), 0, Math.acosh(Math.max(1, (800 + Math.abs(n) * 20) / x)));
+        return a - tail;
+      }
       n = Math.abs(n); const M = Math.max(64, Math.ceil(2 * Math.abs(x) + 2 * n + 64)); let s = 0;
       if (M > 2e6) return NaN;
       for (let k = 0; k < M; k++) { tick(); const t = (k + 0.5) * Math.PI / M; s += Math.exp(x * Math.cos(t)) * Math.cos(n * t); }
       return s / M;
     }
     function besselk(n, x) {
-      if (!isInt(n) || !(x > 0)) return NaN; n = Math.abs(n);
+      // K_ν(x) = ∫ exp(−x cosh t) cosh(νt) dt for every real order; K_−ν = K_ν
+      if (typeof n !== 'number' || Number.isNaN(n) || !(x > 0) || Math.abs(n) > BESSEL_MAX_ORDER) return NaN; n = Math.abs(n);
       const h = 0.02; let s = 0.5 * Math.exp(-x);
       for (let k = 1; k < 100000; k++) { tick(); const t = k * h; const v = Math.exp(-x * Math.cosh(t)) * Math.cosh(n * t); s += v; if (v < 1e-18 * s && x * Math.cosh(t) > 40) break; }
       return s * h;
     }
     function bessely(n, x) {
-      if (!isInt(n) || !(x > 0)) return NaN;
-      if (n < 0) return (n % 2 ? -1 : 1) * bessely(-n, x);
+      if (typeof n !== 'number' || Number.isNaN(n) || !(x > 0) || Math.abs(n) > BESSEL_MAX_ORDER) return NaN;
+      const whole = isInt(n);
+      if (whole && n < 0) return (n % 2 ? -1 : 1) * bessely(-n, x);
       const a = integrate((t) => Math.sin(x * Math.sin(t) - n * t), 0, Math.PI) / Math.PI;
-      const tail = integrate((t) => (Math.exp(n * t) + (n % 2 ? -1 : 1) * Math.exp(-n * t)) * Math.exp(-x * Math.sinh(t)), 0, Math.asinh(Math.max(1, (800 + n * 20) / x))) / Math.PI;
+      // cos(νπ) is ±1 for a whole order, anything in between for the others
+      const sgn = whole ? (n % 2 ? -1 : 1) : Math.cos(n * Math.PI);
+      const tail = integrate((t) => (Math.exp(n * t) + sgn * Math.exp(-n * t)) * Math.exp(-x * Math.sinh(t)), 0, Math.asinh(Math.max(1, (800 + Math.abs(n) * 20) / x))) / Math.PI;
       return a - tail;
     }
     // Complete elliptic integrals K(k), E(k) (modulus k, |k| < 1) by the AGM; incomplete via Carlson.
@@ -619,12 +987,12 @@
       const ea = X * Y, eb = Z * Z, ec = ea - eb, ed = ea - 6 * eb, ee = ed + ec + ec;
       return 3 * sum + fac * (1 + ed * (-3 / 14 + 9 / 88 * ed - 9 / 52 * Z * ee) + Z * (1 / 6 * ee + Z * (-9 / 22 * ec + Z * 3 / 26 * ea))) / (m * Math.sqrt(m));
     }
-    function ellipf(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const s = Math.sin(phi), c = Math.cos(phi); const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const sr = Math.sin(r), cr = Math.cos(r); const base = sr * carlsonRF(cr * cr, 1 - k * k * sr * sr, 1); void s; void c; return 2 * n * ellipk(k) + base; }
-    function ellipeinc(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const s = Math.sin(r), c = Math.cos(r), q = 1 - k * k * s * s; return 2 * n * ellipe(k) + s * carlsonRF(c * c, q, 1) - k * k * s * s * s / 3 * carlsonRD(c * c, q, 1); }
+    function ellipf(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const s = Math.sin(phi), c = Math.cos(phi); const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const sr = Math.sin(r), cr = Math.cos(r); const base = sr * carlsonRF(cr * cr, 1 - k * k * sr * sr, 1); void s; void c; return (n === 0 ? 0 : 2 * n * ellipk(k)) + base; }
+    function ellipeinc(phi, k) { if (typeof phi !== 'number' || !(Math.abs(k) <= 1)) return NaN; const n = Math.round(phi / Math.PI); const r = phi - n * Math.PI; const s = Math.sin(r), c = Math.cos(r), q = 1 - k * k * s * s; return (n === 0 ? 0 : 2 * n * ellipe(k)) + s * carlsonRF(c * c, q, 1) - k * k * s * s * s / 3 * carlsonRD(c * c, q, 1); }
     // Polylogarithm Li_s(z) for real z in [−1, 1] (series; z = ±1 through ζ and η).
     function polylog(s, z) {
       if (typeof s !== 'number' || typeof z !== 'number' || !(z >= -1 && z <= 1)) return NaN;
-      if (z === 0) return 0; if (z === 1) return s > 1 ? zeta(s) : NaN; if (z === -1) return -(1 - Math.pow(2, 1 - s)) * zeta(s);
+      if (z === 0) return 0; if (z === 1) return s > 1 ? zeta(s) : NaN; if (z === -1) return s === 1 ? -Math.LN2 : -(1 - Math.pow(2, 1 - s)) * zeta(s);
       if (s === 1) return -Math.log(1 - z);
       if (Math.abs(z) > 0.5 && s === 2) { const w = 1 - z; if (z > 0) return Math.PI * Math.PI / 6 - Math.log(z) * Math.log(w) - polylog(2, w); }
       let sum = 0, zk = 1; for (let k = 1; k < 100000; k++) { tick(); zk *= z; const add = zk / Math.pow(k, s); sum += add; if (Math.abs(add) < 1e-17 * Math.abs(sum)) break; }
@@ -746,11 +1114,76 @@
     const csinh = (a) => simp(new Cx(Math.sinh(a.re) * Math.cos(a.im), Math.cosh(a.re) * Math.sin(a.im)));
     const ccosh = (a) => simp(new Cx(Math.cosh(a.re) * Math.cos(a.im), Math.sinh(a.re) * Math.sin(a.im)));
     const ctanh = (a) => cdiv(C(csinh(a)), C(ccosh(a)));
+    // Equal for comparisons: the same number, or within 1e-12 of each other relative to their size
+    // (0.1 + 0.2 == 0.3). Mirrors Values::close in PHP.
+    function close(a, b) {
+      if (a === b) return true;
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+      return Math.abs(a - b) <= 1e-12 * Math.max(Math.abs(a), Math.abs(b));
+    }
+    // The remainder as in mathematics: the sign of the divisor (-7 mod 3 = 2, 7 mod -3 = -2); none for a
+    // divisor of 0. A quotient within 1e-12 of a whole number counts as whole. Mirrors Values::modFloor.
+    function modFloor(a, b) {
+      if (Number.isNaN(a) || Number.isNaN(b) || b === 0 || !Number.isFinite(a) || !Number.isFinite(b)) return NaN;
+      const r = a % b;
+      if (r === 0) return 0;
+      const q = a / b, n = Math.round(q);
+      if (n !== 0 && Math.abs(q) < 1e9 && Math.abs(q - n) <= 1e-12 * Math.abs(n)) return 0;
+      return ((r < 0) !== (b < 0)) ? r + b : r;
+    }
+    // n-th root on the real numbers: none for n = 0, nor for a negative x unless n is an odd whole number.
+    function root(x, n) {
+      if (Number.isNaN(x) || Number.isNaN(n) || n === 0) return NaN;
+      if (x >= 0) return x === 0 && n < 0 ? Infinity : Math.pow(x, 1 / n);
+      if (Number.isFinite(n) && Math.floor(n) === n && n % 2 !== 0) return -Math.pow(-x, 1 / n);
+      return NaN;
+    }
+    // Round half away from zero to d decimal places (d < 0: tens, hundreds…), as ROUND does in spreadsheets:
+    // −2.5 → −3, 1.005 → 1.01. The digits rounded are those of the shortest decimal that reads back as x,
+    // not of its binary value. d is cut to a whole number toward zero. Mirrors Values::roundDec.
+    function roundDec(x, d) {
+      if (d === undefined) d = 0;
+      if (Number.isNaN(x) || Number.isNaN(d) || !Number.isFinite(d)) return NaN;
+      if (!Number.isFinite(x) || x === 0) return x;
+      d = Math.max(-400, Math.min(400, Math.trunc(d)));
+      const a = Math.abs(x);
+      let s = '';
+      for (let p = 1; p <= 17; p++) { s = a.toExponential(p - 1); if (Number(s) === a) break; }
+      const [m, e] = s.split('e');
+      const digits = m.replace('.', '');
+      const point = Number(e) + 1;
+      const keep = point + d;
+      if (keep >= digits.length) return x;
+      if (keep < 0) return x < 0 ? -0 : 0;
+      let kept = keep === 0 ? '0' : digits.slice(0, keep);
+      if (digits[keep] >= '5') {
+        const k = kept.split(''); let i = k.length - 1;
+        while (i >= 0 && k[i] === '9') { k[i] = '0'; i--; }
+        if (i < 0) k.unshift('1'); else k[i] = String(Number(k[i]) + 1);
+        kept = k.join('');
+      }
+      const r = Number(kept + 'e' + (point - keep));
+      return x < 0 ? -r : r;
+    }
+    // Math.pow with a real result where mathematics has one: a negative base to a whole power, and to 1/n for
+    // an odd whole n ((-8)^(1/3) = -2); NaN for the rest. 1 to any power is 1. Mirrors Values::rpow.
+    function rpow(a, b) {
+      if (a === 1) return 1;
+      if (a < 0 && Math.floor(b) !== b) {
+        if (Number.isNaN(b) || !Number.isFinite(b)) return NaN;
+        const n = 1 / b, r = Math.round(n);
+        if (r !== 0 && r % 2 !== 0 && Math.abs(n - r) <= 1e-9 * Math.abs(r)) return -Math.pow(-a, b);
+        return NaN;
+      }
+      if (a === 0 && b < 0) return Infinity;
+      return Math.pow(a, b);
+    }
     // Scalar binary operation on numbers or complex values.
     function scalarBin(op, a, b) {
       if (!isC(a) && !isC(b)) {
-        return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? a % b : op === '^' ? Math.pow(a, b)
-          : op === '<' ? +(a < b) : op === '<=' ? +(a <= b) : op === '>' ? +(a > b) : op === '>=' ? +(a >= b) : op === '==' ? +(a === b) : op === '!=' ? +(a !== b) : NaN;
+        return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? modFloor(a, b) : op === '^' ? rpow(a, b)
+          : op === '<' ? +(a < b && !close(a, b)) : op === '<=' ? +(a < b || close(a, b)) : op === '>' ? +(a > b && !close(a, b)) : op === '>=' ? +(a > b || close(a, b))
+          : op === '==' ? +close(a, b) : op === '!=' ? +(Number.isNaN(a) || Number.isNaN(b) || !close(a, b)) : NaN;
       }
       const A = C(a), B = C(b);
       if (op === '+') return cadd(A, B); if (op === '-') return csub(A, B); if (op === '*') return cmul(A, B); if (op === '/') return cdiv(A, B);
@@ -758,7 +1191,7 @@
         // a real negative base with a real exponent stays real in plain arithmetic; complex only when asked
         return cpow(A, B);
       }
-      if (op === '==') return +(A.re === B.re && A.im === B.im); if (op === '!=') return +(A.re !== B.re || A.im !== B.im);
+      if (op === '==') return +(close(A.re, B.re) && close(A.im, B.im)); if (op === '!=') return +(!close(A.re, B.re) || !close(A.im, B.im));
       return NaN;
     }
     // Element-wise with broadcasting: scalar ⊕ list, list ⊕ list (same length), matrix likewise.
@@ -817,10 +1250,10 @@
     function slope(x, y) { return cov(x, y) / variance(x); }
     function intercept(x, y) { return mean(y) - slope(x, y) * mean(x); }
     function rsq(x, y) { const r = corr(x, y); return r * r; }
-    // Cash flows: npv(r, cf) with cf[0] at time 0; irr(cf); mirr(cf, finance rate, reinvestment rate).
-    function npv(r, cf) { cf = reals(cf); if (!cf) return NaN; let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t); return s; }
+    // Cash flows: npv(r, cf) as NPV() in a spreadsheet, the first value one period away; irr(cf) with cf[0] at time 0; mirr(cf, finance rate, reinvestment rate).
+    function npv(r, cf) { cf = reals(cf); if (!cf) return NaN; let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t + 1); return s; }
     function irr(cf, guess) {
-      cf = reals(cf); if (!cf || cf.length < 2) return NaN; const f = (r) => npv(r, cf);
+      cf = reals(cf); if (!cf || cf.length < 2) return NaN; const f = (r) => { let s = 0; for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + r, t); return s; };
       const r0 = ML._findRoot(f, guess === undefined ? 0.1 : guess); if (Number.isFinite(r0) && r0 > -1) return r0;
       return ML._findRoot(f, -0.9999, 10);
     }
@@ -871,7 +1304,7 @@
     const arg = (a) => (isC(a) ? carg(a) : Math.atan2(0, a));
     const polar = (r, t) => simp(new Cx(r * Math.cos(t), r * Math.sin(t)));
     return {
-      Cx, isC, isA, isM, C, simp, bin, neg, lift, flat,
+      Cx, isC, isA, isM, C, simp, bin, neg, lift, flat, modFloor, root, rpow, roundDec,
       complexFns: { sqrt: csqrt, exp: cexp, ln: cln, abs: cabs, sin: csin, cos: ccos, tan: ctan, sinh: csinh, cosh: ccosh, tanh: ctanh, pow: (a, b) => cpow(a, b), log: (a) => cdiv(C(cln(a)), new Cx(Math.LN10, 0)) },
       aggregates: { sum: sumv, prod: prodv, count, len: count, mean, median, mode, var: variance, stdev, varp, stdevp, gmean, hmean, wmean, percentile, quantile: percentile, skew, kurt, cov, corr, slope, intercept, rsq, npv, irr, mirr, list, seq, at, sort: sortv, cumsum, cummax, cummin, diff: diffv, dot, cross, norm, trans, mmul, det, inv, trace, eye, linsolve, re, im, conj, arg, polar },
     };
@@ -880,18 +1313,24 @@
   // Scalar maths lifted over lists; the complex-aware ones also take complex numbers.
   const CF = VAL.complexFns;
   const MATHBASE = {
-    sqrt: [Math.sqrt, CF.sqrt], cbrt: [Math.cbrt], abs: [Math.abs, CF.abs], round: [Math.round],
+    sqrt: [Math.sqrt, CF.sqrt], cbrt: [Math.cbrt], abs: [Math.abs, CF.abs], round: [(x, d) => VAL.roundDec(x, d)],
     floor: [Math.floor], ceil: [Math.ceil], trunc: [Math.trunc], sign: [Math.sign],
     exp: [Math.exp, CF.exp], ln: [Math.log, CF.ln], log: [(x) => Math.log10(x), CF.log], log2: [Math.log2],
     sin: [Math.sin, CF.sin], cos: [Math.cos, CF.cos], tan: [Math.tan, CF.tan], asin: [Math.asin], acos: [Math.acos], atan: [Math.atan],
-    pow: [Math.pow, CF.pow], mod: [(a, b) => a % b], hypot: [Math.hypot],
-    root: [(x, n) => Math.sign(x) * Math.pow(Math.abs(x), 1 / n)],
-    logb: [(x, b) => Math.log(x) / Math.log(b)], roundto: [(x, d) => { const f = Math.pow(10, d); return Math.round(x * f) / f; }],
+    pow: [VAL.rpow, CF.pow], mod: [VAL.modFloor], hypot: [Math.hypot],
+    root: [VAL.root],
+    logb: [(x, b) => (b === 1 ? NaN : Math.log(x) / Math.log(b))], roundto: [(x, d) => VAL.roundDec(x, d)],
     frac: [(x) => x - Math.trunc(x)], clamp: [(x, lo, hi) => Math.min(Math.max(x, lo), hi)],
     deg: [(r) => r * 180 / Math.PI], rad: [(d) => d * Math.PI / 180],
     sec: [(x) => 1 / Math.cos(x)], csc: [(x) => 1 / Math.sin(x)], cot: [(x) => 1 / Math.tan(x)],
     sinh: [Math.sinh, CF.sinh], cosh: [Math.cosh, CF.cosh], tanh: [Math.tanh, CF.tanh],
     and: [(a, b) => +(!!a && !!b)], or: [(a, b) => +(!!a || !!b)], xor: [(a, b) => +(!!a !== !!b)], not: [(a) => +!a],
+  };
+  // How many values each scalar function takes [least, most]: an extra one used to be dropped
+  // without a word -- round(2.675, 2) gave 3. Mirrors FormulaCompiler::BASE_ARITY.
+  const BASE_ARITY = {
+    round: [1, 2], roundto: [2, 2], pow: [2, 2], mod: [2, 2], root: [2, 2], logb: [2, 2],
+    and: [2, 2], or: [2, 2], xor: [2, 2], clamp: [3, 3], hypot: [1, Infinity],
   };
   const FUN = {};
   Object.keys(ML).forEach((k) => { if (k[0] !== '_') FUN[k] = VAL.lift(ML[k], CF[k]); });
@@ -981,7 +1420,10 @@
         let j = i + 1;
         while (j < n && /[0-9.]/.test(s[j])) j++;
         if (j < n && (s[j] === 'e' || s[j] === 'E') && /[0-9+-]/.test(s[j + 1] || '')) { j++; if (j < n && (s[j] === '+' || s[j] === '-')) j++; while (j < n && /[0-9]/.test(s[j])) j++; }
-        const v = parseFloat(s.slice(i, j));
+        const numStr = s.slice(i, j);
+        // the whole text must be one number: parseFloat("1.5.2") reads 1.5 and drops the rest (PHP refuses it)
+        if (!/^(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(numStr)) throw new Error('bad number');
+        const v = parseFloat(numStr);
         if (isNaN(v)) throw new Error('bad number');
         // an imaginary literal: a number followed directly by i (3i, 2.5i) — not by a longer name
         if (s[j] === 'i' && !/[\p{L}\p{N}_]/u.test(s[j + 1] || '')) { toks.push({ t: 'num', v, imag: true }); i = j + 1; continue; }
@@ -1023,7 +1465,12 @@
     const expect = (v) => { const t = next(); if (!t || t.v !== v) throw new Error('expected "' + v + '"'); };
     function pExpr() { return pCmp(); }
     // comparisons bind loosest and give 1 or 0: x > 5, a == b
-    function pCmp() { let l = pAdd(); while (peek() && peek().t === 'op' && CMP.includes(peek().v)) { const op = next().v; l = { type: 'bin', op, l, r: pAdd() }; } return l; }
+    // A chain reads as in mathematics: 3 > 2 > 1 is 3 > 2 and 2 > 1 (as the server does).
+    function pCmp() {
+      let l = pAdd(); let out = null;
+      while (peek() && peek().t === 'op' && CMP.includes(peek().v)) { const op = next().v; const r = pAdd(); const c = { type: 'bin', op, l, r }; out = out ? { type: 'call', name: 'and', args: [out, c] } : c; l = r; }
+      return out || l;
+    }
     function pAdd() { let l = pMul(); while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) { const op = next().v; l = { type: 'bin', op, l, r: pMul() }; } return l; }
     function pMul() { let l = pUnary(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = next().v; l = { type: 'bin', op, l, r: pUnary() }; } return l; }
     // Standard math precedence: '^' binds tighter than unary minus, so -x^2 = -(x^2), and
@@ -1043,7 +1490,12 @@
           next(); const args = [];
           if (!(peek() && peek().v === ')')) { args.push(pExpr()); while (peek() && peek().v === ',') { next(); args.push(pExpr()); } }
           expect(')');
-          if (!FUN[t.v.toLowerCase()]) throw new Error('unknown function "' + t.v + '"');
+          const fn = t.v.toLowerCase();
+          if (!FUN[fn]) throw new Error('unknown function "' + t.v + '"');
+          if (fn in MATHBASE) {
+            const [lo, hi] = BASE_ARITY[fn] || [1, 1];
+            if (args.length < lo || args.length > hi) throw new Error('wrong number of values for "' + t.v + '"');
+          }
           return { type: 'call', name: t.v, args };
         }
         if (t.v.toLowerCase() in CONST) return { type: 'const', name: t.v };
@@ -1058,8 +1510,8 @@
 
   function applyBin(op, a, b) {
     if (typeof a === 'number' && typeof b === 'number') {
-      return op === '+' ? a + b : op === '-' ? a - b : op === '*' ? a * b : op === '/' ? a / b : op === '%' ? a % b : op === '^' ? Math.pow(a, b)
-        : op === '<' ? +(a < b) : op === '<=' ? +(a <= b) : op === '>' ? +(a > b) : op === '>=' ? +(a >= b) : op === '==' ? +(a === b) : +(a !== b);
+      // the fast path is the four operations only: % ^ and the comparisons live in VAL.scalarBin (one definition)
+      if (op === '+') return a + b; if (op === '-') return a - b; if (op === '*') return a * b; if (op === '/') return a / b;
     }
     return VAL.bin(op, a, b);
   }
@@ -1436,7 +1888,7 @@
   ];
 
   /* FUNCHELP-BEGIN — generated from regibase-build/fb-data/funchelp.py */
-  const FUNC_HELP = [{"g": "Basic", "s": "sqrt(x)", "t": "sqrt()", "d": "Square root"}, {"g": "Basic", "s": "cbrt(x)", "t": "cbrt()", "d": "Cube root"}, {"g": "Basic", "s": "root(x, n)", "t": "root()", "d": "n-th root"}, {"g": "Basic", "s": "abs(x)", "t": "abs()", "d": "Absolute value (magnitude of a complex number)"}, {"g": "Basic", "s": "exp(x)", "t": "exp()", "d": "e to the power x"}, {"g": "Basic", "s": "ln(x)", "t": "ln()", "d": "Natural logarithm"}, {"g": "Basic", "s": "log(x)", "t": "log()", "d": "Common logarithm (base 10)"}, {"g": "Basic", "s": "log2(x)", "t": "log2()", "d": "Binary logarithm (base 2)"}, {"g": "Basic", "s": "logb(x, b)", "t": "logb()", "d": "Logarithm of x to base b"}, {"g": "Basic", "s": "pow(a, b)", "t": "pow()", "d": "a to the power b (same as a^b)"}, {"g": "Basic", "s": "mod(a, b)", "t": "mod()", "d": "Remainder of a divided by b"}, {"g": "Basic", "s": "hypot(a, b, …)", "t": "hypot()", "d": "Square root of the sum of squares"}, {"g": "Basic", "s": "round(x)", "t": "round()", "d": "Round to the nearest integer"}, {"g": "Basic", "s": "roundto(x, d)", "t": "roundto()", "d": "Round to d decimal places"}, {"g": "Basic", "s": "floor(x)", "t": "floor()", "d": "Round down"}, {"g": "Basic", "s": "ceil(x)", "t": "ceil()", "d": "Round up"}, {"g": "Basic", "s": "trunc(x)", "t": "trunc()", "d": "Drop the fractional part"}, {"g": "Basic", "s": "frac(x)", "t": "frac()", "d": "Fractional part"}, {"g": "Basic", "s": "sign(x)", "t": "sign()", "d": "Sign: −1, 0 or 1"}, {"g": "Basic", "s": "min(a, b, …)", "t": "min()", "d": "Smallest value (numbers or lists)"}, {"g": "Basic", "s": "max(a, b, …)", "t": "max()", "d": "Largest value (numbers or lists)"}, {"g": "Basic", "s": "clamp(x, lo, hi)", "t": "clamp()", "d": "Limit x to the range lo…hi"}, {"g": "Trigonometry", "s": "sin(x)  cos(x)  tan(x)", "t": "sin()", "d": "Sine, cosine, tangent (x in radians)"}, {"g": "Trigonometry", "s": "sec(x)  csc(x)  cot(x)", "t": "sec()", "d": "Secant, cosecant, cotangent"}, {"g": "Trigonometry", "s": "asin(x)  acos(x)  atan(x)", "t": "asin()", "d": "Inverse sine, cosine, tangent (result in radians)"}, {"g": "Trigonometry", "s": "atan2(y, x)", "t": "atan2()", "d": "Angle of the point (x, y), from −π to π"}, {"g": "Trigonometry", "s": "sinh(x)  cosh(x)  tanh(x)", "t": "sinh()", "d": "Hyperbolic sine, cosine, tangent"}, {"g": "Trigonometry", "s": "asinh(x)  acosh(x)  atanh(x)", "t": "asinh()", "d": "Inverse hyperbolic functions"}, {"g": "Trigonometry", "s": "deg(r)", "t": "deg()", "d": "Radians to degrees"}, {"g": "Trigonometry", "s": "rad(d)", "t": "rad()", "d": "Degrees to radians"}, {"g": "Conditions", "s": "if(c, a, b)", "t": "if()", "d": "a when the condition c holds, otherwise b"}, {"g": "Conditions", "s": "piecewise(c1, v1, c2, v2, …, other)", "t": "piecewise()", "d": "The value of the first condition that holds (a piecewise function)"}, {"g": "Conditions", "s": "a < b   a <= b   a > b   a >= b   a == b   a != b", "t": " < ", "d": "Comparisons: 1 when true, 0 when false"}, {"g": "Conditions", "s": "and(a, b)  or(a, b)  xor(a, b)  not(a)", "t": "and()", "d": "Logical operations on conditions"}, {"g": "Calculus", "s": "sum(k, a, b, expr)", "t": "sum(k, 1, n, )", "d": "Σ: the sum of expr for k = a, a+1, …, b"}, {"g": "Calculus", "s": "prod(k, a, b, expr)", "t": "prod(k, 1, n, )", "d": "Π: the product of expr for k = a…b"}, {"g": "Calculus", "s": "integral(x, a, b, expr)", "t": "integral(x, 0, 1, )", "d": "∫: the definite integral of expr from a to b (limits may be ±infinity)"}, {"g": "Calculus", "s": "deriv(x, at, expr, n)", "t": "deriv(x, 0, )", "d": "The n-th derivative of expr at x = at (n = 1 to 4, default 1)"}, {"g": "Calculus", "s": "solve(x, guess, expr)", "t": "solve(x, 1, )", "d": "The x near guess that makes expr equal to 0"}, {"g": "Calculus", "s": "solve(x, lo, hi, expr)", "t": "solve(x, 0, 1, )", "d": "The x between lo and hi that makes expr equal to 0"}, {"g": "Lists", "s": "1, 2, 3", "t": "", "d": "Type a list into a list variable, separated by commas"}, {"g": "Lists", "s": "list(a, b, …)", "t": "list()", "d": "Make a list"}, {"g": "Lists", "s": "seq(a, b, step)", "t": "seq()", "d": "The list a, a+step, …, b"}, {"g": "Lists", "s": "count(v)", "t": "count()", "d": "Number of items"}, {"g": "Lists", "s": "at(v, i)", "t": "at()", "d": "The i-th item (from 1)"}, {"g": "Lists", "s": "sort(v)", "t": "sort()", "d": "Sorted list"}, {"g": "Lists", "s": "cumsum(v)", "t": "cumsum()", "d": "Running totals"}, {"g": "Lists", "s": "cummax(v)  cummin(v)", "t": "cummax()", "d": "Running maximum and minimum (peak so far)"}, {"g": "Lists", "s": "diff(v)", "t": "diff()", "d": "Differences between neighbours"}, {"g": "Statistics", "s": "sum(v)  prod(v)", "t": "sum()", "d": "Total and product of a list"}, {"g": "Statistics", "s": "mean(v)", "t": "mean()", "d": "Arithmetic mean"}, {"g": "Statistics", "s": "median(v)", "t": "median()", "d": "Median"}, {"g": "Statistics", "s": "mode(v)", "t": "mode()", "d": "Most frequent value"}, {"g": "Statistics", "s": "var(v)  stdev(v)", "t": "stdev()", "d": "Sample variance and standard deviation (n − 1)"}, {"g": "Statistics", "s": "varp(v)  stdevp(v)", "t": "stdevp()", "d": "Population variance and standard deviation (n)"}, {"g": "Statistics", "s": "gmean(v)  hmean(v)", "t": "gmean()", "d": "Geometric and harmonic mean"}, {"g": "Statistics", "s": "wmean(x, w)", "t": "wmean()", "d": "Weighted mean of x with weights w"}, {"g": "Statistics", "s": "percentile(v, p)", "t": "percentile()", "d": "Percentile, p from 0 to 1 (interpolated)"}, {"g": "Statistics", "s": "skew(v)  kurt(v)", "t": "skew()", "d": "Sample skewness and excess kurtosis"}, {"g": "Statistics", "s": "cov(x, y)  corr(x, y)", "t": "corr()", "d": "Sample covariance and correlation"}, {"g": "Statistics", "s": "slope(x, y)  intercept(x, y)  rsq(x, y)", "t": "slope()", "d": "Least-squares line and its R²"}, {"g": "Cash flows", "s": "npv(r, cf)", "t": "npv()", "d": "Net present value; cf[1] is at time 0"}, {"g": "Cash flows", "s": "irr(cf)", "t": "irr()", "d": "Internal rate of return"}, {"g": "Cash flows", "s": "mirr(cf, fr, rr)", "t": "mirr()", "d": "Modified IRR (finance rate fr, reinvestment rate rr)"}, {"g": "Vectors and matrices", "s": "1, 2; 3, 4", "t": "", "d": "Type a matrix into a matrix variable: rows separated by semicolons"}, {"g": "Vectors and matrices", "s": "dot(u, v)  cross(u, v)", "t": "dot()", "d": "Dot and cross product"}, {"g": "Vectors and matrices", "s": "norm(v)", "t": "norm()", "d": "Length of a vector (Euclidean norm)"}, {"g": "Vectors and matrices", "s": "det(M)  trace(M)", "t": "det()", "d": "Determinant and trace"}, {"g": "Vectors and matrices", "s": "inv(M)  trans(M)", "t": "inv()", "d": "Inverse and transpose"}, {"g": "Vectors and matrices", "s": "mmul(A, B)", "t": "mmul()", "d": "Matrix product"}, {"g": "Vectors and matrices", "s": "linsolve(A, b)", "t": "linsolve()", "d": "Solve the linear system A·x = b"}, {"g": "Vectors and matrices", "s": "eye(n)", "t": "eye()", "d": "n × n identity matrix"}, {"g": "Complex numbers", "s": "3 + 4i", "t": "", "d": "A complex number: a number followed by i"}, {"g": "Complex numbers", "s": "re(z)  im(z)", "t": "re()", "d": "Real and imaginary part"}, {"g": "Complex numbers", "s": "abs(z)  arg(z)", "t": "arg()", "d": "Modulus and argument (angle)"}, {"g": "Complex numbers", "s": "conj(z)", "t": "conj()", "d": "Complex conjugate"}, {"g": "Complex numbers", "s": "polar(r, θ)", "t": "polar()", "d": "The complex number with modulus r and angle θ"}, {"g": "Complex numbers", "s": "csqrt(x)  cln(x)  cpow(a, b)", "t": "csqrt()", "d": "Square root, logarithm and power with complex results (csqrt(−4) = 2i)"}, {"g": "Number theory", "s": "gcd(a, b, …)  lcm(a, b, …)", "t": "gcd()", "d": "Greatest common divisor and least common multiple (of numbers or a list)"}, {"g": "Number theory", "s": "fact(n)", "t": "fact()", "d": "Factorial n!"}, {"g": "Number theory", "s": "binom(n, k)  perm(n, k)", "t": "binom()", "d": "Combinations and permutations"}, {"g": "Number theory", "s": "isprime(n)", "t": "isprime()", "d": "1 if n is prime, otherwise 0"}, {"g": "Number theory", "s": "nextprime(n)  prevprime(n)", "t": "nextprime()", "d": "Next and previous prime"}, {"g": "Number theory", "s": "primepi(x)", "t": "primepi()", "d": "Number of primes up to x (exact up to 10¹¹)"}, {"g": "Number theory", "s": "nthprime(n)", "t": "nthprime()", "d": "The n-th prime"}, {"g": "Number theory", "s": "phi(n)", "t": "phi()", "d": "Euler's totient"}, {"g": "Number theory", "s": "sigma(n, k)", "t": "sigma()", "d": "Sum of the k-th powers of the divisors (k = 1 by default)"}, {"g": "Number theory", "s": "tau(n)", "t": "tau()", "d": "Number of divisors"}, {"g": "Number theory", "s": "mu(n)", "t": "mu()", "d": "Möbius function"}, {"g": "Number theory", "s": "omega(n)  bigomega(n)", "t": "omega()", "d": "Number of distinct prime factors, and with multiplicity"}, {"g": "Number theory", "s": "radical(n)  lpf(n)  gpf(n)", "t": "radical()", "d": "Product of the distinct primes; smallest and largest prime factor"}, {"g": "Number theory", "s": "carmichael(n)", "t": "carmichael()", "d": "Carmichael function λ(n)"}, {"g": "Number theory", "s": "powmod(a, b, m)", "t": "powmod()", "d": "a^b mod m, exact"}, {"g": "Number theory", "s": "modinv(a, m)", "t": "modinv()", "d": "Inverse of a modulo m"}, {"g": "Number theory", "s": "crt(a1, m1, a2, m2, …)", "t": "crt()", "d": "Chinese remainder theorem: x ≡ a1 (mod m1), x ≡ a2 (mod m2)"}, {"g": "Number theory", "s": "factmod(n, m)", "t": "factmod()", "d": "n! mod m, exact"}, {"g": "Number theory", "s": "fib(n)  lucas(n)", "t": "fib()", "d": "Fibonacci and Lucas numbers"}, {"g": "Number theory", "s": "catalan(n)  bell(n)  partitions(n)", "t": "catalan()", "d": "Catalan numbers, Bell numbers, partition numbers p(n)"}, {"g": "Number theory", "s": "stirling1(n, k)  stirling2(n, k)", "t": "stirling2()", "d": "Stirling numbers of the first (unsigned) and second kind"}, {"g": "Number theory", "s": "derange(n)", "t": "derange()", "d": "Derangements (subfactorial !n)"}, {"g": "Number theory", "s": "digitsum(n, b)  digitalroot(n)", "t": "digitsum()", "d": "Sum of digits (in base b) and digital root"}, {"g": "Number theory", "s": "numdigits(n, b)  reversenum(n)", "t": "numdigits()", "d": "Number of digits; digits reversed"}, {"g": "Number theory", "s": "collatz(n)", "t": "collatz()", "d": "Steps for the Collatz sequence to reach 1"}, {"g": "Number theory", "s": "legendre(a, p)  jacobi(a, n)", "t": "legendre()", "d": "Legendre and Jacobi symbols"}, {"g": "Number theory", "s": "ord(a, n)  primroot(n)", "t": "ord()", "d": "Multiplicative order; smallest primitive root"}, {"g": "Number theory", "s": "isqrt(n)  issquare(n)  isperfect(n)", "t": "isqrt()", "d": "Integer square root; perfect-square and perfect-number tests"}, {"g": "Special functions", "s": "gamma(x)  lgamma(x)", "t": "gamma()", "d": "Gamma function and its logarithm"}, {"g": "Special functions", "s": "beta(a, b)  digamma(x)", "t": "beta()", "d": "Beta function; digamma ψ(x)"}, {"g": "Special functions", "s": "erf(x)  erfc(x)  erfinv(y)", "t": "erf()", "d": "Error function, complementary, inverse"}, {"g": "Special functions", "s": "gammainc(a, x)  gammaincc(a, x)", "t": "gammainc()", "d": "Regularised incomplete gamma P and Q"}, {"g": "Special functions", "s": "betainc(x, a, b)", "t": "betainc()", "d": "Regularised incomplete beta"}, {"g": "Special functions", "s": "zeta(s)", "t": "zeta()", "d": "Riemann zeta function"}, {"g": "Special functions", "s": "li(x)  ei(x)  expint(x)", "t": "li()", "d": "Logarithmic integral, exponential integrals Ei and E₁"}, {"g": "Special functions", "s": "si(x)  ci(x)", "t": "si()", "d": "Sine and cosine integrals"}, {"g": "Special functions", "s": "lambertw(x)", "t": "lambertw()", "d": "Lambert W (principal branch)"}, {"g": "Special functions", "s": "besselj(n, x)  bessely(n, x)", "t": "besselj()", "d": "Bessel functions J and Y of integer order"}, {"g": "Special functions", "s": "besseli(n, x)  besselk(n, x)", "t": "besseli()", "d": "Modified Bessel functions I and K"}, {"g": "Special functions", "s": "ellipk(k)  ellipe(k)", "t": "ellipk()", "d": "Complete elliptic integrals K and E (modulus k)"}, {"g": "Special functions", "s": "ellipf(φ, k)  ellipeinc(φ, k)", "t": "ellipf()", "d": "Incomplete elliptic integrals F and E"}, {"g": "Special functions", "s": "polylog(s, z)", "t": "polylog()", "d": "Polylogarithm Li_s(z), −1 ≤ z ≤ 1"}, {"g": "Distributions", "s": "normpdf(x, μ, σ)  normcdf(x, μ, σ)  norminv(p, μ, σ)", "t": "normcdf()", "d": "Normal distribution (μ = 0, σ = 1 by default)"}, {"g": "Distributions", "s": "tpdf(x, ν)  tcdf(x, ν)  tinv(p, ν)", "t": "tcdf()", "d": "Student's t distribution"}, {"g": "Distributions", "s": "chi2pdf(x, k)  chi2cdf(x, k)  chi2inv(p, k)", "t": "chi2cdf()", "d": "Chi-squared distribution"}, {"g": "Distributions", "s": "fpdf(x, d1, d2)  fcdf  finv", "t": "fcdf()", "d": "F distribution"}, {"g": "Distributions", "s": "binompdf(k, n, p)  binomcdf(k, n, p)", "t": "binompdf()", "d": "Binomial distribution"}, {"g": "Distributions", "s": "poisspdf(k, λ)  poisscdf(k, λ)", "t": "poisspdf()", "d": "Poisson distribution"}, {"g": "Distributions", "s": "exppdf(x, λ)  expcdf  expinv", "t": "expcdf()", "d": "Exponential distribution (rate λ)"}, {"g": "Distributions", "s": "gammapdf(x, k, θ)  gammacdf  gammainv", "t": "gammacdf()", "d": "Gamma distribution (shape k, scale θ)"}, {"g": "Distributions", "s": "betapdf(x, a, b)  betacdf  betainv", "t": "betacdf()", "d": "Beta distribution"}, {"g": "Distributions", "s": "lognpdf(x, μ, σ)  logncdf  logninv", "t": "logncdf()", "d": "Log-normal distribution"}, {"g": "Distributions", "s": "weibpdf(x, k, λ)  weibcdf  weibinv", "t": "weibcdf()", "d": "Weibull distribution"}, {"g": "Distributions", "s": "geompdf(k, p)  geomcdf(k, p)", "t": "geompdf()", "d": "Geometric distribution (trials until the first success)"}, {"g": "Distributions", "s": "hygepdf(k, N, K, n)", "t": "hygepdf()", "d": "Hypergeometric distribution"}, {"g": "Distributions", "s": "nbinpdf(k, r, p)", "t": "nbinpdf()", "d": "Negative binomial distribution (failures before the r-th success)"}, {"g": "Constants", "s": "pi  e  tau  infinity", "t": "pi", "d": "π, e, 2π and infinity"}, {"g": "Constants", "s": "c_light", "t": "c_light", "d": "Speed of light in vacuum, m/s"}, {"g": "Constants", "s": "h_planck  h_bar", "t": "h_planck", "d": "Planck constant and reduced Planck constant, J·s"}, {"g": "Constants", "s": "g_newton", "t": "g_newton", "d": "Gravitational constant, m³/(kg·s²)"}, {"g": "Constants", "s": "k_boltz", "t": "k_boltz", "d": "Boltzmann constant, J/K"}, {"g": "Constants", "s": "n_avo", "t": "n_avo", "d": "Avogadro constant, 1/mol"}, {"g": "Constants", "s": "r_gas", "t": "r_gas", "d": "Molar gas constant, J/(mol·K)"}, {"g": "Constants", "s": "q_e", "t": "q_e", "d": "Elementary charge, C"}, {"g": "Constants", "s": "m_e  m_p  m_n  u_amu", "t": "m_e", "d": "Masses of the electron, proton, neutron; atomic mass unit, kg"}, {"g": "Constants", "s": "eps_0  mu_0  k_coulomb", "t": "eps_0", "d": "Vacuum permittivity, permeability; Coulomb constant"}, {"g": "Constants", "s": "sigma_sb", "t": "sigma_sb", "d": "Stefan–Boltzmann constant, W/(m²·K⁴)"}, {"g": "Constants", "s": "alpha_fs  a_bohr  r_inf", "t": "alpha_fs", "d": "Fine-structure constant, Bohr radius (m), Rydberg constant (1/m)"}, {"g": "Constants", "s": "f_faraday", "t": "f_faraday", "d": "Faraday constant, C/mol"}, {"g": "Constants", "s": "g_std  atm_pa", "t": "g_std", "d": "Standard gravity (m/s²) and standard atmosphere (Pa)"}, {"g": "Constants", "s": "au_m  ly_m  pc_m", "t": "au_m", "d": "Astronomical unit, light-year, parsec, in metres"}, {"g": "Constants", "s": "m_sun  m_earth  r_earth", "t": "m_sun", "d": "Masses of the Sun and the Earth (kg); mean radius of the Earth (m)"}, {"g": "Constants", "s": "ev_j  cal_j", "t": "ev_j", "d": "One electronvolt and one calorie in joules"}, {"g": "Constants", "s": "euler_gamma  golden_ratio  catalan_c  apery_c", "t": "golden_ratio", "d": "Euler–Mascheroni γ, golden ratio φ, Catalan G, Apéry ζ(3)"}];
+  const FUNC_HELP = [{"g": "Basic", "s": "sqrt(x)", "t": "sqrt()", "d": "Square root"}, {"g": "Basic", "s": "cbrt(x)", "t": "cbrt()", "d": "Cube root"}, {"g": "Basic", "s": "root(x, n)", "t": "root()", "d": "n-th root"}, {"g": "Basic", "s": "abs(x)", "t": "abs()", "d": "Absolute value (magnitude of a complex number)"}, {"g": "Basic", "s": "exp(x)", "t": "exp()", "d": "e to the power x"}, {"g": "Basic", "s": "ln(x)", "t": "ln()", "d": "Natural logarithm"}, {"g": "Basic", "s": "log(x)", "t": "log()", "d": "Common logarithm (base 10)"}, {"g": "Basic", "s": "log2(x)", "t": "log2()", "d": "Binary logarithm (base 2)"}, {"g": "Basic", "s": "logb(x, b)", "t": "logb()", "d": "Logarithm of x to base b"}, {"g": "Basic", "s": "pow(a, b)", "t": "pow()", "d": "a to the power b (same as a^b)"}, {"g": "Basic", "s": "mod(a, b)", "t": "mod()", "d": "Remainder of a divided by b"}, {"g": "Basic", "s": "hypot(a, b, …)", "t": "hypot()", "d": "Square root of the sum of squares"}, {"g": "Basic", "s": "round(x)", "t": "round()", "d": "Round to the nearest integer"}, {"g": "Basic", "s": "roundto(x, d)", "t": "roundto()", "d": "Round to d decimal places"}, {"g": "Basic", "s": "floor(x)", "t": "floor()", "d": "Round down"}, {"g": "Basic", "s": "ceil(x)", "t": "ceil()", "d": "Round up"}, {"g": "Basic", "s": "trunc(x)", "t": "trunc()", "d": "Drop the fractional part"}, {"g": "Basic", "s": "frac(x)", "t": "frac()", "d": "Fractional part"}, {"g": "Basic", "s": "sign(x)", "t": "sign()", "d": "Sign: −1, 0 or 1"}, {"g": "Basic", "s": "min(a, b, …)", "t": "min()", "d": "Smallest value (numbers or lists)"}, {"g": "Basic", "s": "max(a, b, …)", "t": "max()", "d": "Largest value (numbers or lists)"}, {"g": "Basic", "s": "clamp(x, lo, hi)", "t": "clamp()", "d": "Limit x to the range lo…hi"}, {"g": "Trigonometry", "s": "sin(x)  cos(x)  tan(x)", "t": "sin()", "d": "Sine, cosine, tangent (x in radians)"}, {"g": "Trigonometry", "s": "sec(x)  csc(x)  cot(x)", "t": "sec()", "d": "Secant, cosecant, cotangent"}, {"g": "Trigonometry", "s": "asin(x)  acos(x)  atan(x)", "t": "asin()", "d": "Inverse sine, cosine, tangent (result in radians)"}, {"g": "Trigonometry", "s": "atan2(y, x)", "t": "atan2()", "d": "Angle of the point (x, y), from −π to π"}, {"g": "Trigonometry", "s": "sinh(x)  cosh(x)  tanh(x)", "t": "sinh()", "d": "Hyperbolic sine, cosine, tangent"}, {"g": "Trigonometry", "s": "asinh(x)  acosh(x)  atanh(x)", "t": "asinh()", "d": "Inverse hyperbolic functions"}, {"g": "Trigonometry", "s": "deg(r)", "t": "deg()", "d": "Radians to degrees"}, {"g": "Trigonometry", "s": "rad(d)", "t": "rad()", "d": "Degrees to radians"}, {"g": "Conditions", "s": "if(c, a, b)", "t": "if()", "d": "a when the condition c holds, otherwise b"}, {"g": "Conditions", "s": "piecewise(c1, v1, c2, v2, …, other)", "t": "piecewise()", "d": "The value of the first condition that holds (a piecewise function)"}, {"g": "Conditions", "s": "a < b   a <= b   a > b   a >= b   a == b   a != b", "t": " < ", "d": "Comparisons: 1 when true, 0 when false"}, {"g": "Conditions", "s": "and(a, b)  or(a, b)  xor(a, b)  not(a)", "t": "and()", "d": "Logical operations on conditions"}, {"g": "Calculus", "s": "sum(k, a, b, expr)", "t": "sum(k, 1, n, )", "d": "Σ: the sum of expr for k = a, a+1, …, b"}, {"g": "Calculus", "s": "prod(k, a, b, expr)", "t": "prod(k, 1, n, )", "d": "Π: the product of expr for k = a…b"}, {"g": "Calculus", "s": "integral(x, a, b, expr)", "t": "integral(x, 0, 1, )", "d": "∫: the definite integral of expr from a to b (limits may be ±infinity)"}, {"g": "Calculus", "s": "deriv(x, at, expr, n)", "t": "deriv(x, 0, )", "d": "The n-th derivative of expr at x = at (n = 1 to 4, default 1)"}, {"g": "Calculus", "s": "solve(x, guess, expr)", "t": "solve(x, 1, )", "d": "The x near guess that makes expr equal to 0"}, {"g": "Calculus", "s": "solve(x, lo, hi, expr)", "t": "solve(x, 0, 1, )", "d": "The x between lo and hi that makes expr equal to 0"}, {"g": "Lists", "s": "1, 2, 3", "t": "", "d": "Type a list into a list variable, separated by commas"}, {"g": "Lists", "s": "list(a, b, …)", "t": "list()", "d": "Make a list"}, {"g": "Lists", "s": "seq(a, b, step)", "t": "seq()", "d": "The list a, a+step, …, b"}, {"g": "Lists", "s": "count(v)", "t": "count()", "d": "Number of items"}, {"g": "Lists", "s": "at(v, i)", "t": "at()", "d": "The i-th item (from 1)"}, {"g": "Lists", "s": "sort(v)", "t": "sort()", "d": "Sorted list"}, {"g": "Lists", "s": "cumsum(v)", "t": "cumsum()", "d": "Running totals"}, {"g": "Lists", "s": "cummax(v)  cummin(v)", "t": "cummax()", "d": "Running maximum and minimum (peak so far)"}, {"g": "Lists", "s": "diff(v)", "t": "diff()", "d": "Differences between neighbours"}, {"g": "Statistics", "s": "sum(v)  prod(v)", "t": "sum()", "d": "Total and product of a list"}, {"g": "Statistics", "s": "mean(v)", "t": "mean()", "d": "Arithmetic mean"}, {"g": "Statistics", "s": "median(v)", "t": "median()", "d": "Median"}, {"g": "Statistics", "s": "mode(v)", "t": "mode()", "d": "Most frequent value"}, {"g": "Statistics", "s": "var(v)  stdev(v)", "t": "stdev()", "d": "Sample variance and standard deviation (n − 1)"}, {"g": "Statistics", "s": "varp(v)  stdevp(v)", "t": "stdevp()", "d": "Population variance and standard deviation (n)"}, {"g": "Statistics", "s": "gmean(v)  hmean(v)", "t": "gmean()", "d": "Geometric and harmonic mean"}, {"g": "Statistics", "s": "wmean(x, w)", "t": "wmean()", "d": "Weighted mean of x with weights w"}, {"g": "Statistics", "s": "percentile(v, p)", "t": "percentile()", "d": "Percentile, p from 0 to 1 (interpolated)"}, {"g": "Statistics", "s": "skew(v)  kurt(v)", "t": "skew()", "d": "Sample skewness and excess kurtosis"}, {"g": "Statistics", "s": "cov(x, y)  corr(x, y)", "t": "corr()", "d": "Sample covariance and correlation"}, {"g": "Statistics", "s": "slope(x, y)  intercept(x, y)  rsq(x, y)", "t": "slope()", "d": "Least-squares line and its R²"}, {"g": "Cash flows", "s": "npv(r, cf)", "t": "npv()", "d": "Net present value, as NPV() in a spreadsheet: the first value is one period away"}, {"g": "Cash flows", "s": "irr(cf)", "t": "irr()", "d": "Internal rate of return"}, {"g": "Cash flows", "s": "mirr(cf, fr, rr)", "t": "mirr()", "d": "Modified IRR (finance rate fr, reinvestment rate rr)"}, {"g": "Vectors and matrices", "s": "1, 2; 3, 4", "t": "", "d": "Type a matrix into a matrix variable: rows separated by semicolons"}, {"g": "Vectors and matrices", "s": "dot(u, v)  cross(u, v)", "t": "dot()", "d": "Dot and cross product"}, {"g": "Vectors and matrices", "s": "norm(v)", "t": "norm()", "d": "Length of a vector (Euclidean norm)"}, {"g": "Vectors and matrices", "s": "det(M)  trace(M)", "t": "det()", "d": "Determinant and trace"}, {"g": "Vectors and matrices", "s": "inv(M)  trans(M)", "t": "inv()", "d": "Inverse and transpose"}, {"g": "Vectors and matrices", "s": "mmul(A, B)", "t": "mmul()", "d": "Matrix product"}, {"g": "Vectors and matrices", "s": "linsolve(A, b)", "t": "linsolve()", "d": "Solve the linear system A·x = b"}, {"g": "Vectors and matrices", "s": "eye(n)", "t": "eye()", "d": "n × n identity matrix"}, {"g": "Complex numbers", "s": "3 + 4i", "t": "", "d": "A complex number: a number followed by i"}, {"g": "Complex numbers", "s": "re(z)  im(z)", "t": "re()", "d": "Real and imaginary part"}, {"g": "Complex numbers", "s": "abs(z)  arg(z)", "t": "arg()", "d": "Modulus and argument (angle)"}, {"g": "Complex numbers", "s": "conj(z)", "t": "conj()", "d": "Complex conjugate"}, {"g": "Complex numbers", "s": "polar(r, θ)", "t": "polar()", "d": "The complex number with modulus r and angle θ"}, {"g": "Complex numbers", "s": "csqrt(x)  cln(x)  cpow(a, b)", "t": "csqrt()", "d": "Square root, logarithm and power with complex results (csqrt(−4) = 2i)"}, {"g": "Number theory", "s": "gcd(a, b, …)  lcm(a, b, …)", "t": "gcd()", "d": "Greatest common divisor and least common multiple (of numbers or a list)"}, {"g": "Number theory", "s": "fact(n)", "t": "fact()", "d": "Factorial n!"}, {"g": "Number theory", "s": "binom(n, k)  perm(n, k)", "t": "binom()", "d": "Combinations and permutations"}, {"g": "Number theory", "s": "isprime(n)", "t": "isprime()", "d": "1 if n is prime, otherwise 0"}, {"g": "Number theory", "s": "nextprime(n)  prevprime(n)", "t": "nextprime()", "d": "Next and previous prime"}, {"g": "Number theory", "s": "primepi(x)", "t": "primepi()", "d": "Number of primes up to x (exact up to 10¹¹)"}, {"g": "Number theory", "s": "nthprime(n)", "t": "nthprime()", "d": "The n-th prime"}, {"g": "Number theory", "s": "phi(n)", "t": "phi()", "d": "Euler's totient"}, {"g": "Number theory", "s": "sigma(n, k)", "t": "sigma()", "d": "Sum of the k-th powers of the divisors (k = 1 by default)"}, {"g": "Number theory", "s": "tau(n)", "t": "tau()", "d": "Number of divisors"}, {"g": "Number theory", "s": "mu(n)", "t": "mu()", "d": "Möbius function"}, {"g": "Number theory", "s": "omega(n)  bigomega(n)", "t": "omega()", "d": "Number of distinct prime factors, and with multiplicity"}, {"g": "Number theory", "s": "radical(n)  lpf(n)  gpf(n)", "t": "radical()", "d": "Product of the distinct primes; smallest and largest prime factor"}, {"g": "Number theory", "s": "carmichael(n)", "t": "carmichael()", "d": "Carmichael function λ(n)"}, {"g": "Number theory", "s": "powmod(a, b, m)", "t": "powmod()", "d": "a^b mod m, exact"}, {"g": "Number theory", "s": "modinv(a, m)", "t": "modinv()", "d": "Inverse of a modulo m"}, {"g": "Number theory", "s": "crt(a1, m1, a2, m2, …)", "t": "crt()", "d": "Chinese remainder theorem: x ≡ a1 (mod m1), x ≡ a2 (mod m2)"}, {"g": "Number theory", "s": "factmod(n, m)", "t": "factmod()", "d": "n! mod m, exact"}, {"g": "Number theory", "s": "fib(n)  lucas(n)", "t": "fib()", "d": "Fibonacci and Lucas numbers"}, {"g": "Number theory", "s": "catalan(n)  bell(n)  partitions(n)", "t": "catalan()", "d": "Catalan numbers, Bell numbers, partition numbers p(n)"}, {"g": "Number theory", "s": "stirling1(n, k)  stirling2(n, k)", "t": "stirling2()", "d": "Stirling numbers of the first (signed) and second kind"}, {"g": "Number theory", "s": "derange(n)", "t": "derange()", "d": "Derangements (subfactorial !n)"}, {"g": "Number theory", "s": "digitsum(n, b)  digitalroot(n)", "t": "digitsum()", "d": "Sum of digits (in base b) and digital root"}, {"g": "Number theory", "s": "numdigits(n, b)  reversenum(n)", "t": "numdigits()", "d": "Number of digits; digits reversed"}, {"g": "Number theory", "s": "collatz(n)", "t": "collatz()", "d": "Steps for the Collatz sequence to reach 1"}, {"g": "Number theory", "s": "legendre(a, p)  jacobi(a, n)", "t": "legendre()", "d": "Legendre and Jacobi symbols"}, {"g": "Number theory", "s": "ord(a, n)  primroot(n)", "t": "ord()", "d": "Multiplicative order; smallest primitive root"}, {"g": "Number theory", "s": "isqrt(n)  issquare(n)  isperfect(n)", "t": "isqrt()", "d": "Integer square root; perfect-square and perfect-number tests"}, {"g": "Special functions", "s": "gamma(x)  lgamma(x)", "t": "gamma()", "d": "Gamma function and its logarithm"}, {"g": "Special functions", "s": "beta(a, b)  digamma(x)", "t": "beta()", "d": "Beta function; digamma ψ(x)"}, {"g": "Special functions", "s": "erf(x)  erfc(x)  erfinv(y)", "t": "erf()", "d": "Error function, complementary, inverse"}, {"g": "Special functions", "s": "gammainc(a, x)  gammaincc(a, x)", "t": "gammainc()", "d": "Regularised incomplete gamma P and Q"}, {"g": "Special functions", "s": "betainc(x, a, b)", "t": "betainc()", "d": "Regularised incomplete beta"}, {"g": "Special functions", "s": "zeta(s)", "t": "zeta()", "d": "Riemann zeta function"}, {"g": "Special functions", "s": "li(x)  ei(x)  expint(x)", "t": "li()", "d": "Logarithmic integral, exponential integrals Ei and E₁"}, {"g": "Special functions", "s": "si(x)  ci(x)", "t": "si()", "d": "Sine and cosine integrals"}, {"g": "Special functions", "s": "lambertw(x)", "t": "lambertw()", "d": "Lambert W (principal branch)"}, {"g": "Special functions", "s": "besselj(n, x)  bessely(n, x)", "t": "besselj()", "d": "Bessel functions J and Y of integer order"}, {"g": "Special functions", "s": "besseli(n, x)  besselk(n, x)", "t": "besseli()", "d": "Modified Bessel functions I and K"}, {"g": "Special functions", "s": "ellipk(k)  ellipe(k)", "t": "ellipk()", "d": "Complete elliptic integrals K and E (modulus k)"}, {"g": "Special functions", "s": "ellipf(φ, k)  ellipeinc(φ, k)", "t": "ellipf()", "d": "Incomplete elliptic integrals F and E"}, {"g": "Special functions", "s": "polylog(s, z)", "t": "polylog()", "d": "Polylogarithm Li_s(z), −1 ≤ z ≤ 1"}, {"g": "Distributions", "s": "normpdf(x, μ, σ)  normcdf(x, μ, σ)  norminv(p, μ, σ)", "t": "normcdf()", "d": "Normal distribution (μ = 0, σ = 1 by default)"}, {"g": "Distributions", "s": "tpdf(x, ν)  tcdf(x, ν)  tinv(p, ν)", "t": "tcdf()", "d": "Student's t distribution"}, {"g": "Distributions", "s": "chi2pdf(x, k)  chi2cdf(x, k)  chi2inv(p, k)", "t": "chi2cdf()", "d": "Chi-squared distribution"}, {"g": "Distributions", "s": "fpdf(x, d1, d2)  fcdf  finv", "t": "fcdf()", "d": "F distribution"}, {"g": "Distributions", "s": "binompdf(k, n, p)  binomcdf(k, n, p)", "t": "binompdf()", "d": "Binomial distribution"}, {"g": "Distributions", "s": "poisspdf(k, λ)  poisscdf(k, λ)", "t": "poisspdf()", "d": "Poisson distribution"}, {"g": "Distributions", "s": "exppdf(x, λ)  expcdf  expinv", "t": "expcdf()", "d": "Exponential distribution (rate λ)"}, {"g": "Distributions", "s": "gammapdf(x, k, θ)  gammacdf  gammainv", "t": "gammacdf()", "d": "Gamma distribution (shape k, scale θ)"}, {"g": "Distributions", "s": "betapdf(x, a, b)  betacdf  betainv", "t": "betacdf()", "d": "Beta distribution"}, {"g": "Distributions", "s": "lognpdf(x, μ, σ)  logncdf  logninv", "t": "logncdf()", "d": "Log-normal distribution"}, {"g": "Distributions", "s": "weibpdf(x, k, λ)  weibcdf  weibinv", "t": "weibcdf()", "d": "Weibull distribution"}, {"g": "Distributions", "s": "geompdf(k, p)  geomcdf(k, p)", "t": "geompdf()", "d": "Geometric distribution (trials until the first success)"}, {"g": "Distributions", "s": "hygepdf(k, N, K, n)", "t": "hygepdf()", "d": "Hypergeometric distribution"}, {"g": "Distributions", "s": "nbinpdf(k, r, p)", "t": "nbinpdf()", "d": "Negative binomial distribution (failures before the r-th success)"}, {"g": "Constants", "s": "pi  e  tau  infinity", "t": "pi", "d": "π, e, 2π and infinity"}, {"g": "Constants", "s": "c_light", "t": "c_light", "d": "Speed of light in vacuum, m/s"}, {"g": "Constants", "s": "h_planck  h_bar", "t": "h_planck", "d": "Planck constant and reduced Planck constant, J·s"}, {"g": "Constants", "s": "g_newton", "t": "g_newton", "d": "Gravitational constant, m³/(kg·s²)"}, {"g": "Constants", "s": "k_boltz", "t": "k_boltz", "d": "Boltzmann constant, J/K"}, {"g": "Constants", "s": "n_avo", "t": "n_avo", "d": "Avogadro constant, 1/mol"}, {"g": "Constants", "s": "r_gas", "t": "r_gas", "d": "Molar gas constant, J/(mol·K)"}, {"g": "Constants", "s": "q_e", "t": "q_e", "d": "Elementary charge, C"}, {"g": "Constants", "s": "m_e  m_p  m_n  u_amu", "t": "m_e", "d": "Masses of the electron, proton, neutron; atomic mass unit, kg"}, {"g": "Constants", "s": "eps_0  mu_0  k_coulomb", "t": "eps_0", "d": "Vacuum permittivity, permeability; Coulomb constant"}, {"g": "Constants", "s": "sigma_sb", "t": "sigma_sb", "d": "Stefan–Boltzmann constant, W/(m²·K⁴)"}, {"g": "Constants", "s": "alpha_fs  a_bohr  r_inf", "t": "alpha_fs", "d": "Fine-structure constant, Bohr radius (m), Rydberg constant (1/m)"}, {"g": "Constants", "s": "f_faraday", "t": "f_faraday", "d": "Faraday constant, C/mol"}, {"g": "Constants", "s": "g_std  atm_pa", "t": "g_std", "d": "Standard gravity (m/s²) and standard atmosphere (Pa)"}, {"g": "Constants", "s": "au_m  ly_m  pc_m", "t": "au_m", "d": "Astronomical unit, light-year, parsec, in metres"}, {"g": "Constants", "s": "m_sun  m_earth  r_earth", "t": "m_sun", "d": "Masses of the Sun and the Earth (kg); mean radius of the Earth (m)"}, {"g": "Constants", "s": "ev_j  cal_j", "t": "ev_j", "d": "One electronvolt and one calorie in joules"}, {"g": "Constants", "s": "euler_gamma  golden_ratio  catalan_c  apery_c", "t": "golden_ratio", "d": "Euler–Mascheroni γ, golden ratio φ, Catalan G, Apéry ζ(3)"}];
   /* FUNCHELP-END */
   /* Input-assist palette for the formula editor. Each button inserts its `t` at the caret;
    * a trailing "()" places the caret between the parentheses so the user just types the argument.
@@ -2314,7 +2766,7 @@ return function render(_ctx, _cache) {
         _createElementVNode("button", {
           class: "btn primary block",
           onClick: _cache[0] || (_cache[0] = $event => (_ctx.openCollectionModal()))
-        }, _toDisplayString(_ctx.t('＋ New collection')), 1 /* TEXT */),
+        }, _toDisplayString(_ctx.t('+ New collection')), 1 /* TEXT */),
         _createElementVNode("button", {
           class: "btn sm block",
           onClick: _cache[1] || (_cache[1] = (...args) => (_ctx.openSettings && _ctx.openSettings(...args))),
@@ -2385,7 +2837,7 @@ return function render(_ctx, _cache) {
                       _createElementVNode("button", {
                         class: "btn primary",
                         onClick: _cache[6] || (_cache[6] = $event => (_ctx.openCollectionModal()))
-                      }, _toDisplayString(_ctx.t('＋ New collection')), 1 /* TEXT */)
+                      }, _toDisplayString(_ctx.t('+ New collection')), 1 /* TEXT */)
                     ])
                   ])
                 ]))
@@ -3004,7 +3456,7 @@ return function render(_ctx, _cache) {
                       type: "button",
                       class: "ci",
                       onClick: _cache[46] || (_cache[46] = $event => (_ctx.ctxDo('new-coll')))
-                    }, _toDisplayString(_ctx.t('＋ New collection')), 1 /* TEXT */)
+                    }, _toDisplayString(_ctx.t('+ New collection')), 1 /* TEXT */)
                   ], 64 /* STABLE_FRAGMENT */))
         ], 36 /* STYLE, NEED_HYDRATION */))
       : _createCommentVNode("v-if", true),
@@ -3012,7 +3464,7 @@ return function render(_ctx, _cache) {
       ? (_openBlock(), _createElementBlock("div", _hoisted_143, [
           _createElementVNode("div", _hoisted_144, [
             _createElementVNode("div", _hoisted_145, [
-              _createElementVNode("h3", null, _toDisplayString(_ctx.collForm.id ? _ctx.t('⚙️ Collection settings') : _ctx.t('＋ New collection')), 1 /* TEXT */),
+              _createElementVNode("h3", null, _toDisplayString(_ctx.collForm.id ? _ctx.t('⚙️ Collection settings') : _ctx.t('+ New collection')), 1 /* TEXT */),
               _createElementVNode("button", {
                 class: "icon-btn",
                 onClick: _cache[49] || (_cache[49] = $event => (_ctx.modal=null))
@@ -6037,8 +6489,9 @@ return function render(_ctx, _cache) {
             name: this.t(tp.name),
             expression: tp.expression,
             description: tp.description ? this.t(tp.description) : '',
-            variables: (tp.variables || []).map((v) => Object.assign({}, v, { label: v.label ? this.t(v.label) : v.label })),
-            result_unit: tp.result_unit || '',
+            // Units too: "h" becomes 時間, "people" 人. Symbols with no entry (kg, m/s) stay as they are.
+            variables: (tp.variables || []).map((v) => Object.assign({}, v, { label: v.label ? this.t(v.label) : v.label, unit: v.unit ? this.t(v.unit) : v.unit })),
+            result_unit: tp.result_unit ? this.t(tp.result_unit) : '',
             decimals: tp.decimals == null ? 2 : tp.decimals,
             notes: tp.notes ? this.t(tp.notes) : '',
           });
@@ -6089,7 +6542,8 @@ return function render(_ctx, _cache) {
     dec = (dec == null ? 2 : dec);
     v = Number(v);
     if (!isFinite(v)) return String(v);
-    const fixed = v.toFixed(dec);
+    // toFixed rounds the binary value (1.005 → "1.00"); round as written first, like a spreadsheet's display
+    const fixed = (Math.abs(v) < 1e21 ? VAL.roundDec(v, dec) : v).toFixed(dec);
     // If a non-zero value collapses to 0 at the chosen precision, show significant
     // figures instead of a misleading "0.00" (keeps normal-range display untouched).
     if (v !== 0 && parseFloat(fixed) === 0) {

@@ -294,7 +294,10 @@ class MathLib {
 					}
 					$row = $next;
 				}
-				return $k <= $n ? self::f($row[(int)$k]) : 0.0;
+				// Signed, as in mathematics: s(n, k) = (-1)^(n-k) × (number of permutations with k cycles).
+				if ($k > $n) { return 0.0; }
+				$c = self::f($row[(int)$k]);
+				return (((int)$n - (int)$k) % 2) ? -$c : $c;
 			case 'derange':
 				if (!self::nonNegInt($x) || $x > 5000) { return NAN; }
 				if ($x == 0) { return 1.0; }
@@ -351,7 +354,7 @@ class MathLib {
 				return self::call('sigma', [$x, 1.0]) == 2 * $x ? 1.0 : 0.0;
 			case 'gamma': return self::gamma($x);
 			case 'lgamma': return self::lgamma($x);
-			case 'beta': return exp(self::lgamma($x) + self::lgamma($y) - self::lgamma($x + $y));
+			case 'beta': return ($x > 0 && $y > 0) ? exp(Special::lbeta($x, $y)) : exp(self::lgamma($x) + self::lgamma($y) - self::lgamma($x + $y));
 			case 'erf': return self::erf($x);
 			case 'erfc': return self::erfc($x);
 			case 'normcdf':
@@ -549,22 +552,67 @@ class MathLib {
 		return sqrt(2 * M_PI) * ($t ** ($x + 0.5)) * exp(-$t) * $a;
 	}
 
-	public static function lgamma(float $x): float {
-		if (is_nan($x) || $x <= 0) { return NAN; }
-		if ($x < 0.5) { return log(fdiv(M_PI, abs(sin(M_PI * $x)))) - self::lgamma(1 - $x); }
-		$x -= 1;
-		$a = self::LC[0];
-		$t = $x + self::LG + 0.5;
-		for ($i = 1; $i < self::LG + 2; $i++) { $a += self::LC[$i] / ($x + $i); }
-		return 0.5 * log(2 * M_PI) + ($x + 0.5) * log($t) - $t + log($a);
+	public const LN_SQRT_2PI = 0.9189385332046728; // ln √(2π)
+	public const LN_2PI = 1.8378770664093453;
+	/** ln Γ(2 + z) = z · Σ LG2[j] z^j (|z| ≤ 0.5): LG2[0] = 1 − γ, LG2[j] = (−1)^(j+1) (ζ(j+1) − 1)/(j+1) */
+	private const LG2 = [0.42278433509846713, 0.3224670334241132, -0.0673523010531981, 0.020580808427784546, -0.007385551028673986, 0.0028905103307415234,
+		-0.001192753911703261, 0.0005096695247430425, -0.00022315475845357939, 9.945751278180853e-05, -4.492623673813314e-05, 2.050721277567069e-05,
+		-9.439488275268397e-06, 4.374866789907488e-06, -2.039215753801366e-06, 9.55141213040742e-07, -4.492469198764566e-07, 2.1207184805554665e-07,
+		-1.0043224823968099e-07, 4.7698101693639804e-08, -2.2711094608943164e-08, 1.0838659214896955e-08, -5.183475041970047e-09, 2.4836745438024785e-09,
+		-1.1921401405860912e-09, 5.731367241678862e-10, -2.7595228851242334e-10, 1.330476437424449e-10, -6.4229645638381e-11, 3.1044247747322276e-11];
+
+	private static function lg2p(float $z): float {
+		$s = 0.0;
+		for ($j = count(self::LG2) - 1; $j >= 0; $j--) { $s = $s * $z + self::LG2[$j]; }
+		return $s * $z;
 	}
 
+	/** ln Γ(1 + a) for −0.5 ≤ a ≤ 1, without forming 1 + a */
+	public static function lgamma1p(float $a): float {
+		return $a <= 0.5 ? self::lg2p($a) - log1p($a) : self::lg2p($a - 1);
+	}
+
+	/** ln Γ(x) − ((x − ½) ln x − x + ln √(2π)) for x ≥ 10: the Stirling series (the error is below 1e-19) */
+	public static function lgcorBig(float $x): float {
+		$t = 1 / ($x * $x);
+		return (0.08333333333333333 + $t * (-0.002777777777777778 + $t * (0.0007936507936507937 + $t * (-0.0005952380952380953 + $t * (0.0008417508417508417
+			+ $t * (-0.0019175269175269176 + $t * (0.00641025641025641 + $t * (-0.029550653594771242 + $t * 0.17964437236883057)))))))) / $x;
+	}
+
+	/** |sin(πx)| with the argument reduced exactly first */
+	private static function sinpiAbs(float $x): float {
+		$r = fmod(abs($x), 2.0);
+		if ($r > 1) { $r -= 1; }
+		if ($r > 0.5) { $r = 1 - $r; }
+		return sin(M_PI * $r);
+	}
+
+	public static function lgamma(float $x): float {
+		// log|Γ(x)|: defined for every x but the poles 0, −1, −2, … (reflection for the negative side)
+		if (is_nan($x) || ($x <= 0 && floor($x) == $x)) { return NAN; }
+		if ($x == INF) { return INF; }
+		if ($x < 0.5) {
+			if ($x > 0) { return self::lgamma1p($x) - log($x); }
+			return log(fdiv(M_PI, self::sinpiAbs($x))) - self::lgamma(1 - $x);
+		}
+		if ($x < 1.5) { return self::lgamma1p($x - 1); }
+		if ($x < 2.5) { return self::lg2p($x - 2); }
+		if ($x < 10) {
+			$p = 1.0;
+			while ($x >= 2.5) { $x -= 1; $p *= $x; }
+			return log($p) + self::lg2p($x - 2);
+		}
+		return ($x - 0.5) * log($x) - $x + self::LN_SQRT_2PI + self::lgcorBig($x);
+	}
+
+	/** erf/erfc to double precision: Taylor series near 0, the continued fraction from 1 on. */
 	public static function erfc(float $x): float {
 		if (is_nan($x)) { return NAN; }
 		if ($x < 0) { return 2 - self::erfc(-$x); }
-		if ($x < 2.5) { return 1 - self::erf($x); }
+		if ($x < 1) { return 1 - self::erf($x); }
+		// continued fraction erfc(x) = exp(-x²)/√π · 1/(x + 1/2/(x + 1/(x + 3/2/(x + …))))
 		$f = 0.0;
-		for ($n = 60; $n >= 1; $n--) { $f = ($n / 2) / ($x + $f); }
+		for ($n = $x < 2.5 ? 200 : 60; $n >= 1; $n--) { $f = ($n / 2) / ($x + $f); }
 		return exp(-$x * $x) / sqrt(M_PI) / ($x + $f);
 	}
 
@@ -583,28 +631,41 @@ class MathLib {
 		return (2 / sqrt(M_PI)) * $sum;
 	}
 
+	/**
+	 * Acklam's rational approximation, then Halley steps. Between ¼ and ¾ the residual is
+	 * ½·erf(x/√2) − (p − ½) (both exact to the last digit near ½); in the tails it is the tail itself,
+	 * ½·erfc(|x|/√2) − min(p, 1 − p), so 1 − 1e-12 keeps its digits.
+	 */
 	public static function norminv(float $p, float $m, float $s): float {
 		if (!($p > 0 && $p < 1) || !($s > 0)) { return NAN; }
-		$a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239];
-		$b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
-		$c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
-		$d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
-		$pl = 0.02425;
-		if ($p < $pl) {
-			$q = sqrt(-2 * log($p));
-			$x = ((((($c[0] * $q + $c[1]) * $q + $c[2]) * $q + $c[3]) * $q + $c[4]) * $q + $c[5]) / (((($d[0] * $q + $d[1]) * $q + $d[2]) * $q + $d[3]) * $q + 1);
-		} elseif ($p <= 1 - $pl) {
+		if ($p >= 0.25 && $p <= 0.75) {
 			$q = $p - 0.5;
 			$r = $q * $q;
-			$x = ((((($a[0] * $r + $a[1]) * $r + $a[2]) * $r + $a[3]) * $r + $a[4]) * $r + $a[5]) * $q / ((((($b[0] * $r + $b[1]) * $r + $b[2]) * $r + $b[3]) * $r + $b[4]) * $r + 1);
-		} else {
-			$q = sqrt(-2 * log(1 - $p));
-			$x = -((((($c[0] * $q + $c[1]) * $q + $c[2]) * $q + $c[3]) * $q + $c[4]) * $q + $c[5]) / (((($d[0] * $q + $d[1]) * $q + $d[2]) * $q + $d[3]) * $q + 1);
+			$x = (((((-3.969683028665376e1 * $r + 2.209460984245205e2) * $r - 2.759285104469687e2) * $r + 1.383577518672690e2) * $r - 3.066479806614716e1) * $r + 2.506628277459239) * $q / (((((-5.447609879822406e1 * $r + 1.615858368580409e2) * $r - 1.556989798598866e2) * $r + 6.680131188771972e1) * $r - 1.328068155288572e1) * $r + 1);
+			for ($i = 0; $i < 2 && $x != 0; $i++) {
+				$e = 0.5 * self::erf($x / M_SQRT2) - $q;
+				if ($e == 0) { break; }
+				$u = $e * sqrt(2 * M_PI) * exp($x * $x / 2);
+				$x -= fdiv($u, 1 + $x * $u / 2);
+			}
+			return $m + $s * $x;
 		}
-		$e = 0.5 * self::erfc(-$x / M_SQRT2) - $p;
-		$u = $e * sqrt(2 * M_PI) * exp($x * $x / 2);
-		$x = $x - $u / (1 + $x * $u / 2);
-		return $m + $s * $x;
+		$pp = $p < 0.5 ? $p : 1 - $p;
+		if ($pp < 0.02425) {
+			$q = sqrt(-2 * log($pp));
+			$x = (((((-7.784894002430293e-3 * $q - 3.223964580411365e-1) * $q - 2.400758277161838) * $q - 2.549732539343734) * $q + 4.374664141464968) * $q + 2.938163982698783) / ((((7.784695709041462e-3 * $q + 3.224671290700398e-1) * $q + 2.445134137142996) * $q + 3.754408661907416) * $q + 1);
+		} else {
+			$q = $pp - 0.5;
+			$r = $q * $q;
+			$x = (((((-3.969683028665376e1 * $r + 2.209460984245205e2) * $r - 2.759285104469687e2) * $r + 1.383577518672690e2) * $r - 3.066479806614716e1) * $r + 2.506628277459239) * $q / (((((-5.447609879822406e1 * $r + 1.615858368580409e2) * $r - 1.556989798598866e2) * $r + 6.680131188771972e1) * $r - 1.328068155288572e1) * $r + 1);
+		}
+		for ($i = 0; $i < 2; $i++) {
+			$e = 0.5 * self::erfc(-$x / M_SQRT2) - $pp;
+			if ($e == 0) { break; }
+			$u = ($e / $pp) * exp(log($pp) + self::LN_SQRT_2PI + $x * $x / 2);
+			$x -= fdiv($u, 1 + $x * $u / 2);
+		}
+		return $p < 0.5 ? $m + $s * $x : $m - $s * $x;
 	}
 
 	public static function zeta(float $s): float {
@@ -646,6 +707,8 @@ class MathLib {
 	private static function lambertw(float $x): float {
 		if (is_nan($x) || !($x >= -1 / M_E)) { return NAN; }
 		if ($x == 0) { return 0.0; }
+		// the branch point: W(−1/e) = −1 (the iteration below cannot reach it)
+		if ($x <= -1 / M_E) { return -1.0; }
 		$w = $x < 1 ? ($x > -0.3 ? $x : -1 + sqrt(2 * (1 + M_E * $x))) : log($x) - log(log($x) + 1);
 		for ($i = 0; $i < 60; $i++) {
 			$e = exp($w);

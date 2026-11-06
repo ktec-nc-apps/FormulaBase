@@ -39,6 +39,12 @@ class FormulaCompiler {
 		'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'pow', 'mod', 'hypot', 'root', 'logb', 'roundto', 'frac', 'clamp',
 		'deg', 'rad', 'sec', 'csc', 'cot', 'and', 'or', 'xor', 'not',
 	];
+	/** How many values each scalar function takes [least, most]: an extra one used to be dropped
+	 *  without a word -- round(2.675, 2) gave 3, log(8, 2) the common logarithm. */
+	private const BASE_ARITY = [
+		'round' => [1, 2], 'roundto' => [2, 2], 'pow' => [2, 2], 'mod' => [2, 2], 'root' => [2, 2], 'logb' => [2, 2],
+		'and' => [2, 2], 'or' => [2, 2], 'xor' => [2, 2], 'clamp' => [3, 3], 'hypot' => [1, PHP_INT_MAX],
+	];
 	private const COMPLEX_OK = ['sqrt', 'abs', 'exp', 'ln', 'log', 'sin', 'cos', 'tan', 'sinh', 'cosh', 'tanh', 'pow'];
 	/** Forms evaluated specially (binders and branches). */
 	private const SPECIAL = ['integral', 'deriv', 'solve', 'if', 'piecewise'];
@@ -147,8 +153,15 @@ class FormulaCompiler {
 						}
 					}
 					$expect(')');
-					if (!$this->isFunction(mb_strtolower($t['v']))) {
+					$fn = mb_strtolower($t['v']);
+					if (!$this->isFunction($fn)) {
 						throw new \RuntimeException('unknown function "' . $t['v'] . '"');
+					}
+					if (in_array($fn, self::BASE, true) || in_array($fn, ['sinh', 'cosh', 'tanh'], true)) {
+						[$lo, $hi] = self::BASE_ARITY[$fn] ?? [1, 1];
+						if (count($args) < $lo || count($args) > $hi) {
+							throw new \RuntimeException('wrong number of values for "' . $t['v'] . '"');
+						}
 					}
 					return ['type' => 'call', 'name' => $t['v'], 'args' => $args];
 				}
@@ -199,12 +212,18 @@ class FormulaCompiler {
 			return $l;
 		};
 		$pCmp = function () use ($pAdd, $peek, $next, $isOp): array {
+			// A chain reads as in mathematics: 3 > 2 > 1 is 3 > 2 and 2 > 1 (owner, 2026-11-06),
+			// not (3 > 2) > 1, which compared the 1 of "true" with 1 and gave 0.
 			$l = $pAdd();
+			$out = null;
 			while ($isOp($peek(), self::CMP)) {
 				$op = $next()['v'];
-				$l = ['type' => 'bin', 'op' => $op, 'l' => $l, 'r' => $pAdd()];
+				$r = $pAdd();
+				$c = ['type' => 'bin', 'op' => $op, 'l' => $l, 'r' => $r];
+				$out = $out === null ? $c : ['type' => 'call', 'name' => 'and', 'args' => [$out, $c]];
+				$l = $r;
 			}
-			return $l;
+			return $out ?? $l;
 		};
 		$pExpr = function () use ($pCmp): array { return $pCmp(); };
 
@@ -462,16 +481,16 @@ class FormulaCompiler {
 		// fdiv() divides the way JavaScript does: 1/0 is ∞, 0/0 is NaN, never an error.
 		return match ($name) {
 			'sqrt' => $x < 0 ? NAN : sqrt($x), 'cbrt' => ($x >= 0 ? 1 : -1) * (abs($x) ** (1 / 3)),
-			'abs' => abs($x), 'round' => self::jsRound($x), 'floor' => floor($x), 'ceil' => ceil($x),
+			'abs' => abs($x), 'round' => Values::roundDec($x, $a[1] ?? 0.0), 'floor' => floor($x), 'ceil' => ceil($x),
 			'trunc' => $x >= 0 ? floor($x) : ceil($x), 'sign' => is_nan($x) ? NAN : (float)($x <=> 0),
 			'exp' => exp($x), 'ln' => $x < 0 ? NAN : ($x == 0 ? -INF : log($x)), 'log' => $x < 0 ? NAN : ($x == 0 ? -INF : log10($x)),
 			'log2' => $x < 0 ? NAN : ($x == 0 ? -INF : log($x, 2)),
 			'sin' => sin($x), 'cos' => cos($x), 'tan' => tan($x),
 			'asin' => asin($x), 'acos' => acos($x), 'atan' => atan($x),
-			'pow' => Values::rpow($x, $a[1] ?? NAN), 'mod' => fmod($x, $a[1] ?? NAN),
+			'pow' => Values::rpow($x, $a[1] ?? NAN), 'mod' => Values::modFloor($x, $a[1] ?? NAN),
 			'hypot' => sqrt(array_sum(array_map(fn ($v) => $v * $v, $a))),
-			'root' => ($x <=> 0) * (abs($x) ** fdiv(1, $a[1] ?? NAN)),
-			'logb' => fdiv(log($x), log($a[1] ?? NAN)), 'roundto' => fdiv(self::jsRound($x * (10 ** ($a[1] ?? 0))), 10 ** ($a[1] ?? 0)),
+			'root' => Values::root($x, $a[1] ?? NAN),
+			'logb' => (($a[1] ?? NAN) == 1.0 ? NAN : fdiv(log($x), log($a[1] ?? NAN))), 'roundto' => Values::roundDec($x, $a[1] ?? NAN),
 			'frac' => $x - ($x >= 0 ? floor($x) : ceil($x)), 'clamp' => min(max($x, $a[1] ?? NAN), $a[2] ?? NAN),
 			'deg' => $x * 180 / M_PI, 'rad' => $x * M_PI / 180,
 			'sec' => fdiv(1, cos($x)), 'csc' => fdiv(1, sin($x)), 'cot' => fdiv(1, tan($x)),
@@ -479,11 +498,6 @@ class FormulaCompiler {
 			'xor' => (float)(self::truthy($x) !== self::truthy($a[1] ?? NAN)), 'not' => (float)!self::truthy($x),
 			default => MathLib::call($name, $a),
 		};
-	}
-
-	/** JavaScript's Math.round: halves go towards +∞ (PHP's round goes away from zero). */
-	private static function jsRound(float $x): float {
-		return floor($x + 0.5);
 	}
 
 	/** A value typed into an input (a bare i is the imaginary unit here only): a number, a list "1, 2, 3", a matrix "1, 2; 3, 4" or a complex number "3+4i". */
@@ -553,7 +567,7 @@ class FormulaCompiler {
 		if (!is_finite($f)) {
 			return is_nan($f) ? 'NaN' : ($f > 0 ? '∞' : '−∞');
 		}
-		$s = sprintf('%.12G', $f);
+		$s = sprintf('%.15G', $f);
 		if (str_contains($s, 'E')) {
 			[$m, $e] = explode('E', $s);
 			return (str_contains($m, '.') ? rtrim(rtrim($m, '0'), '.') : $m) . 'E' . (int)$e;
@@ -569,6 +583,7 @@ class FormulaCompiler {
 	 */
 	public function toOdf(array $n, array $cellMap, ?array $scope = null): string {
 		$this->odfScope = $scope;
+		$this->odfFixed = false;
 		foreach ($scope ?? [] as $v) {
 			if (is_array($v) || $v instanceof Cx) {
 				// a list/matrix/complex input sits in its cell as text, which no spreadsheet formula can
@@ -584,6 +599,16 @@ class FormulaCompiler {
 
 	/** Values to put in place of a call that has no spreadsheet function (see callToOdf). */
 	private ?array $odfScope = null;
+	/** Set by toOdf() when a part that depends on the inputs had to be written as its value. */
+	private bool $odfFixed = false;
+
+	/**
+	 * True when the last toOdf() wrote a part that depends on the inputs as the value it comes to:
+	 * that part does not follow a changed input in the spreadsheet, and the export says so.
+	 */
+	public function odfHasFixedValue(): bool {
+		return $this->odfFixed;
+	}
 
 	private function odf(array $n, array $cellMap): string {
 		if ($this->hasListPart($n)) {
@@ -611,21 +636,63 @@ class FormulaCompiler {
 				return $n['op'] . $this->wrap($n['arg'], $cellMap);
 			case 'bin':
 				if ($n['op'] === '^') {
-					return 'POWER(' . $this->odf($n['l'], $cellMap) . ';' . $this->odf($n['r'], $cellMap) . ')';
+					return $this->guard($this->powToOdf($n['l'], $n['r'], $cellMap), $n);
 				}
 				if ($n['op'] === '%') {
+					// MOD has the sign of the divisor, like the app's % and mod()
 					return 'MOD(' . $this->odf($n['l'], $cellMap) . ';' . $this->odf($n['r'], $cellMap) . ')';
 				}
 				if (in_array($n['op'], self::CMP, true)) {
-					// a comparison is TRUE/FALSE in a spreadsheet; turn it into 1/0 like the app
-					$op = ['==' => '=', '!=' => '<>'][$n['op']] ?? $n['op'];
-					return 'IF(' . $this->wrap($n['l'], $cellMap) . $op . $this->wrap($n['r'], $cellMap) . ';1;0)';
+					// 1/0 like the app, with the app's tolerance: equal means within 1e-12 of each other
+					// (a spreadsheet's own = is looser: about 4e-15)
+					$l = $this->wrap($n['l'], $cellMap);
+					$r = $this->wrap($n['r'], $cellMap);
+					$same = 'ABS(' . $l . '-' . $r . ')<=1E-12*MAX(ABS(' . $l . ');ABS(' . $r . '))';
+					$diff = 'ABS(' . $l . '-' . $r . ')>1E-12*MAX(ABS(' . $l . ');ABS(' . $r . '))';
+					$s = match ($n['op']) {
+						'==' => 'IF(' . $same . ';1;0)',
+						'!=' => 'IF(' . $same . ';0;1)',
+						'<' => 'IF(AND(' . $l . '<' . $r . ';' . $diff . ');1;0)',
+						'>' => 'IF(AND(' . $l . '>' . $r . ';' . $diff . ');1;0)',
+						'<=' => 'IF(OR(' . $l . '<' . $r . ';' . $same . ');1;0)',
+						default => 'IF(OR(' . $l . '>' . $r . ';' . $same . ');1;0)',
+					};
+					return $this->guard($s, $n);
 				}
 				return $this->wrap($n['l'], $cellMap) . $n['op'] . $this->wrap($n['r'], $cellMap);
 			case 'call':
 				return $this->callToOdf($n, $cellMap);
 		}
 		throw new \RuntimeException('bad node');
+	}
+
+	/**
+	 * A formula that grows past what a cell should hold (the wrappers below repeat their operands)
+	 * is written as the value it comes to instead.
+	 */
+	private function guard(string $s, array $n): string {
+		return (strlen($s) > 4000 && $this->odfScope !== null) ? $this->literalOf($n) : $s;
+	}
+
+	/**
+	 * a^b: POWER, but for a base that may be negative and an exponent that may be fractional the
+	 * formula gives what the app gives -- the real odd root for an exponent 1/n with n odd, otherwise
+	 * an error -- where a spreadsheet's POWER would be lenient or fail differently.
+	 */
+	private function powToOdf(array $l, array $r, array $cellMap): string {
+		$a = $this->odf($l, $cellMap);
+		$b = $this->odf($r, $cellMap);
+		$plain = 'POWER(' . $a . ';' . $b . ')';
+		$wholeExp = $r['type'] === 'num' && empty($r['imag']) && floor((float)$r['v']) == (float)$r['v'];
+		$nonNegBase = $l['type'] === 'const' || ($l['type'] === 'num' && (float)$l['v'] >= 0)
+			|| ($l['type'] === 'call' && in_array(mb_strtolower($l['name']), ['exp', 'abs', 'sqrt', 'cosh', 'hypot'], true));
+		if ($wholeExp || $nonNegBase) {
+			return $plain;
+		}
+		$n = 'ROUND(1/(' . $b . ');0)';
+		return 'IF(AND((' . $a . ')<0;(' . $b . ')-INT(' . $b . ')<>0);'
+			. 'IF(AND(ABS(1/(' . $b . ')-' . $n . ')<=1E-9*ABS(' . $n . ');MOD(' . $n . ';2)=1);-POWER(-(' . $a . ');' . $b . ');NA());'
+			. $plain . ')';
 	}
 
 	/** Wrap a binary-operation operand in parentheses (leaves and calls never need it). */
@@ -703,6 +770,10 @@ class FormulaCompiler {
 			throw new \RuntimeException('no spreadsheet function for this part of the formula');
 		}
 		$v = $this->evaluate($n, $this->odfScope);
+		// a part with no input in it comes to the same value whatever the inputs are
+		if ($this->collectVars($n) !== []) {
+			$this->odfFixed = true;
+		}
 		if (is_float($v) || is_int($v)) {
 			return $this->numLiteral((float)$v);
 		}
@@ -716,12 +787,112 @@ class FormulaCompiler {
 		'and' => 'AND', 'or' => 'OR', 'xor' => 'XOR', 'not' => 'NOT',
 	];
 
+	/** How many values each function below takes [least, most]; another count is written as its value. */
+	private const ODF_DIST_ARITY = [
+		'clamp' => [3, 3], 'logb' => [2, 2], 'sec' => [1, 1], 'csc' => [1, 1], 'cot' => [1, 1],
+		'normpdf' => [1, 3], 'normcdf' => [2, 3], 'lognpdf' => [1, 3], 'logncdf' => [1, 3],
+		'exppdf' => [2, 2], 'expcdf' => [2, 2], 'expinv' => [2, 2], 'weibpdf' => [3, 3], 'weibcdf' => [3, 3], 'weibinv' => [3, 3],
+		'geompdf' => [2, 2], 'geomcdf' => [2, 2],
+	];
+
+	/**
+	 * The few functions and distributions a spreadsheet computes to the app's value (Special::call,
+	 * MathLib::call), each giving 0 or NA() exactly where the app gives 0 or NaN -- a spreadsheet
+	 * function fails, or cuts a fraction off, at other edges. The rest stay values: the app's
+	 * incomplete gamma/beta, log-gamma and inverse functions part from the spreadsheet's beyond
+	 * 1e-9 for large parameters or far tails (chi2cdf(1e5, 1e5), binompdf(k, 1e6, p), tinv(p, ν) at
+	 * p near 0.5), and TDIST, FDIST, CHISQDIST cut a fractional degree of freedom.
+	 * null: not one of them (or another number of values).
+	 */
+	private function distToOdf(string $name, array $args, array $cellMap): ?string {
+		$ar = self::ODF_DIST_ARITY[$name] ?? null;
+		if ($ar === null || count($args) < $ar[0] || count($args) > $ar[1]) {
+			return null;
+		}
+		// each value parenthesised: it stands inside sums and products below
+		$v = array_map(fn ($x) => '(' . $this->odf($x, $cellMap) . ')', $args);
+		[$x, $y, $z] = [$v[0], $v[1] ?? null, $v[2] ?? null];
+		$m = $y ?? '0';
+		$s = $z ?? '1';
+		$ifPos = fn (array $pos, string $body) => 'IF(AND(' . implode(';', array_map(fn ($t) => $t . '>0', $pos)) . ');' . $body . ';NA())';
+		// (1-p)^e, also where it is too small for POWER (which fails below 2.2E-308, where the app goes on to 0)
+		$q = '(1-' . $y . ')';
+		$powQ = fn (string $e) => 'IF(' . $e . '*LN' . $q . '<-708;EXP(' . $e . '*LN' . $q . ');POWER(' . $q . ';' . $e . '))';
+		return match ($name) {
+			'clamp' => 'MIN(MAX(' . $x . ';' . $y . ');' . $z . ')',
+			// log(x)/log(0) is 0 for x > 0 in the app; LN(0) fails
+			'logb' => 'IF(' . $y . '=0;IF(' . $x . '>0;0;NA());LN(' . $x . ')/LN(' . $y . '))',
+			'sec' => '(1/COS(' . $x . '))',
+			'csc' => '(1/SIN(' . $x . '))',
+			'cot' => '(1/TAN(' . $x . '))',
+			'normpdf' => 'NORMDIST(' . $x . ';' . $m . ';' . $s . ';0)',
+			'normcdf' => 'NORMDIST(' . $x . ';' . $m . ';' . $s . ';1)',
+			'lognpdf' => $ifPos([$s], 'IF(' . $x . '<=0;0;LOGNORMDIST(' . $x . ';' . $m . ';' . $s . ';0))'),
+			'logncdf' => $ifPos([$s], 'IF(' . $x . '<=0;0;LOGNORMDIST(' . $x . ';' . $m . ';' . $s . ';1))'),
+			'exppdf' => $ifPos([$y], 'IF(' . $x . '<0;0;EXPONDIST(' . $x . ';' . $y . ';0))'),
+			'expcdf' => $ifPos([$y], 'IF(' . $x . '<0;0;EXPONDIST(' . $x . ';' . $y . ';1))'),
+			'expinv' => 'IF(AND(' . $y . '>0;' . $x . '>=0;' . $x . '<1);-LN(1-' . $x . ')/' . $y . ';NA())',
+			'weibpdf' => $ifPos([$y, $z], 'IF(' . $x . '<0;0;WEIBULL(' . $x . ';' . $y . ';' . $z . ';0))'),
+			'weibcdf' => $ifPos([$y, $z], 'IF(' . $x . '<0;0;WEIBULL(' . $x . ';' . $y . ';' . $z . ';1))'),
+			'weibinv' => 'IF(AND(' . $y . '>0;' . $z . '>0;' . $x . '>=0;' . $x . '<1);' . $z . '*POWER(-LN(1-' . $x . ');1/' . $y . ');NA())',
+			'geompdf' => 'IF(AND(' . $x . '-INT(' . $x . ')=0;' . $y . '>0;' . $y . '<=1);IF(' . $x . '<1;0;IF(' . $q . '=0;IF(' . $x . '=1;' . $y . ';0);'
+				. $powQ('(' . $x . '-1)') . '*' . $y . '));NA())',
+			'geomcdf' => 'IF(AND(' . $y . '>0;' . $y . '<=1);IF(' . $x . '<1;0;IF(' . $q . '=0;1;1-' . $powQ('INT(' . $x . ')') . '));NA())',
+		};
+	}
+
 	private function callToOdf(array $n, array $cellMap): string {
 		$name = mb_strtolower($n['name']);
 		$args = $n['args'];
 		$a = fn () => array_map(fn ($x) => $this->odf($x, $cellMap), $args);
 		if ($this->isBinder($n, $this->odfScope)) {
 			return $this->literalOf($n);
+		}
+		if (in_array($name, ['fact', 'binom', 'perm', 'gcd', 'lcm'], true)) {
+			// these take whole numbers only (a spreadsheet cuts a fraction off and goes on), and the app's
+			// gcd/lcm take any sign and its binom/perm give 0 for a k outside 0..n, where the spreadsheet's fail
+			$v = $a();
+			$count = count($v);
+			if (($name === 'fact' && $count !== 1) || (($name === 'binom' || $name === 'perm') && $count !== 2) || $count < 1) {
+				return $this->literalOf($n);
+			}
+			$conds = array_map(fn ($x) => '(' . $x . ')-INT(' . $x . ')=0', $v);
+			if ($name === 'binom' || $name === 'perm') {
+				$conds[] = '(' . $v[0] . ')>=0';
+			}
+			$cond = $count > 1 || count($conds) > 1 ? 'AND(' . implode(';', $conds) . ')' : $conds[0];
+			$abs = fn () => implode(';', array_map(fn ($x) => 'ABS(' . $x . ')', $v));
+			$body = match ($name) {
+				'fact' => 'FACT(' . $v[0] . ')',
+				'binom' => 'IF(OR((' . $v[1] . ')<0;(' . $v[1] . ')>(' . $v[0] . '));0;COMBIN(' . $v[0] . ';' . $v[1] . '))',
+				'perm' => 'IF(OR((' . $v[1] . ')<0;(' . $v[1] . ')>(' . $v[0] . '));0;PERMUT(' . $v[0] . ';' . $v[1] . '))',
+				'gcd' => 'GCD(' . $abs() . ')',
+				default => 'LCM(' . $abs() . ')',
+			};
+			return $this->guard('IF(' . $cond . ';' . $body . ';NA())', $n);
+		}
+		if ($name === 'lgamma' && count($args) === 1) {
+			// log|Γ(x)|: GAMMALN stops at 0, the app goes on for negative x that is not a whole number
+			$x = $a()[0];
+			return $this->guard('IF((' . $x . ')<0;IF((' . $x . ')-INT(' . $x . ')=0;NA();LN(PI()/ABS(SIN(PI()*(' . $x . '))))-GAMMALN(1-(' . $x . ')));GAMMALN(' . $x . '))', $n);
+		}
+		$dist = $this->distToOdf($name, $args, $cellMap);
+		if ($dist !== null) {
+			return $this->guard($dist, $n);
+		}
+		if ($name === 'pow' && count($args) === 2) {
+			return $this->guard($this->powToOdf($args[0], $args[1], $cellMap), $n);
+		}
+		if ($name === 'root' && count($args) === 2) {
+			// n-th root on the reals: none for n = 0, nor for x < 0 unless n is an odd whole number
+			[$x, $k] = $a();
+			return $this->guard('IF((' . $k . ')=0;NA();IF((' . $x . ')>=0;POWER(' . $x . ';1/(' . $k . '));'
+				. 'IF(AND((' . $k . ')-INT(' . $k . ')=0;MOD(' . $k . ';2)=1);-POWER(-(' . $x . ');1/(' . $k . '));NA())))', $n);
+		}
+		if ($name === 'round' || $name === 'roundto') {
+			// the spreadsheet's ROUND rounds the same way as the app (Values::roundDec)
+			$v = $a();
+			return 'ROUND(' . $v[0] . ';' . ($v[1] ?? '0') . ')';
 		}
 		if (isset(self::ODF_NEW[$name])) {
 			$inner = self::ODF_NEW[$name] . '(' . implode(';', $a()) . ')';
@@ -762,8 +933,6 @@ class FormulaCompiler {
 		return match ($name) {
 			// parenthesised: these stand where a single value would (x / cbrt(y))
 			'cbrt' => '(SIGN(' . $v[0] . ')*POWER(ABS(' . $v[0] . ');1/3))',
-			// the app rounds halves up (−2.5 → −2), spreadsheets' ROUND away from zero; INT always floors
-			'round' => 'INT(' . $v[0] . '+0.5)',
 			'floor' => 'INT(' . $v[0] . ')',
 			'ceil' => '-INT(-(' . $v[0] . '))',
 			'trunc' => 'TRUNC(' . $v[0] . ';0)',
