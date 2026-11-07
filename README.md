@@ -4,7 +4,7 @@
 **よく使う計算式を登録しておけば、数値を入力するだけですぐに計算できる、Nextcloud 用の個人向け計算アプリです。すぐに使える計算式テンプレートを 5,671 件収録しています。**
 
 > Personal project · self-hosted · runs entirely inside your own Nextcloud.
-> 個人プロジェクト · セルフホスト型 · お使いの Nextcloud の中だけで動作します。
+> 個人のプロジェクトです。セルフホスト型で、お使いの Nextcloud の中だけで動作します。
 
 [English ↓](#english) · [日本語 ↓](#japanese)
 
@@ -38,7 +38,7 @@ Organise your formulas into **collections**, define each formula's **variables**
 - **Server-side history** per formula (record / restore / delete / clear), scoped per user
 - **Version history** per formula — the version before each edit is kept beside it (numbered, restorable), independent of the calculation history above; how many to keep, and whether one is taken on every edit or only on request, is configurable in Settings
 - **Internal sharing** — share a collection with other Nextcloud users at three permission levels (view / edit / delete)
-- **An AI assistant, through the AI-Hub app** — a chat beside the formulas that knows FormulaBase and how its expressions are written; it answers in words and writes a formula out as text you can type in, reads the open collection only as the administrator allows, and changes nothing. It needs the free **AI-Hub** app, where the AI service, its key and its limits are set once for every app on the server; without it, it is simply not shown
+- **An AI assistant, through the AI-Hub app** — a chat beside the formulas that knows FormulaBase and how its expressions are written; it looks through your collections and formulas, works formulas out on the server to check them, and — when the administrator allows it — adds templates, makes, changes and deletes formulas and collections for you, with your own rights. A formula it changes keeps its earlier form under Versions, a formula or collection it deletes can be put back by asking it, and what it actually did is listed under its answer, apart from its own words. It needs the free **AI-Hub** app, where the AI service, its key and its limits are set once for every app on the server; without it, it is simply not shown
 - UI and template library in 21 languages — English, Japanese, Chinese, Spanish, French, German, Italian, Portuguese (Brazil and Portugal), Russian, Arabic, Hindi, Korean, Indonesian, Vietnamese, Turkish, Thai, Persian, Polish, Ukrainian and Czech
 
 ### Tech
@@ -66,7 +66,7 @@ FormulaBase は、利益率の計算、単位換算、ローンの返済額、�
 
 ### FormulaBase の特長
 
-- **一から式を作る必要はありません。** 数学、統計と確率、AI とコンピューター、物理、宇宙と地球、化学と材料、工学、暮らしのお金、投資と市場、会社の会計と経営、経済学、医療と生命科学、暮らしの **13 分野・5,671 件の計算式テンプレート**を最初から収録しています。一覧は分野ごとに分かれ、関連する分野が隣り合うように並んでいます。使わない分野、小分類、個々のテンプレートは、**テンプレート設定**で非表示にできます。ライブラリを検索してテンプレートを自分のコレクションに追加すれば、式を自分で入力しなくても、すぐに計算を始められます。
+- **一から式を作る必要はありません。** 数学、統計・確率、AI・コンピュータ、物理、宇宙・地球、化学・材料、工学、暮らしのお金、投資・市場、会社の会計・経営、経済学、医療・生命科学、暮らしの **13 分野・5,671 件の計算式テンプレート**を最初から収録しています。一覧は分野ごとに分かれ、関連する分野が隣り合うように並んでいます。使わない分野、小分類、個々のテンプレートは、**テンプレート設定**で非表示にできます。ライブラリを検索してテンプレートを自分のコレクションに追加すれば、式を自分で入力しなくても、すぐに計算を始められます。
 - **計算はすべてブラウザー内で完結します。** 数式エンジンは独自に作成した小さなパーサー／AST 評価器で、**`eval` や `new Function` は一切使っていません**（`unsafe-eval` も不要です）。計算はすべてブラウザー側ですぐに実行され、サーバーとの通信は発生せず、コードインジェクションの余地もありません。
 - **答えだけでなく、計算の過程も確認できます。** 計算の経過パネルには、入力した値を式に代入し、1 つずつ計算を進めていく様子が表示されます。結果に至るまでの流れを、ご自身はもちろん、学生や同僚もそのまま追うことができます。
 - **作業が失われることはありません。** 計算式ごとに計算履歴をサーバーに保存でき、記録した計算を後から復元したり、不要なものを削除したりできます（履歴はユーザーごとに別々です）。計算式そのものの編集も保護されています。編集するたびに直前の内容が番号付きで残り、いつでも復元できるので、編集を誤っても元に戻せます。
@@ -80,11 +80,11 @@ FormulaBase は、利益率の計算、単位換算、ローンの返済額、�
 - ラベル、単位、初期値を設定できる名前付きの変数 — 数値、リスト、行列、複素数に対応
 - **安全な数式エンジン** — 小さなパーサー／AST 評価器で、**`eval` も `new Function` も使いません**（`unsafe-eval` 不要）。**200 を超える関数**を備えています：四則演算、比較と条件分岐（`if`・`piecewise`）、総和・総乗（Σ・Π）、定積分、微分、方程式の求解（`solve`）、統計、キャッシュフロー（`npv`・`irr`）、ベクトルと行列、数論向けの正確な整数演算（`gcd`・`isprime`・`powmod` など）、特殊関数、確率分布、物理定数。関数の一覧と簡単な説明は、計算式エディターから開けます。変数名には日本語などの Unicode 文字も使えます
 - 入力に合わせて**結果をリアルタイムに表示**（単位と小数点以下の桁数を指定可能）
-- **計算の経過を表示** — 「出力」ボタンから、テキストまたは画像としてコピーしたり、Markdown、実際に計算できる ODS スプレッドシート、ODT レポートのいずれかの形式で Nextcloud の Files に保存したりできます
+- **計算の経過を表示** — 「出力」ボタンから、テキストまたは画像としてコピーしたり、Markdown、実際に計算できる ODS スプレッドシート、ODT レポートのいずれかの形式で Nextcloud の「ファイル」に保存したりできます
 - 計算式ごとに**計算履歴をサーバーに保存**（記録／復元／削除／全消去。ユーザーごとに独立）
 - **バージョン履歴** — 計算式を編集するたびに直前の内容を番号付きで保存し、いつでも復元できます。上記の計算履歴とは別の機能です。保存する数と、編集のたびに自動で保存するか指定したときだけ保存するかは、設定で変更できます
 - **内部共有** — コレクションを他の Nextcloud ユーザーと 3 段階の権限（閲覧／編集／削除）で共有
-- **AI-Hub アプリを通じた AI アシスタント** — 計算式の横にチャットを表示します。FormulaBase と計算式の書き方を理解しており、質問に文章で答え、計算式はそのまま入力できるテキストとして示します。開いているコレクションは管理者が許可した範囲でのみ読み取り、データを変更することはありません。利用には無料の **AI-Hub** アプリが必要です。AI サービスとそのキー、利用制限は AI-Hub で一度設定すれば、サーバー上のすべてのアプリで共通して使われます。AI-Hub がない場合は表示されません
+- **AI-Hub アプリを通じた AI アシスタント** — 計算式の横にチャットを表示します。FormulaBase と計算式の書き方を理解しており、コレクションと計算式を調べ、計算式をサーバーで計算して確かめます。管理者が許可すれば、利用者本人の権限で、テンプレートの追加や、計算式・コレクションの作成・変更・削除も行います。AI が変更した計算式の元の形は「バージョン」に残り、AI が削除した計算式やコレクションは AI に頼めば元に戻せます。答えの下には、AI の言葉とは別に、実際に行った操作が表示されます。利用には無料の **AI-Hub** アプリが必要です。AI サービスとそのキー、利用制限は AI-Hub で一度設定すれば、サーバー上のすべてのアプリで共通して使われます。AI-Hub がない場合は表示されません
 - 画面とテンプレートライブラリは 21 言語に対応 — 日本語、英語、中国語、スペイン語、フランス語、ドイツ語、イタリア語、ポルトガル語（ブラジル・ポルトガル）、ロシア語、アラビア語、ヒンディー語、韓国語、インドネシア語、ベトナム語、トルコ語、タイ語、ペルシア語、ポーランド語、ウクライナ語、チェコ語
 
 Nextcloud 30〜35 に対応しています。
@@ -95,7 +95,7 @@ Nextcloud 30〜35 に対応しています。
 
 私自身がすべての計算式を試したわけではないため、皆さまからのご報告がとても大切です。誤りを見つけたら、help.nextcloud.com の [FormulaBase 0.7.0 のスレッド](https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-formula-templates-help-testing-them-is-very-welcome/249798)か、[GitHub の Issue](https://github.com/ktec-nc-apps/FormulaBase/issues/new?template=formula-report.yml)でお知らせください。一行だけでも助かります。
 
-私の作るアプリが、一人でも多くの方にとって小さな幸せになれば幸いです。
+私の作るアプリが、一人でも多くの方に小さな幸せを届けられたらうれしいです。
 
 ---
 

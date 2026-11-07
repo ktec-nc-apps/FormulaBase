@@ -40,12 +40,12 @@ $reasons = [
 			<?php } ?>
 		</div>
 
-		<h3><?php p($l->t('What it may read (read only — it never changes anything there)')); ?></h3>
+		<h3><?php p($l->t('What it may do')); ?></h3>
 		<?php
-		// The built-in templates are only named for now: there is no tool to read them yet.
 		$sources = [
-			'collection' => [$l->t('The open collection\'s formulas, with the values typed in'), true],
-			'templates' => [$l->t('The built-in templates (not yet)'), false],
+			'collection' => [$l->t('The collections and formulas the person can see, and working them out'), true],
+			'templates' => [$l->t('The built-in templates'), true],
+			'write' => [$l->t('Make, change and delete formulas and collections, with the person\'s own rights (a changed formula keeps its earlier form under “Versions”)'), true],
 		];
 		foreach ($sources as $src => [$label, $there]) { ?>
 			<p><input type="checkbox" class="checkbox" id="fb-ai-read-<?php p($src); ?>" data-read="<?php p($src); ?>"

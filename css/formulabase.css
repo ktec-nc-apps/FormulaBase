@@ -960,6 +960,11 @@ html.fb-col-resizing, html.fb-col-resizing * { cursor: col-resize !important; -w
 #formulabase-root .fb-ai-msgs .fb-ai-bubble { display: block; position: static; padding: 7px 11px; border-radius: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 #formulabase-root .fb-ai-msgs .fb-ai-msg.is-user .fb-ai-bubble { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); }
 #formulabase-root .fb-ai-msgs .fb-ai-msg.is-bot .fb-ai-bubble { background: var(--surface-2); }
+/* what the assistant's tools actually did, under its answer (2026-11-07) */
+#formulabase-root .fb-ai-acts { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--primary) 6%, var(--surface)); border-left: 3px solid var(--primary); font-size: 12.5px; white-space: normal; }
+#formulabase-root .fb-ai-acts-h { font-weight: 700; margin-bottom: 2px; }
+#formulabase-root .fb-ai-act.ok .mk { color: var(--accent); font-weight: 700; }
+#formulabase-root .fb-ai-act.ng .mk, #formulabase-root .fb-ai-act .ng-t { color: var(--danger); font-weight: 700; }
 #formulabase-root .fb-ai-msgs .fb-ai-bubble.is-busy { color: var(--muted); }
 #formulabase-root .fb-ai-msgs .fb-ai-err { color: var(--danger); margin: 2px 0; }
 /* Saving the conversation to Files (the owner, 2026-10-06): two small icon buttons in the

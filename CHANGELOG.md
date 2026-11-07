@@ -2,6 +2,30 @@
 
 All notable changes to FormulaBase.
 
+## 0.10.3 — 2026-11-08
+
+The AI assistant can now work in FormulaBase itself.
+（AI アシスタントが、FormulaBase の中を自分で操作できるようになりました。）
+
+### Added
+
+- **The AI assistant can work in FormulaBase itself** (with AI-Hub). It looks through every collection and formula the person can see — not only the open one — works formulas out on the server to check them, and searches the built-in templates. When the administrator allows it, it adds templates in the person's language, makes, changes and deletes formulas, and makes, renames and deletes collections. It acts with the rights of the person asking, so a shared collection only at its shared level. A formula it changes keeps its earlier form under "Versions"; a formula or collection it deletes can be put back by asking it (without its calculation history). The page shows the change as soon as the answer comes. In the administration settings, "What it may do" now has a third choice, "Make, change and delete formulas and collections", and "The built-in templates" can be chosen. Under each answer, "What was actually done" lists the changes the tools really made — taken from the record of the calls, not from the assistant's words — with what was added, changed or deleted, and any that failed.
+  （**AI アシスタントが、AI-Hub を通して FormulaBase の中を自分で操作できるようになりました。** 開いているコレクションだけでなく、利用者が見られるすべてのコレクションと計算式を調べます。計算式をサーバーで計算して確かめ、組み込みのテンプレートも探します。管理者が許可すれば、テンプレートを利用者の言語で追加し、計算式の作成・変更・削除、コレクションの作成・名前の変更・削除も行います。操作は質問した人の権限で行い、共有されたコレクションは共有の権限までです。AI が変更した計算式の元の形は「バージョン」に残ります。AI が削除した計算式やコレクションは、AI に頼めば元に戻せます（計算の履歴は戻りません）。AI が答えると、画面にもすぐ反映されます。管理設定の「AI にできること」に 3 つ目の選択肢「計算式とコレクションの作成、変更、削除」を足し、「組み込みのテンプレート」も選べるようにしました。答えの下には「実際に行った操作」として、ツールが実際に行った変更（追加・変更・削除した物の名前と、失敗した物）を出します。AI の言葉ではなく、実際の呼び出しの記録から作っています。）
+
+### Changed
+
+- The assistant follows the permissions set in AI-Hub (0.1.7 or later): each of its tools says whether it reads, adds, changes or deletes, and what the administrator has not allowed there is not offered to it.
+  （AI-Hub（0.1.7 以降）で設定した許可に従います。ツールごとに、読む・追加・変更・削除のどれかを申告し、管理者が許可していない操作はアシスタントに渡しません。）
+- Templates that used one name for two different things now say which: "Statistical power" in the sample-size templates (it was shown as electrical power), "Weight (model parameter)" in gradient descent, and "Body weight" in the body, dosing and clinical templates.
+  （1 つの名前を別々の意味に使っていたテンプレートを分けました。標本サイズのテンプレートでは「検出力」（これまでは電力と表示）、勾配降下法では「重み（モデルのパラメーター）」、体・薬の量・臨床のテンプレートでは「体重」にしました。）
+- The README describes what the assistant can do today.
+  （README の AI アシスタントの説明を、今の機能に合わせました。）
+
+### Fixed
+
+- **Translations reviewed.** Japanese was gone through in full — screens, templates, the README and the change notes — and corrected in about 1,800 places, among them wrong meanings such as "hypotenuse" used for any triangle and current assets written for quick assets. In every other language, the screens were checked line by line, and the templates whose Japanese had a wrong meaning were checked in every language.
+  （**訳を見直しました。** 日本語は、画面・テンプレート・README・変更履歴の全体を点検し、約 1,800 か所を直しました。その中には、直角三角形でない三角形に「斜辺」を使っていた、当座資産を流動資産と書いていた、などの意味の誤りもあります。ほかの言語は、画面の言葉を 1 行ずつ点検し、日本語で意味の誤りがあったテンプレートを全言語で確かめました。）
+
 ## 0.10.0 — 2026-11-07
 
 I am sorry. FormulaBase gave wrong results for some calculations, and some exported files were wrong or damaged. This version fixes them. It also adds 151 templates and eight languages, and changes two functions to work as they do in spreadsheets and in mathematics; a formula you saved with one of them gives a different result (see "Changed").
@@ -21,14 +45,14 @@ I am sorry. FormulaBase gave wrong results for some calculations, and some expor
   （**`npv(r, cf)` を、表計算の NPV() と同じ計算にしました。** 最初の値を 1 期後とします（これまでは時点 0 でした）。`npv(0.1, list(-100, 60, 60))` は 4.13 でしたが、3.76 になります。LibreOffice Calc と Excel の NPV(0.1; -100; 60; 60) と同じです。
   最初の値が時点 0（初期投資など）のつもりで `npv` を使って保存した計算式は、`npv(r, cf) * (1 + r)` に書き換えるか、最初の値を別に足してください。テンプレート「キャッシュフローの並びの正味現在価値」は、この形に変えました。`irr` は変わりません。）
 - **`stirling1(n, k)` is now signed,** as in mathematics: s(n, k) = (−1)^(n−k) × c(n, k). `stirling1(5, 2)` was 50 and is now −50. For the number of permutations with k cycles, use `abs(stirling1(n, k))`; the template "Stirling Numbers of the First Kind c(n, k)" is changed this way.
-  （**`stirling1(n, k)` を、数学の定義どおり符号付きにしました。** s(n, k) = (−1)^(n−k) × c(n, k) です。`stirling1(5, 2)` は 50 でしたが、−50 になります。巡回が k 個の並べ替えの数を求めるときは、`abs(stirling1(n, k))` を使ってください。テンプレート「第1種スターリング数 c(n, k)」は、この形に変えました。）
+  （**`stirling1(n, k)` を、数学の定義どおり符号付きにしました。** s(n, k) = (−1)^(n−k) × c(n, k) です。`stirling1(5, 2)` は 50 でしたが、−50 になります。k 個の巡回からなる置換の数を求めるときは、`abs(stirling1(n, k))` を使ってください。テンプレート「第1種スターリング数 c(n, k)」は、この形に変えました。）
 
 ### Wrong results in the app
 
 - **`root(x, n)` returned a number where no real root exists.** It worked out the sign of x and the root of |x| separately, so `root(-2.5, 2)` gave −1.58, `root(-2.5, 3.5)` gave −1.30 and `root(-1, -2)` gave −1. `root(x, 0)` gave ±∞ or 1 on the server and NaN on the screen.
   Fix: a negative x has a real root only when n is an odd whole number (`root(-8, 3)` = −2). Every other negative x, and n = 0, now gives NaN, on the server, on the screen and in exported spreadsheets.
-  （**`root(x, n)` が、実数の解が無い場合にも数を返していました。** x の符号と |x| の根を別々に計算していたため、`root(-2.5, 2)` は −1.58、`root(-2.5, 3.5)` は −1.30、`root(-1, -2)` は −1 を返していました。`root(x, 0)` は、サーバーで ±∞ または 1、画面で NaN でした。
-  対応：負の x に実数の根があるのは、n が奇数の整数の時だけです（`root(-8, 3)` = −2）。それ以外の負の x と n = 0 は、サーバー・画面・書き出した表計算のすべてで NaN を返します。）
+  （**`root(x, n)` が、実数の根が無い場合にも数を返していました。** x の符号と |x| の根を別々に計算していたため、`root(-2.5, 2)` は −1.58、`root(-2.5, 3.5)` は −1.30、`root(-1, -2)` は −1 を返していました。`root(x, 0)` は、サーバーで ±∞ または 1、画面で NaN でした。
+  対応：負の x に実数の根があるのは、n が奇数の整数のときだけです（`root(-8, 3)` = −2）。それ以外の負の x と n = 0 は、サーバー・画面・書き出した表計算のすべてで NaN を返します。）
 - **The remainder had the wrong sign.** `%` and `mod()` kept the sign of the number divided (`-7 % 3` = −1, `mod(-2.5, 2)` = −0.5), while an exported spreadsheet gave 2 and 1.5.
   Fix: the remainder now has the sign of the divisor everywhere: `-7 % 3` = 2, `7 % -3` = −2. A divisor of 0 gives NaN. When the quotient is within 1e-12 of a whole number, the remainder is 0 (`mod(3.5, 0.7)` = 0).
   （**剰余の符号が誤っていました。** `%` と `mod()` は割られる数の符号を使っていたため（`-7 % 3` = −1、`mod(-2.5, 2)` = −0.5）、書き出した表計算の 2、1.5 と食い違っていました。
@@ -40,7 +64,7 @@ I am sorry. FormulaBase gave wrong results for some calculations, and some expor
 - **Powers of a negative number.** `(-8)^(1/3)` gave NaN in the app and −2 in an exported spreadsheet.
   Fix: a negative base gives a real result for a whole-number exponent and for 1/n with an odd whole n (`(-8)^(1/3)` = −2, as `cbrt(-8)` already did). Other exponents give NaN (`(-8)^0.5`, `(-8)^(2/3)`).
   （**負の数のべき乗が食い違っていました。** `(-8)^(1/3)` は、アプリで NaN、書き出した表計算で −2 でした。
-  対応：負の底は、指数が整数の時と、1/n（n は奇数の整数）の時に実数を返します（`(-8)^(1/3)` = −2。`cbrt(-8)` は前から −2 でした）。それ以外の指数は NaN です（`(-8)^0.5`、`(-8)^(2/3)`）。）
+  対応：負の底は、指数が整数のときと、1/n（n は奇数の整数）のときに実数を返します（`(-8)^(1/3)` = −2。`cbrt(-8)` は前から −2 でした）。それ以外の指数は NaN です（`(-8)^0.5`、`(-8)^(2/3)`）。）
 - **Values that exist came out as NaN:** Bessel functions (`besselj`, `bessely`, `besseli`, `besselk`) of a non-integer order (`besselj(0.5, 1)` is 0.671); `lgamma` of a negative non-integer (`lgamma(-0.5)` is 1.2655); `polylog(1, -1)` (−ln 2); `lambertw(-1/e)` (−1); `ellipf(φ, 1)` near φ = 0; `betapdf` at x = 0 and x = 1; `nbinpdf(0, r, 1)` (1); `logninv(0, …)` (0). `lgamma(1)` gave −8.9e-16 instead of 0.
   Fix: each now returns the correct value. Bessel functions of order above 1000, and J, Y, I of a negative x (not real), still give NaN.
   （**値が存在するのに NaN になっていました：** 非整数次数のベッセル関数（`besselj`、`bessely`、`besseli`、`besselk`。`besselj(0.5, 1)` は 0.671）、負の非整数の `lgamma`（`lgamma(-0.5)` は 1.2655）、`polylog(1, -1)`（−ln 2）、`lambertw(-1/e)`（−1）、φ が 0 付近の `ellipf(φ, 1)`、x = 0 と x = 1 の `betapdf`、`nbinpdf(0, r, 1)`（1）、`logninv(0, …)`（0）。また `lgamma(1)` が 0 でなく −8.9e-16 でした。
@@ -50,21 +74,21 @@ I am sorry. FormulaBase gave wrong results for some calculations, and some expor
   （**丸めが、表計算の四捨五入と違っていました。** `round` は 0.5 をいつも大きい方へ丸めていたため、`round(-2.5)` が −2 でした（表計算の ROUND は −3）。`round(2.675, 2)` は 2 を無視して 3 を返していました。`roundto(1.005, 2)` は 1.00、`roundto(0.285, 2)` は 0.28 でした。1.005 のコンピューターの中の値が、わずかに小さいためです。小数の桁数を決めて表示する結果も、同じ誤りがありました（1.005 を 1.00 と表示）。
   対応：`round(x)`、`round(x, d)`、`roundto(x, d)` は、LibreOffice Calc と Excel の ROUND と同じ四捨五入をします。0.5 は 0 から遠い方へ丸め、書いたとおりの数字で丸めます（`round(-2.5)` = −3、`round(1.005, 2)` = 1.01、`round(1255, -1)` = 1260）。書き出した表計算には ROUND を使います。LibreOffice Calc と 620 通りで突き合わせ、すべて一致しました。画面の結果の表示も、同じ丸め方にしました。）
 - **An extra value was dropped without a word.** `sqrt(4, 5)`, `log(8, 2)` and the like used the first value and ignored the rest. They are now refused with "wrong number of values"; `logb(x, b)` is the logarithm to base b.
-  （**余分な値を、黙って無視していました。** `sqrt(4, 5)` や `log(8, 2)` などは、最初の値だけを使い、残りを無視していました。今は「値の数が違う」として断ります。底を決めた対数は `logb(x, b)` です。）
+  （**余分な値を、黙って無視していました。** `sqrt(4, 5)` や `log(8, 2)` などは、最初の値だけを使い、残りを無視していました。現在は「値の数が違う」というエラーにします。底を決めた対数は `logb(x, b)` です。）
 - **`logb(x, 1)` gave ±∞.** A logarithm to base 1 is undefined; it now gives NaN.
   （**`logb(x, 1)` が ±∞ を返していました。** 底 1 の対数は定義されないため、NaN を返します。）
 - **The server and the screen disagreed.** `round(0.49999999999999994)` gave 1 on the server and 0 on the screen (0 is right); `root(1, 0)` gave 1 and NaN; `1.5.2` was read as 1.5 on the screen and refused on the server; `1^∞` differed. They now agree: 0, NaN, refused, 1. The screen's quick calculation of `%`, `^` and comparisons had its own shortcuts, which are removed.
-  （**サーバーと画面の結果が食い違っていました。** `round(0.49999999999999994)` はサーバーで 1、画面で 0（正しいのは 0）、`root(1, 0)` は 1 と NaN、`1.5.2` は画面で 1.5 と読まれサーバーでは拒否、`1^∞` も違っていました。現在はそれぞれ 0、NaN、拒否、1 で一致します。画面の即時計算にあった `%`・`^`・比較の独自の近道は除きました。）
+  （**サーバーと画面の結果が食い違っていました。** `round(0.49999999999999994)` はサーバーで 1、画面で 0（正しいのは 0）、`root(1, 0)` は 1 と NaN、`1.5.2` は画面で 1.5 と読まれサーバーでは拒否、`1^∞` も違っていました。現在はそれぞれ 0、NaN、拒否、1 で一致します。画面の即時計算にあった `%`・`^`・比較の独自の簡略処理はやめました。）
 - **Chained comparisons.** `3 > 2 > 1` was read as `(3 > 2) > 1`, that is `1 > 1`, and gave 0.
   Fix: a chain of comparisons means each pair holds: `3 > 2 > 1` is `3 > 2 and 2 > 1` and gives 1; `0 < x <= 10` checks that x is in the range.
   （**比較を続けて書いた式が誤っていました。** `3 > 2 > 1` は `(3 > 2) > 1`、つまり `1 > 1` と読まれ、0 でした。
   対応：比較を続けて書くと、隣り合うすべての組が成り立つかを調べます。`3 > 2 > 1` は `3 > 2 and 2 > 1` で 1 です。`0 < x <= 10` で x が範囲内かを調べられます。）
 - **Distributions gave wrong values for large parameters.** `poisscdf(1e6, 1e6)` gave 0.6586 (right: 0.500266), `gammacdf(520000, 520000, 1)` gave 0.4175 (right: 0.500184), and the inverse functions (`tinv`, `chi2inv`, `gammainv`, `betainv`, `finv`) gave wrong values far in the tails. Densities, `lgamma` near 1 and 2, `norminv` near 1, and `expcdf`, `weibcdf`, `geomcdf` for very small values lost digits.
   Fix: the probability, cumulative and inverse functions of every distribution, and `gammainc`, `betainc`, `lgamma`, are computed by methods that keep full accuracy. Checked on about 7,400 values against SciPy and 40-digit references: all within 1e-12 (relative). No template result changes in the digits shown.
-  （**分布の関数が、大きなパラメーターで誤った値を返していました。** `poisscdf(1e6, 1e6)` は 0.6586（正しくは 0.500266）、`gammacdf(520000, 520000, 1)` は 0.4175（正しくは 0.500184）でした。逆関数（`tinv`、`chi2inv`、`gammainv`、`betainv`、`finv`）は、裾の遠い所で誤った値でした。確率密度、1 と 2 の近くの `lgamma`、1 に近い所の `norminv`、ごく小さい値の `expcdf`・`weibcdf`・`geomcdf` も、桁が落ちていました。
+  （**分布の関数が、大きなパラメーターで誤った値を返していました。** `poisscdf(1e6, 1e6)` は 0.6586（正しくは 0.500266）、`gammacdf(520000, 520000, 1)` は 0.4175（正しくは 0.500184）でした。逆関数（`tinv`、`chi2inv`、`gammainv`、`betainv`、`finv`）は、裾の遠い所で誤った値でした。確率密度、1 と 2 の近くの `lgamma`、1 に近い所の `norminv`、ごく小さい値の `expcdf`・`weibcdf`・`geomcdf` も、桁落ちで精度が下がっていました。
   対応：すべての分布の確率・累積・逆関数と、`gammainc`、`betainc`、`lgamma` を、精度を落とさない方法で計算します。約 7,400 通りを SciPy と 40 桁の検算値で確かめ、すべて相対 1e-12 以内でした。表示する桁でテンプレートの結果が変わるものはありません。）
 - **In right-to-left languages, numbers were reversed.** In Arabic and Persian, "-2.00" was shown as "2.00-", and a list typed as "1, 2; 3, 4" read back as "4 ,3 ;2 ,1". Values, the boxes they are typed into and the worked steps are now shown left to right.
-  （**右から左へ書く言語で、数値が逆に表示されていました。** アラビア語とペルシア語で「-2.00」が「2.00-」と表示され、「1, 2; 3, 4」と入力した並びが「4 ,3 ;2 ,1」と読み返されていました。値、値を入力する欄、計算の手順は、左から右に表示するようにしました。）
+  （**右から左へ書く言語で、数値が逆に表示されていました。** アラビア語とペルシア語で「-2.00」が「2.00-」と表示され、「1, 2; 3, 4」と入力した並びが「4 ,3 ;2 ,1」と表示されていました。値、値を入力する欄、計算の手順は、左から右に表示するようにしました。）
 - **Texts and translations.** English texts that had Japanese mixed into them (105 places) are corrected, and one Brazilian Portuguese sentence written the European way now reads as it does in Brazil.
   （**文章と翻訳。** 英語の原文に日本語が混ざっていた 105 か所を直しました。また、ブラジル向けポルトガル語で、ポルトガルの言い方になっていた 1 か所を、ブラジルの言い方に直しました。）
 
@@ -81,11 +105,11 @@ I am sorry. FormulaBase gave wrong results for some calculations, and some expor
 - **Adding to an existing spreadsheet pointed the result at the wrong rows.** The variable rows were counted as in a new file, so the result cell referred to rows at the top of the sheet; a second addition used the first one's variables, and a picture was placed over the first table.
   Fix: new rows and pictures are placed below the last row of the sheet, and the result refers to them. If the sheet has no room left, the addition is refused and the file is not changed.
   （**既存の表計算への追記で、結果が誤った行を参照していました。** 変数の行を新しいファイルと同じ位置として数えていたため、結果のセルがシートの先頭の行を参照していました。2 回目の追記は 1 回目の変数を使い、画像は先頭の表に重なっていました。
-  対応：新しい行と画像はシートの最後の行の下に置き、結果はその行を参照します。シートに余地が無い場合は追記を断り、ファイルは変更しません。）
+  対応：新しい行と画像はシートの最後の行の下に置き、結果はその行を参照します。シートに空きの行が無い場合は追記せず、ファイルは変更しません。）
 - **Adding a picture to a spreadsheet exported by FormulaBase damaged it.** Elements were inserted without the declarations they need, and the file was overwritten with the damaged content.
   Fix: elements are inserted as XML with the declarations they need; the result is checked before writing; a file that cannot be read or updated is refused and left as it was.
   （**FormulaBase で書き出した表計算に画像付きで追記すると、ファイルが壊れていました。** 必要な宣言の無いまま要素を差し込み、壊れた内容で元のファイルを上書きしていました。
-  対応：要素を、必要な宣言と一緒に XML として入れます。書き込む前に結果を確かめ、読めない・更新できないファイルは断って元のまま残します。）
+  対応：要素を、必要な宣言と一緒に XML として入れます。書き込む前に結果を確かめ、読めない・更新できないファイルには書き込まず、元のまま残します。）
 - **A variable without a key shifted the rows.** Only possible through the API or an edited backup: every later variable referred to the wrong cell.
   Fix: such rows no longer shift the references.
   （**key の無い変数があると、行がずれていました。** API または手を加えたバックアップの場合だけですが、以降の変数がすべて誤ったセルを参照していました。
@@ -129,7 +153,7 @@ An AI assistant, through the new AI-Hub app, and the fixes from a review of the 
 - **Huge matrices no longer use up the server's memory.** A product that would have a hundred million cells now gives NaN; a backup file or its data that is too large is refused.
   （**巨大な行列でサーバーのメモリーを使い切らないようにしました。** 結果が 1 億セルになる行列の積は NaN を返します。大きすぎるバックアップファイルやそのデータは受け付けません。）
 - **Dividing by zero and the like no longer breaks an export.** `csc(0)`, `logb(5,1)`, `root(8,0)` and similar gave an ODS export an error, or dropped the result row of an ODT; they now give ∞ or NaN, as on the screen.
-  （**ゼロ除算などでエクスポートが失敗しないようにしました。** `csc(0)`、`logb(5,1)`、`root(8,0)` などで、ODS のエクスポートがエラーになったり、ODT で結果の行が抜けたりしていました。現在は画面と同じく ∞ または NaN になります。）
+  （**ゼロ除算などで書き出しが失敗しないようにしました。** `csc(0)`、`logb(5,1)`、`root(8,0)` などで、ODS の書き出しがエラーになったり、ODT で結果の行が抜けたりしていました。現在は画面と同じく ∞ または NaN になります。）
 - **Restoring a backup over a collection is checked first and done in one step**, so a broken backup no longer leaves the collection empty.
   （**バックアップでコレクションを上書き復元するときは、先に内容を確認してから一括で処理するようにしました。** 壊れたバックアップを使っても、コレクションが空になることはありません。）
 - **Choosing whom to share with follows Nextcloud's sharing settings.** Everybody could be listed, outside the groups the administrator allows.
@@ -143,49 +167,40 @@ An AI assistant, through the new AI-Hub app, and the fixes from a review of the 
 
 The 2,400 templates added in 0.7.0 now speak every language, and a set of fixes found by a review
 of the whole app is included.
-（0.7.0 で追加した 2,400 件のテンプレートが、すべての言語で使えるようになった。あわせて、アプリ
-全体の点検で見つかったものを直した。）
+（0.7.0 で追加した 2,400 件のテンプレートが、すべての言語で使えるようになりました。あわせて、アプリ全体の点検で見つかった問題を直しました。）
 
 ### Languages
 
 - **Every template and every screen is now translated into all 13 languages** — the 2,400
   templates added in 0.7.0 and the newer screens (Template settings, the function list) were in
   English and Japanese only.
-  （**すべてのテンプレートと画面が 13 言語に対応した**。0.7.0 で追加した 2,400 件と新しい画面
-  （テンプレート設定・関数の一覧）は、これまで英語と日本語だけだった。）
+  （**すべてのテンプレートと画面が 13 言語に対応しました。** 0.7.0 で追加した 2,400 件と新しい画面（テンプレート設定・関数の一覧）は、これまで英語と日本語だけでした。）
 - **Brazilian Portuguese** is new. The Portuguese shipped so far is European Portuguese and is
   now named **Português (Portugal)**; if you had chosen it, it stays selected.
-  （**ブラジルのポルトガル語**を加えた。これまでのポルトガル語は本国版で、名前を
-  **Português (Portugal)** とした。選んでいた人はそのまま。）
+  （**ブラジルのポルトガル語**を追加しました。これまでのポルトガル語はヨーロッパのポルトガル語で、名前を **Português (Portugal)** に変えました。選んでいた場合は、そのまま選ばれています。）
 - **The earlier translations were reviewed in every language**, and many terms that had been
   translated in their everyday sense were corrected (for example "stroke" of an engine,
   "charge" in physics, "discharge" of a river). The English and Japanese texts were reviewed as
   well, and variable labels that were in Japanese in the English templates are now in English.
-  （**これまでの訳を全言語で見直した**。専門語を日常の意味で訳していたもの（エンジンの
-  「行程」、物理の「電荷」、川の「流量」など）を多数直した。英語と日本語の文も見直し、英語の
-  テンプレートで日本語になっていた変数名を英語にした。）
+  （**これまでの訳を全言語で見直しました。** 日常の意味で訳していた専門用語を多数直しました（例：エンジンの stroke →「行程」、物理の charge →「電荷」、川の discharge →「流量」）。英語と日本語の文も見直し、英語のテンプレートで日本語になっていた変数のラベルを英語にしました。）
 
 ### Fixed
 
 - **`sum` and `prod` with four plain values** (for example `sum(1, 2, 3, 4)`) are the total or
   product of those values; they were taken as Σ / Π and gave a wrong result, on the screen and
   in the spreadsheet export alike.
-  （**値を 4 つ並べた `sum`・`prod`**（例 `sum(1, 2, 3, 4)`）を、その値の合計・積として計算する。
-  これまでは Σ・Π として扱われ、画面でも表計算の書き出しでも誤った結果になった。）
+  （**値を 4 つ並べた `sum`・`prod`**（例：`sum(1, 2, 3, 4)`）を、その値の合計・積として計算するようにしました。これまでは Σ・Π として扱われ、画面でも表計算の書き出しでも誤った結果になっていました。）
 - **A formula that is too long, too deeply nested or too heavy to calculate** now shows a
   message instead of freezing the page or keeping the server busy.
-  （**長すぎる・入れ子が深すぎる・重すぎる式**は、画面を止めたりサーバーを使い続けたりせず、
-  知らせを出す。）
+  （**長すぎる・入れ子が深すぎる・重すぎる計算式**は、画面を止めたりサーバーに負荷をかけ続けたりせず、メッセージを表示するようにしました。）
 - In a shared collection, how many versions a formula keeps follows the owner's setting, so an
   editor can no longer remove the owner's versions; a formula saved without changing its name
   or labels keeps the wording it was written in.
-  （共有されたコレクションでは、式の版をいくつ残すかはオーナーの設定に従う。編集者がオーナーの
-  版を消せない。名前やラベルを変えずに保存した式は、元の言葉のまま残る。）
+  （共有されたコレクションでは、計算式のバージョンをいくつ残すかはオーナーの設定に従うようにしました。編集者がオーナーのバージョンを消すことはできません。名前やラベルを変えずに保存した計算式は、元の文言のまま残ります。）
 - Saving one formula no longer resets the numbers typed into the others; switching collections
   quickly no longer shows another collection's formulas; Restore waits until the chosen backup
   has been read.
-  （一つの式を保存しても、ほかの式に入力した数値が消えない。コレクションをすばやく切り替えても、
-  別のコレクションの式が出ない。復元は、選んだバックアップを読み終えるまで押せない。）
+  （1 つの計算式を保存しても、ほかの計算式に入力した数値が消えないようにしました。コレクションをすばやく切り替えても、別のコレクションの計算式が表示されないようにしました。「復元」ボタンは、選んだバックアップを読み終えるまで押せないようにしました。）
 
 ## 0.7.0 — 2026-09-22
 
@@ -193,15 +208,12 @@ Thank you for the downloads, and for the comments on apps.nextcloud.com saying F
 useful. No problems were reported against the template library up to 0.6.2, so this release adds
 much more content — new formulas and new functions — while the way you use the app stays the same.
 （多くのダウンロードと、apps.nextcloud.com での「役に立っている」というコメントをありがとうございます。
-0.6.2 までテンプレートについて問題の報告が無かったため、この版ではこれまでの使い方は変えずに、
-公式と関数を大きく追加した。）
+0.6.2 までテンプレートについて問題の報告が無かったため、この版では使い方は変えずに、計算式と関数を大幅に追加しました。）
 
 With 5,522 formulas there are now far too many for us to debug on our own — if you find a wrong
 formula, a bad default, a mistranslation or a missing unit, please tell us in the FormulaBase 0.7.0 thread
 on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-formula-templates-help-testing-them-is-very-welcome/249798 (a GitHub issue is fine too).
-（公式が 5,522 件になり、私たちだけではデバッグしきれない。誤った公式・不適切な初期値・誤訳・
-単位の誤りなどを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドで知らせてもらえると助かる
-（GitHub の Issue でもよい）。）
+（計算式が 5,522 件になり、私たちだけでは確かめきれません。誤った計算式・不適切な初期値・誤訳・単位の抜けなどを見つけたら、help.nextcloud.com の FormulaBase 0.7.0 のスレッドでお知らせください（GitHub の Issue でもかまいません）。）
 
 ### New: 2,400 more templates (5,522 in all)
 
@@ -210,11 +222,9 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
   learning (400); physics, chemistry and engineering (600); medicine, statistics and biology
   (400). Each one was checked against an independent calculation, and against a published value
   where one exists. The whole library was checked for duplicates, and any found were removed.
-  （**2,400 件のテンプレートを追加した**。数論 500・金融／会計／保険／年金 500・
-  AI と機械学習 400・物理／化学／工学 600・医療／統計／生物 400。すべて別の方法で計算した
-  値と照合し、公表値があるものはそれとも照合した。ライブラリ全体で重複を調べ、見つかったものは取り除いた。）
+  （**2,400 件のテンプレートを追加しました。** 数論 500、金融・会計・保険・年金 500、AI と機械学習 400、物理・化学・工学 600、医療・統計・生物 400 です。すべて別の方法で計算した値と照合し、公表値があるものはそれとも照合しました。ライブラリ全体で重複を調べ、見つかったものは取り除きました。）
 - The new templates are in English and Japanese. Other languages show them in English.
-  （新しいテンプレートは英語と日本語。ほかの言語では英語で表示される。）
+  （新しいテンプレートは英語と日本語です。ほかの言語では英語で表示されます。）
 
 ### New: templates grouped into 13 fields
 
@@ -223,22 +233,17 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
   has its own heading, and related fields sit next to each other. This replaces the
   63 flat categories, whose names overlapped (for example "Money", "Finance" and
   "Accounting").
-  （テンプレート一覧を 2 段にした。13 の大分類（数学・統計・確率・AI・コンピュータ・
-  物理 など）の下に小分類がある。大分類ごとに見出しで区切り、近い分野を隣に並べた。
-  名前が紛らわしかった従来の 63 分類（「お金」「金融」「会計」など）に代わる。）
+  （テンプレートの一覧を 2 段にしました。13 の分野（数学、統計・確率、AI・コンピュータ、物理 など）の下に小分類があります。分野ごとに見出しで区切り、関連する分野を隣に並べました。名前が紛らわしかった従来の 63 分類（「お金」「金融」「会計」など）に代わるものです。）
 
 ### New: Template settings — hide templates you do not need
 
 - **Settings → Template settings** shows every field, subcategory and template with a
   checkbox. Untick a whole field, a subcategory or a single template to hide it; "Show
   all" brings everything back. The choice is saved per user on the server.
-  （**設定 → テンプレート設定**で、大分類・小分類・テンプレートをチェックの木で表示する。
-  チェックを外すと大分類ごと・小分類ごと・1 件ずつ非表示にできる。「すべて表示」で元に戻る。
-  利用者ごとにサーバーへ保存される。）
+  （**設定 → テンプレート設定**で、分野・小分類・テンプレートをすべてチェックボックス付きで表示します。チェックを外すと、分野ごと・小分類ごと・1 件ずつ非表示にできます。「すべて表示」で元に戻ります。選択は利用者ごとにサーバーに保存されます。）
 - Hidden templates never appear in the list, in search results (by name, description,
   formula, variable or category) or in the counts.
-  （非表示のテンプレートは、一覧・検索結果（名前・説明・式・変数・分類のどれで探しても）・
-  件数のどこにも出ない。）
+  （非表示のテンプレートは、一覧・検索結果（名前・説明・式・変数・分類のどれで探しても）・件数のどこにも表示されません。）
 
 ### New: a much more capable formula engine
 
@@ -249,11 +254,9 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
   vectors and matrices, number theory, special functions, probability distributions,
   and physical constants. A function list with short descriptions is available in the
   formula editor.
-  （**数式エンジンを大幅に強化した**。リスト・行列・複素数の変数、比較と `if()`・`piecewise()`、
-  Σ・Π・定積分・微分・`solve()`、統計・キャッシュフロー・ベクトルと行列・数論・特殊関数・
-  確率分布・物理定数など **200 を超える関数**。数式編集画面から関数の一覧と説明を開ける。）
+  （**数式エンジンを大幅に強化しました。** リスト・行列・複素数の変数、比較と `if()`・`piecewise()`、Σ・Π・定積分・微分・`solve()` に対応し、統計・キャッシュフロー・ベクトルと行列・数論・特殊関数・確率分布・物理定数など **200 を超える関数**を使えます。計算式エディターから関数の一覧と説明を開けます。）
 - All 3,122 existing templates give the same results as before.
-  （既存の 3,122 件のテンプレートの計算結果は以前と変わらない。）
+  （既存の 3,122 件のテンプレートの計算結果は、以前と変わりません。）
 
 ### Fixed: spreadsheet export
 
@@ -266,18 +269,13 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
 - Parts a spreadsheet cannot compute (for example Σ or complex numbers) are written as
   their value. Every template was re-computed in LibreOffice after export and matched
   the app.
-  （**表計算への書き出しを修正した**。8 件で式の括弧が欠けていた（hypot・cbrt・root）のを
-  直した。負の数の丸め（round・floor・ceil）がアプリと一致するようにした。正規分布は
-  LibreOffice が受け付ける `LEGACY.NORMSDIST`／`LEGACY.NORMSINV` で書く（`NORMSDIST` は
-  Err:525 になっていた）。表計算で計算できない部分（Σ や複素数など）は値で書く。全テンプレートを
-  書き出して LibreOffice で計算し直し、アプリと一致することを確かめた。）
+  （**表計算への書き出しを修正しました。** 8 件で式の括弧が欠けていた（hypot・cbrt・root）のを直しました。負の数の丸め（round・floor・ceil）がアプリと一致するようにしました。正規分布は、LibreOffice が受け付ける `LEGACY.NORMSDIST`／`LEGACY.NORMSINV` で書きます（`NORMSDIST` は Err:525 になっていました）。表計算で計算できない部分（Σ や複素数など）は値で書きます。全テンプレートを書き出して LibreOffice で計算し直し、アプリと一致することを確かめました。）
 
 ### Changed
 
 - "Modular Exponentiation (Small Values)" now computes exactly for large inputs. Its
   inputs and its default answer are unchanged.
-  （「モジュラー指数演算（小規模値）」が大きな入力でも正確に計算するようにした。入力と初期値での答えは
-  変わらない。）
+  （「べき剰余（小さな値）」が、大きな入力でも正確に計算できるようにしました。入力と、初期値での答えは変わりません。）
 
 ## 0.6.2 — 2026-09-17
 
@@ -287,9 +285,7 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
   is widened from 30–34 to 30–35. The app itself is unchanged from 0.6.1: it was tested
   on Nextcloud 35 against the changes that release makes for apps, and ran without
   modification.
-  （**Nextcloud 35 に対応した。それ以外の変更はない。** 対応範囲を 30〜34 から 30〜35 に
-  広げた。アプリ本体は 0.6.1 から変わっていない。Nextcloud 35 でアプリ向けに変わった点に
-  照らして試験し、修正なしで動くことを確かめた。）
+  （**Nextcloud 35 に対応しました。それ以外の変更はありません。** 対応範囲を 30〜34 から 30〜35 に広げました。アプリ本体は 0.6.1 から変わっていません。Nextcloud 35 でアプリ向けに変わった点に照らして試験し、修正なしで動くことを確かめました。）
 
 ## 0.6.1 — 2026-09-08
 
@@ -303,11 +299,7 @@ on help.nextcloud.com: https://help.nextcloud.com/t/formulabase-0-7-0-2-400-new-
   The view-only and picker dialogs (the template browser, a formula's version history,
   the export options and the file picker) keep closing on an outside click, since they
   hold nothing you can lose.
-  （データ入力中にダイアログの外側をクリックすると、ダイアログが消えて入力が失われてしまうバグを
-  修正した。対象＝コレクション編集・数式編集・設定・「全データのダウンロード」（バックアップ）・
-  「バックアップから復元」の各ダイアログ。外側クリックでは閉じなくなり、✕・キャンセル・保存で閉じる。
-  閲覧/選択系のダイアログ（テンプレート一覧・数式の版履歴・書き出し設定・ファイル選択）は失う入力が
-  ないため従来どおり外側クリックで閉じる。）
+  （データの入力中にダイアログの外側をクリックすると、ダイアログが消えて入力した内容が失われるバグを修正しました。対象は、コレクションの編集・計算式の編集・設定・「全データをダウンロード」（バックアップ）・「バックアップから復元」の各ダイアログです。外側をクリックしても閉じなくなり、✕・キャンセル・保存で閉じます。表示や選択だけのダイアログ（テンプレート一覧・計算式のバージョン履歴・書き出しの設定・ファイルの選択）は、失われる入力が無いため、これまでどおり外側のクリックで閉じます。）
 
 ## 0.6.0 — 2026-09-01
 

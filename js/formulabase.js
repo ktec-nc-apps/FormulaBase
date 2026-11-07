@@ -16,6 +16,8 @@
   const HUB = ((window.OC && OC.generateUrl) ? OC.generateUrl('/apps/ai_hub') : '/apps/ai_hub') + '/conversation';
   /** Where this tab keeps the token of a collection's conversation with the AI (sessionStorage). */
   const AI_CONV_KEY = 'formulabase.ai.conversation';
+  // the assistant's tools that change something: after one of them the page reloads what it shows
+  const AI_WRITE_TOOLS = ['add_templates', 'create_formulas', 'update_formulas', 'delete_formulas', 'create_collection', 'update_collection', 'delete_collection', 'restore_deleted'];
   let TOKEN = (window.OC && OC.requestToken) ? OC.requestToken : '';
   let rootProxy = null;
   // In-app language override map (fetched from /api/i18n/<lang>); null → follow Nextcloud's own locale.
@@ -2174,7 +2176,7 @@
         <p class="fb-ai-hint" v-if="!ai.msgs.length && ai.imagesOk">{{ t('You can also paste (Ctrl+V) or drop images here.') }}</p>
         <!-- Each message can be copied as it stands (the owner, 2026-10-06): the button shows while
              the pointer is on the message; images sent with a question are shown small above its words. -->
-        <div class="fb-ai-msg" :class="m.role === 'user' ? 'is-user' : 'is-bot'" v-for="(m, i) in ai.msgs" :key="i"><div class="fb-ai-bubble"><div class="fb-ai-imgs" v-if="m.images && m.images.length"><img v-for="(im, k) in m.images" :key="k" :src="im.url" :alt="im.name" :title="im.name"></div>{{ m.text }}</div><button type="button" class="fb-ai-copy" v-if="m.text" :class="{ done: m.copied }" :title="t('Copy')" :aria-label="t('Copy')" @click="aiCopy(m)">{{ m.copied ? '✓' : '📋' }}<span class="fb-ai-copied" v-if="m.copied" role="status">{{ t('Copied') }}</span></button></div>
+        <div class="fb-ai-msg" :class="m.role === 'user' ? 'is-user' : 'is-bot'" v-for="(m, i) in ai.msgs" :key="i"><div class="fb-ai-bubble"><div class="fb-ai-imgs" v-if="m.images && m.images.length"><img v-for="(im, k) in m.images" :key="k" :src="im.url" :alt="im.name" :title="im.name"></div>{{ m.text }}<div class="fb-ai-acts" v-if="m.actions && m.actions.length"><div class="fb-ai-acts-h">{{ t('What was actually done') }}</div><div class="fb-ai-act" v-for="(a, k) in m.actions" :key="k" :class="a.ok ? 'ok' : 'ng'"><span class="mk">{{ a.ok ? '✓' : '✗' }}</span> <span>{{ a.ok ? (a.report || aiToolLabel(a)) : aiToolLabel(a) }}</span><span v-if="!a.ok" class="ng-t"> （{{ t('Failed') }}）</span></div></div></div><button type="button" class="fb-ai-copy" v-if="m.text" :class="{ done: m.copied }" :title="t('Copy')" :aria-label="t('Copy')" @click="aiCopy(m)">{{ m.copied ? '✓' : '📋' }}<span class="fb-ai-copied" v-if="m.copied" role="status">{{ t('Copied') }}</span></button></div>
         <div class="fb-ai-msg is-bot" v-if="ai.busy"><div class="fb-ai-bubble is-busy">{{ t('Thinking…') }}</div></div>
         <p class="fb-ai-err" v-if="ai.error">{{ ai.error }}</p>
         <p class="fb-ai-note" v-if="ai.note" role="status">{{ ai.note }}</p>
@@ -3776,6 +3778,14 @@
         }
         return out;
       },
+      // a tool's name in the page's language (AI-Hub sends the name it was registered with)
+      aiToolLabel(a) {
+        const names = { list_collections: 'Look at the collections', find_formulas: 'Find formulas', calculate: 'Work out a formula',
+          search_templates: 'Search the templates', add_templates: 'Add templates', create_formulas: 'Add formulas', update_formulas: 'Change formulas',
+          delete_formulas: 'Delete formulas', create_collection: 'Make a collection', update_collection: 'Change a collection',
+          delete_collection: 'Delete a collection', restore_deleted: 'Bring back what was deleted' };
+        return names[a.tool] ? this.t(names[a.tool]) : (a.label || a.tool);
+      },
       aiError(e) {
         const m = String((e && e.message) || e || '');
         if (m === 'busy') return this.t('Too many questions at once. Wait a moment and ask again.');
@@ -3812,6 +3822,8 @@
         this.aiScroll();
         let answer = null;
         let fresh = false;
+        let changed = false;
+        let actions = [];
         try {
           const r = await api('ai/ask', { method: 'POST', body: JSON.stringify({ history, message, context: this.aiContext(), conversation: this.aiConvToken(true),
             images: images.map((im) => ({ type: im.type, data: im.data })) }) });
@@ -3822,7 +3834,7 @@
             if (ticket !== this.ai.ask) return;
             const x = await api('ai/result/' + encodeURIComponent(r.id));
             if (x.state === 'running') continue;
-            if (x.state === 'done') { answer = String(x.text || ''); fresh = !!x.fresh; break; }
+            if (x.state === 'done') { answer = String(x.text || ''); fresh = !!x.fresh; changed = (x.tools || []).some((n) => AI_WRITE_TOOLS.includes(n)); actions = Array.isArray(x.actions) ? x.actions : []; break; }
             throw new Error(x.error || x.state);
           }
           if (answer === null) throw new Error('timeout');
@@ -3837,9 +3849,20 @@
           this.ai.msgs = this.ai.msgs.slice(-1);
           this.ai.note = this.t('The earlier conversation had ended, so this one starts afresh.');
         }
-        this.ai.msgs.push({ role: 'assistant', text: answer.trim() });
+        // what the tools actually did, from AI-Hub's record of the calls (not the model's words)
+        this.ai.msgs.push({ role: 'assistant', text: answer.trim(), actions: actions.filter((a) => a && a.kind !== 'read') });
         this.ai.busy = false;
         this.aiScroll();
+        // the assistant changed something: show it (2026-11-07)
+        if (changed) {
+          try {
+            this.collections = await api('collections');
+            if (this.currentId != null && !this.collections.some((c) => c.id === this.currentId)) {
+              this.currentId = this.collections.length ? this.collections[0].id : null;
+            }
+            await this.loadFormulas();
+          } catch (e) { /* the page shows it on the next load */ }
+        }
       },
       async saveSettings() {
         try {

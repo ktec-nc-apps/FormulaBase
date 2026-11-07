@@ -18,9 +18,8 @@ use OCP\IUserManager;
  * the assistant is not offered at all, and its admin settings are shown greyed out.
  *
  * What the assistant may do is set by the administrator: whether it is on, who may
- * use it, what it may read (read only -- it never changes anything), and whether it
- * may search the web. For now it only reads what the browser sends with a question:
- * the formulas of the open collection and the selected formula with its values.
+ * use it, what it may read, whether it may change formulas and collections (with the
+ * asker's rights, through AiTools; the owner, 2026-11-07), and whether it may search the web.
  */
 class AiService {
 	public const KEY_ENABLED = 'ai_enabled';
@@ -29,10 +28,10 @@ class AiService {
 	public const KEY_READ = 'ai_read';
 	public const KEY_SEARCH = 'ai_search';
 	/**
-	 * What the assistant may be allowed to read: the open collection's formulas (sent
-	 * by the browser), and the built-in templates (only named for now; no tool yet).
+	 * What the assistant may be allowed: the collections and formulas the person can see,
+	 * the built-in templates, and changing formulas and collections (AiTools; 2026-11-07).
 	 */
-	public const SOURCES = ['collection', 'templates'];
+	public const SOURCES = ['collection', 'templates', 'write'];
 	/** The name FormulaBase's assistant is registered under at AI-Hub. */
 	public const SCENARIO = 'assistant';
 	/** The most one turn of the conversation may carry to AI-Hub (characters). */
@@ -77,6 +76,9 @@ class AiService {
 			// Who may ask is the administrator's FormulaBase setting, and the hub holds
 			// to it on every way in -- not only through FormulaBase's own controller.
 			'allow' => fn (string $uid): bool => $this->allowed($uid),
+			// What it can do in FormulaBase by itself (the owner, 2026-11-07); each tool looks
+			// up what the administrator allows when it runs.
+			'tools' => \OCP\Server::get(AiTools::class)->tools(fn (): array => $this->settings()['read']),
 		]);
 	}
 
